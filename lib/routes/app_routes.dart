@@ -35,7 +35,7 @@ class AppRoutes {
   static Map<String, WidgetBuilder> getRoutes() {
     return {
       splash: (context) => const SplashScreen(),
-      roleSelection: (context) => const StudentDashboard(),
+      roleSelection: (context) => const RoleSelectionScreen(),
       studentDashboard: (context) => const StudentDashboard(),
       teacherDashboard: (context) => const TeacherDashboard(),
       adminDashboard: (context) => const AdminDashboard(),
