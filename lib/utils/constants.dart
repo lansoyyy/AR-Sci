@@ -3,9 +3,10 @@ import 'package:flutter/material.dart';
 /// App-wide constants
 class AppConstants {
   // App Information
-  static const String appName = 'AR Sci';
-  static const String appFullName = 'Augmented Reality Science';
+  static const String appName = 'AR SCI';
+  static const String appFullName = 'AR SCI Mobile App';
   static const String appVersion = '1.0.0';
+  static const String appTagline = 'Science Education Reimagined';
 
   // Spacing
   static const double paddingXS = 4.0;
@@ -100,9 +101,28 @@ class AppConstants {
   static const String keyOfflineMode = 'offline_mode';
 
   // User Types
-  static const String userTypeMother = 'mother';
-  static const String userTypeCaregiver = 'caregiver';
-  static const String userTypeHealthWorker = 'health_worker';
+  static const String userTypeStudent = 'student';
+  static const String userTypeTeacher = 'teacher';
+  static const String userTypeAdmin = 'admin';
+  
+  // Grade Levels
+  static const List<String> gradeLevels = [
+    'Grade 7',
+    'Grade 8',
+    'Grade 9',
+    'Grade 10',
+    'Grade 11',
+    'Grade 12',
+  ];
+  
+  // Subjects
+  static const List<String> subjects = [
+    'Biology',
+    'Chemistry',
+    'Physics',
+    'Earth Science',
+    'General Science',
+  ];
 
   // Medication Status
   static const String statusTaken = 'taken';

@@ -44,6 +44,19 @@ class AppColors {
   static const Color consultation = Color(0xFFA890B8); // Soft Purple
   static const Color emergency = Color(0xFFD87070); // Soft Red
   static const Color reward = Color(0xFFD8B86B); // Warm Yellow
+  
+  // Role-specific Colors - Science/Technology inspired
+  static const Color studentPrimary = Color(0xFF4A90E2); // Bright Blue
+  static const Color studentLight = Color(0xFF7AB8F5); // Light Blue
+  static const Color studentDark = Color(0xFF2E5C8A); // Dark Blue
+  
+  static const Color teacherPrimary = Color(0xFF52C41A); // Bright Green
+  static const Color teacherLight = Color(0xFF7FD84F); // Light Green
+  static const Color teacherDark = Color(0xFF3A8F12); // Dark Green
+  
+  static const Color adminPrimary = Color(0xFF6B7280); // Gray
+  static const Color adminLight = Color(0xFF9CA3AF); // Light Gray
+  static const Color adminDark = Color(0xFF4B5563); // Dark Gray
 
   // Gradient Colors - Purple and beige gradients
   static const LinearGradient primaryGradient = LinearGradient(
