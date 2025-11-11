@@ -25,13 +25,17 @@ class MedicationCard extends StatelessWidget {
   Color _getStatusColor() {
     switch (status.toLowerCase()) {
       case 'taken':
-        return AppColors.taken;
+      case 'completed':
+        return AppColors.completed;
       case 'missed':
-        return AppColors.missed;
+      case 'overdue':
+        return AppColors.overdue;
       case 'pending':
-        return AppColors.pending;
+      case 'inprogress':
+        return AppColors.inProgress;
       case 'skipped':
-        return AppColors.skipped;
+      case 'notstarted':
+        return AppColors.notStarted;
       default:
         return AppColors.textSecondary;
     }
@@ -86,7 +90,7 @@ class MedicationCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: AppConstants.paddingM),
-              
+
               // Medication Details
               Expanded(
                 child: Column(
@@ -129,7 +133,7 @@ class MedicationCard extends StatelessWidget {
                   ],
                 ),
               ),
-              
+
               // Status Badge
               Column(
                 children: [
@@ -140,7 +144,8 @@ class MedicationCard extends StatelessWidget {
                     ),
                     decoration: BoxDecoration(
                       color: _getStatusColor().withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(AppConstants.radiusRound),
+                      borderRadius:
+                          BorderRadius.circular(AppConstants.radiusRound),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -162,7 +167,7 @@ class MedicationCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                  
+
                   // Action Buttons for Pending Status
                   if (status.toLowerCase() == 'pending') ...[
                     const SizedBox(height: AppConstants.paddingS),
@@ -170,16 +175,18 @@ class MedicationCard extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         IconButton(
-                          icon: const Icon(Icons.check, size: AppConstants.iconS),
-                          color: AppColors.taken,
+                          icon:
+                              const Icon(Icons.check, size: AppConstants.iconS),
+                          color: AppColors.completed,
                           onPressed: onMarkTaken,
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),
                         ),
                         const SizedBox(width: AppConstants.paddingS),
                         IconButton(
-                          icon: const Icon(Icons.close, size: AppConstants.iconS),
-                          color: AppColors.missed,
+                          icon:
+                              const Icon(Icons.close, size: AppConstants.iconS),
+                          color: AppColors.overdue,
                           onPressed: onMarkMissed,
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),

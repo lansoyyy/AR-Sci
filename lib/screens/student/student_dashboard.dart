@@ -557,13 +557,13 @@ class _ProgressPage extends StatelessWidget {
             const SizedBox(height: AppConstants.paddingM),
 
             _SubjectProgress(
-                subject: 'Physics',
-                progress: 0.85,
-                color: AppColors.studentPrimary),
+                subject: 'Physics', progress: 0.85, color: AppColors.physics),
             _SubjectProgress(
-                subject: 'Chemistry', progress: 0.70, color: AppColors.success),
+                subject: 'Chemistry',
+                progress: 0.70,
+                color: AppColors.chemistry),
             _SubjectProgress(
-                subject: 'Biology', progress: 0.65, color: AppColors.warning),
+                subject: 'Biology', progress: 0.65, color: AppColors.biology),
 
             const SizedBox(height: AppConstants.paddingXL),
 

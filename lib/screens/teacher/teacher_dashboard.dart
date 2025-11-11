@@ -73,7 +73,8 @@ class _DashboardHome extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.notifications_outlined),
             onPressed: () {
-              Navigator.pushNamed(context, '/notifications', arguments: 'teacher');
+              Navigator.pushNamed(context, '/notifications',
+                  arguments: 'teacher');
             },
           ),
           IconButton(
@@ -129,7 +130,8 @@ class _DashboardHome extends StatelessWidget {
                     ),
                     decoration: BoxDecoration(
                       color: AppColors.textWhite.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(AppConstants.radiusRound),
+                      borderRadius:
+                          BorderRadius.circular(AppConstants.radiusRound),
                     ),
                     child: const Text(
                       'Physics Teacher',
@@ -142,12 +144,13 @@ class _DashboardHome extends StatelessWidget {
                 ],
               ),
             ),
-            
+
             const SizedBox(height: AppConstants.paddingL),
-            
+
             // Analytics Stats
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingM),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: AppConstants.paddingM),
               child: Row(
                 children: [
                   Expanded(
@@ -172,11 +175,12 @@ class _DashboardHome extends StatelessWidget {
                 ],
               ),
             ),
-            
+
             const SizedBox(height: AppConstants.paddingM),
-            
+
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingM),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: AppConstants.paddingM),
               child: Row(
                 children: [
                   Expanded(
@@ -200,9 +204,9 @@ class _DashboardHome extends StatelessWidget {
                 ],
               ),
             ),
-            
+
             const SizedBox(height: AppConstants.paddingXL),
-            
+
             // Quick Actions
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: AppConstants.paddingM),
@@ -216,7 +220,7 @@ class _DashboardHome extends StatelessWidget {
               ),
             ),
             const SizedBox(height: AppConstants.paddingM),
-            
+
             FeatureCard(
               title: 'Create New Lesson',
               description: 'Add a new lesson with content and materials',
@@ -224,7 +228,7 @@ class _DashboardHome extends StatelessWidget {
               iconColor: AppColors.teacherPrimary,
               onTap: () {},
             ),
-            
+
             FeatureCard(
               title: 'Create Quiz',
               description: 'Design a new quiz for your students',
@@ -232,7 +236,7 @@ class _DashboardHome extends StatelessWidget {
               iconColor: AppColors.studentPrimary,
               onTap: () {},
             ),
-            
+
             FeatureCard(
               title: 'View Reports',
               description: 'Check student performance and analytics',
@@ -240,9 +244,9 @@ class _DashboardHome extends StatelessWidget {
               iconColor: AppColors.warning,
               onTap: () {},
             ),
-            
+
             const SizedBox(height: AppConstants.paddingXL),
-            
+
             // Recent Activity
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: AppConstants.paddingM),
@@ -256,7 +260,7 @@ class _DashboardHome extends StatelessWidget {
               ),
             ),
             const SizedBox(height: AppConstants.paddingM),
-            
+
             _ActivityCard(
               title: 'Quiz Submitted',
               subtitle: '25 students completed Physics Quiz 3',
@@ -264,7 +268,7 @@ class _DashboardHome extends StatelessWidget {
               icon: Icons.assignment_turned_in_outlined,
               color: AppColors.success,
             ),
-            
+
             _ActivityCard(
               title: 'New Lesson Published',
               subtitle: 'Laws of Motion is now available',
@@ -272,7 +276,7 @@ class _DashboardHome extends StatelessWidget {
               icon: Icons.publish_outlined,
               color: AppColors.studentPrimary,
             ),
-            
+
             const SizedBox(height: AppConstants.paddingL),
           ],
         ),
@@ -468,15 +472,19 @@ class _LessonManagementCard extends StatelessWidget {
                     vertical: AppConstants.paddingS,
                   ),
                   decoration: BoxDecoration(
-                    color: isPublished ? AppColors.success.withOpacity(0.1) : AppColors.warning.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(AppConstants.radiusRound),
+                    color: isPublished
+                        ? AppColors.success.withOpacity(0.1)
+                        : AppColors.warning.withOpacity(0.1),
+                    borderRadius:
+                        BorderRadius.circular(AppConstants.radiusRound),
                   ),
                   child: Text(
                     isPublished ? 'Published' : 'Draft',
                     style: TextStyle(
                       fontSize: AppConstants.fontS,
                       fontWeight: FontWeight.w600,
-                      color: isPublished ? AppColors.success : AppColors.warning,
+                      color:
+                          isPublished ? AppColors.success : AppColors.warning,
                     ),
                   ),
                 ),

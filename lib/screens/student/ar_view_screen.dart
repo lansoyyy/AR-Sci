@@ -49,7 +49,7 @@ class _ARViewScreenState extends State<ARViewScreen> {
                 gradient: LinearGradient(
                   colors: [
                     Colors.black,
-                    AppColors.studentPrimary.withOpacity(0.3),
+                    _getARModeColor().withOpacity(0.3),
                   ],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
@@ -96,7 +96,7 @@ class _ARViewScreenState extends State<ARViewScreen> {
                       ],
                     ),
                   ),
-                  
+
                   // AR Controls Overlay (Top)
                   Positioned(
                     top: AppConstants.paddingM,
@@ -113,7 +113,8 @@ class _ARViewScreenState extends State<ARViewScreen> {
                           ),
                           decoration: BoxDecoration(
                             color: Colors.black.withOpacity(0.6),
-                            borderRadius: BorderRadius.circular(AppConstants.radiusRound),
+                            borderRadius:
+                                BorderRadius.circular(AppConstants.radiusRound),
                           ),
                           child: DropdownButton<String>(
                             value: _selectedLanguage,
@@ -121,20 +122,23 @@ class _ARViewScreenState extends State<ARViewScreen> {
                             underline: const SizedBox(),
                             style: const TextStyle(color: AppColors.textWhite),
                             items: const [
-                              DropdownMenuItem(value: 'English', child: Text('English')),
-                              DropdownMenuItem(value: 'Filipino', child: Text('Filipino')),
+                              DropdownMenuItem(
+                                  value: 'English', child: Text('English')),
+                              DropdownMenuItem(
+                                  value: 'Filipino', child: Text('Filipino')),
                             ],
                             onChanged: (value) {
                               setState(() => _selectedLanguage = value!);
                             },
                           ),
                         ),
-                        
+
                         // Toggle Labels
                         Container(
                           decoration: BoxDecoration(
                             color: Colors.black.withOpacity(0.6),
-                            borderRadius: BorderRadius.circular(AppConstants.radiusRound),
+                            borderRadius:
+                                BorderRadius.circular(AppConstants.radiusRound),
                           ),
                           child: IconButton(
                             icon: Icon(
@@ -149,7 +153,7 @@ class _ARViewScreenState extends State<ARViewScreen> {
                       ],
                     ),
                   ),
-                  
+
                   // Interactive Labels Placeholder (if visible)
                   if (_labelsVisible && _selectedARMode == 'labels')
                     Positioned(
@@ -158,6 +162,7 @@ class _ARViewScreenState extends State<ARViewScreen> {
                       child: _ARLabel(
                         title: 'Lungs',
                         description: 'Organs for breathing',
+                        color: AppColors.biology,
                       ),
                     ),
                   if (_labelsVisible && _selectedARMode == 'labels')
@@ -167,13 +172,14 @@ class _ARViewScreenState extends State<ARViewScreen> {
                       child: _ARLabel(
                         title: 'Heart',
                         description: 'Pumps blood throughout body',
+                        color: AppColors.biology,
                       ),
                     ),
                 ],
               ),
             ),
           ),
-          
+
           // Control Panel
           Container(
             padding: const EdgeInsets.all(AppConstants.paddingL),
@@ -195,7 +201,7 @@ class _ARViewScreenState extends State<ARViewScreen> {
                   ),
                 ),
                 const SizedBox(height: AppConstants.paddingM),
-                
+
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Row(
@@ -204,6 +210,7 @@ class _ARViewScreenState extends State<ARViewScreen> {
                         icon: Icons.play_circle_outline,
                         label: 'Simulation',
                         isSelected: _selectedARMode == 'simulation',
+                        color: AppColors.simulation,
                         onTap: () {
                           setState(() => _selectedARMode = 'simulation');
                         },
@@ -213,6 +220,7 @@ class _ARViewScreenState extends State<ARViewScreen> {
                         icon: Icons.label_outline,
                         label: 'Labels',
                         isSelected: _selectedARMode == 'labels',
+                        color: AppColors.biology,
                         onTap: () {
                           setState(() => _selectedARMode = 'labels');
                         },
@@ -222,6 +230,7 @@ class _ARViewScreenState extends State<ARViewScreen> {
                         icon: Icons.science_outlined,
                         label: 'Periodic Table',
                         isSelected: _selectedARMode == 'periodic',
+                        color: AppColors.periodicTable,
                         onTap: () {
                           setState(() => _selectedARMode = 'periodic');
                         },
@@ -229,9 +238,9 @@ class _ARViewScreenState extends State<ARViewScreen> {
                     ],
                   ),
                 ),
-                
+
                 const SizedBox(height: AppConstants.paddingL),
-                
+
                 // Playback Controls (for Simulation mode)
                 if (_selectedARMode == 'simulation') ...[
                   Row(
@@ -240,13 +249,13 @@ class _ARViewScreenState extends State<ARViewScreen> {
                       IconButton(
                         icon: const Icon(Icons.skip_previous),
                         iconSize: 32,
-                        color: AppColors.studentPrimary,
+                        color: _getARModeColor(),
                         onPressed: () {},
                       ),
                       const SizedBox(width: AppConstants.paddingL),
                       Container(
                         decoration: BoxDecoration(
-                          color: AppColors.studentPrimary,
+                          color: _getARModeColor(),
                           shape: BoxShape.circle,
                         ),
                         child: IconButton(
@@ -264,13 +273,13 @@ class _ARViewScreenState extends State<ARViewScreen> {
                       IconButton(
                         icon: const Icon(Icons.skip_next),
                         iconSize: 32,
-                        color: AppColors.studentPrimary,
+                        color: _getARModeColor(),
                         onPressed: () {},
                       ),
                     ],
                   ),
                   const SizedBox(height: AppConstants.paddingM),
-                  
+
                   // Speed Control
                   Row(
                     children: [
@@ -282,7 +291,7 @@ class _ARViewScreenState extends State<ARViewScreen> {
                           max: 2.0,
                           divisions: 3,
                           label: '1x',
-                          activeColor: AppColors.studentPrimary,
+                          activeColor: _getARModeColor(),
                           onChanged: (value) {},
                         ),
                       ),
@@ -290,13 +299,13 @@ class _ARViewScreenState extends State<ARViewScreen> {
                     ],
                   ),
                 ],
-                
+
                 // Feature Description
                 const SizedBox(height: AppConstants.paddingL),
                 Container(
                   padding: const EdgeInsets.all(AppConstants.paddingM),
                   decoration: BoxDecoration(
-                    color: AppColors.studentPrimary.withOpacity(0.1),
+                    color: _getARModeColor().withOpacity(0.1),
                     borderRadius: BorderRadius.circular(AppConstants.radiusM),
                   ),
                   child: Column(
@@ -306,16 +315,16 @@ class _ARViewScreenState extends State<ARViewScreen> {
                         children: [
                           Icon(
                             Icons.info_outline,
-                            color: AppColors.studentPrimary,
+                            color: _getARModeColor(),
                             size: 20,
                           ),
                           const SizedBox(width: AppConstants.paddingS),
                           Text(
                             _getARModeTitle(),
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: AppConstants.fontL,
                               fontWeight: FontWeight.w600,
-                              color: AppColors.studentPrimary,
+                              color: _getARModeColor(),
                             ),
                           ),
                         ],
@@ -337,6 +346,19 @@ class _ARViewScreenState extends State<ARViewScreen> {
         ],
       ),
     );
+  }
+
+  Color _getARModeColor() {
+    switch (_selectedARMode) {
+      case 'simulation':
+        return AppColors.simulation;
+      case 'labels':
+        return AppColors.biology;
+      case 'periodic':
+        return AppColors.periodicTable;
+      default:
+        return AppColors.arFeature;
+    }
   }
 
   IconData _getARIcon() {
@@ -391,22 +413,27 @@ class _ARViewScreenState extends State<ARViewScreen> {
               _InstructionItem(
                 icon: Icons.camera_alt,
                 text: 'Point your camera at a flat surface',
+                color: _getARModeColor(),
               ),
               _InstructionItem(
                 icon: Icons.touch_app,
                 text: 'Tap to place 3D models',
+                color: _getARModeColor(),
               ),
               _InstructionItem(
                 icon: Icons.pinch,
                 text: 'Pinch to zoom in/out',
+                color: _getARModeColor(),
               ),
               _InstructionItem(
                 icon: Icons.rotate_right,
                 text: 'Drag to rotate models',
+                color: _getARModeColor(),
               ),
               _InstructionItem(
                 icon: Icons.label,
                 text: 'Tap labels for more information',
+                color: _getARModeColor(),
               ),
             ],
           ),
@@ -426,12 +453,14 @@ class _ARModeChip extends StatelessWidget {
   final IconData icon;
   final String label;
   final bool isSelected;
+  final Color color;
   final VoidCallback onTap;
 
   const _ARModeChip({
     required this.icon,
     required this.label,
     required this.isSelected,
+    required this.color,
     required this.onTap,
   });
 
@@ -445,14 +474,10 @@ class _ARModeChip extends StatelessWidget {
           vertical: AppConstants.paddingM,
         ),
         decoration: BoxDecoration(
-          color: isSelected
-              ? AppColors.studentPrimary
-              : AppColors.surfaceLight,
+          color: isSelected ? color : AppColors.surfaceLight,
           borderRadius: BorderRadius.circular(AppConstants.radiusRound),
           border: Border.all(
-            color: isSelected
-                ? AppColors.studentPrimary
-                : AppColors.border,
+            color: isSelected ? color : AppColors.border,
             width: 2,
           ),
         ),
@@ -460,9 +485,7 @@ class _ARModeChip extends StatelessWidget {
           children: [
             Icon(
               icon,
-              color: isSelected
-                  ? AppColors.textWhite
-                  : AppColors.textSecondary,
+              color: isSelected ? AppColors.textWhite : AppColors.textSecondary,
               size: 20,
             ),
             const SizedBox(width: AppConstants.paddingS),
@@ -471,9 +494,7 @@ class _ARModeChip extends StatelessWidget {
               style: TextStyle(
                 fontSize: AppConstants.fontM,
                 fontWeight: FontWeight.w600,
-                color: isSelected
-                    ? AppColors.textWhite
-                    : AppColors.textPrimary,
+                color: isSelected ? AppColors.textWhite : AppColors.textPrimary,
               ),
             ),
           ],
@@ -486,10 +507,12 @@ class _ARModeChip extends StatelessWidget {
 class _ARLabel extends StatelessWidget {
   final String title;
   final String description;
+  final Color color;
 
   const _ARLabel({
     required this.title,
     required this.description,
+    required this.color,
   });
 
   @override
@@ -498,7 +521,7 @@ class _ARLabel extends StatelessWidget {
       constraints: const BoxConstraints(maxWidth: 200),
       padding: const EdgeInsets.all(AppConstants.paddingM),
       decoration: BoxDecoration(
-        color: AppColors.studentPrimary,
+        color: color,
         borderRadius: BorderRadius.circular(AppConstants.radiusM),
         boxShadow: [
           BoxShadow(
@@ -552,10 +575,12 @@ class _ARLabel extends StatelessWidget {
 class _InstructionItem extends StatelessWidget {
   final IconData icon;
   final String text;
+  final Color color;
 
   const _InstructionItem({
     required this.icon,
     required this.text,
+    required this.color,
   });
 
   @override
@@ -564,7 +589,7 @@ class _InstructionItem extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: AppConstants.paddingS),
       child: Row(
         children: [
-          Icon(icon, color: AppColors.studentPrimary),
+          Icon(icon, color: color),
           const SizedBox(width: AppConstants.paddingM),
           Expanded(
             child: Text(

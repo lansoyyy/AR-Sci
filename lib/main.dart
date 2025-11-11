@@ -35,7 +35,7 @@ class ARSciApp extends StatelessWidget {
       theme: AppTheme.lightTheme,
       routes: AppRoutes.getRoutes(),
       onGenerateRoute: AppRoutes.onGenerateRoute,
-      initialRoute: AppRoutes.studentDashboard,
+      initialRoute: AppRoutes.splash,
     );
   }
 }
