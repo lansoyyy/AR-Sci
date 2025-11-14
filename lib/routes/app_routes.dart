@@ -73,9 +73,10 @@ class AppRoutes {
         final args = settings.arguments as Map<String, dynamic>? ?? {};
         return MaterialPageRoute(
           builder: (context) => ARViewScreen(
-            lessonId: args['lessonId'] ?? '',
-            lessonTitle: args['lessonTitle'] ?? 'AR View',
+            lessonId: args['id'] ?? args['lessonId'] ?? '',
+            lessonTitle: args['title'] ?? args['lessonTitle'] ?? 'AR View',
           ),
+          settings: RouteSettings(arguments: args),
         );
 
       default:

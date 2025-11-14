@@ -21,14 +21,44 @@ class _ARViewScreenState extends State<ARViewScreen> {
   bool _isPlaying = false;
   bool _labelsVisible = true;
   String _selectedLanguage = 'English';
+  Map<String, dynamic>? _lessonData;
+  List<String>? _arItems;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLessonData();
+  }
+
+  void _loadLessonData() {
+    // Get lesson arguments passed from navigation
+    final args =
+        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    if (args != null) {
+      setState(() {
+        _lessonData = args;
+        _arItems = List<String>.from(args['arItems'] ?? []);
+      });
+    } else {
+      // Find lesson by ID or use default
+      final lesson = AppConstants.allLessons.firstWhere(
+        (lesson) => lesson['id'] == widget.lessonId,
+        orElse: () => AppConstants.allLessons.first,
+      );
+      setState(() {
+        _lessonData = lesson;
+        _arItems = List<String>.from(lesson['arItems'] ?? []);
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: Text(widget.lessonTitle),
-        backgroundColor: AppColors.studentPrimary,
+        title: Text(_lessonData?['title'] ?? widget.lessonTitle),
+        backgroundColor: _getSubjectColor(_lessonData?['color']),
         actions: [
           IconButton(
             icon: const Icon(Icons.info_outline),
@@ -388,10 +418,29 @@ class _ARViewScreenState extends State<ARViewScreen> {
   }
 
   String _getARModeDescription() {
+    final lessonId = _lessonData?['id'];
     switch (_selectedARMode) {
       case 'simulation':
-        return 'Watch animated models of scientific systems like the digestive, circulatory, and respiratory systems. Play, pause, or slow down each phase for better comprehension.';
+        if (lessonId == 'g9_periodic') {
+          return 'Watch animated atomic structures and element behaviors. Interact with 3D models to understand electron configurations and bonding patterns.';
+        } else if (lessonId == 'g9_volcano') {
+          return 'Experience volcanic eruptions in AR. Watch the formation process, magma flow, and climate impact in real-time simulation.';
+        } else if (lessonId == 'g9_respiratory') {
+          return 'Explore animated models of respiratory and circulatory systems. Watch how oxygen flows and blood circulates through the body.';
+        } else if (lessonId == 'g10_physics') {
+          return 'Interact with force vectors and gravity simulations. See how different forces affect object motion in real-time 3D space.';
+        }
+        return 'Watch animated models of scientific systems. Play, pause, or slow down each phase for better comprehension.';
       case 'labels':
+        if (lessonId == 'g9_periodic') {
+          return 'Tap on elements to learn their properties, atomic numbers, and chemical behaviors. Interactive labels show detailed information.';
+        } else if (lessonId == 'g9_volcano') {
+          return 'Tap on volcano parts to learn about magma chambers, vents, and eruption types. Labels explain geological processes.';
+        } else if (lessonId == 'g9_respiratory') {
+          return 'Tap on organs and blood vessels to learn their names and functions. Interactive labels show how systems work together.';
+        } else if (lessonId == 'g10_physics') {
+          return 'Tap on force vectors and objects to learn about magnitude, direction, and effects. Labels explain physics concepts.';
+        }
         return 'Tap on parts to learn their names, definitions, functions, and importance. Pop-up info cards provide detailed explanations.';
       case 'periodic':
         return 'Explore the periodic table in 3D AR format. Select elements to view their atomic structure, model, or sample appearance.';
@@ -404,7 +453,7 @@ class _ARViewScreenState extends State<ARViewScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('AR Instructions'),
+        title: Text('${_lessonData?['title'] ?? 'AR'} Instructions'),
         content: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -435,6 +484,37 @@ class _ARViewScreenState extends State<ARViewScreen> {
                 text: 'Tap labels for more information',
                 color: _getARModeColor(),
               ),
+              if (_arItems != null && _arItems!.isNotEmpty) ...[
+                const SizedBox(height: AppConstants.paddingM),
+                const Text(
+                  'Available AR Items:',
+                  style: TextStyle(
+                    fontSize: AppConstants.fontL,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: AppConstants.paddingS),
+                ..._arItems!.map((item) => Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.science_outlined,
+                            size: 16,
+                            color: _getARModeColor(),
+                          ),
+                          const SizedBox(width: AppConstants.paddingS),
+                          Expanded(
+                            child: Text(
+                              item,
+                              style:
+                                  const TextStyle(fontSize: AppConstants.fontM),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )),
+              ],
             ],
           ),
         ),
@@ -446,6 +526,21 @@ class _ARViewScreenState extends State<ARViewScreen> {
         ],
       ),
     );
+  }
+
+  Color _getSubjectColor(String? colorName) {
+    switch (colorName) {
+      case 'physics':
+        return AppColors.physics;
+      case 'chemistry':
+        return AppColors.chemistry;
+      case 'biology':
+        return AppColors.biology;
+      case 'earthScience':
+        return AppColors.primary;
+      default:
+        return AppColors.studentPrimary;
+    }
   }
 }
 

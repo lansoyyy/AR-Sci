@@ -218,13 +218,12 @@ class _DashboardHome extends StatelessWidget {
                 color: AppColors.studentPrimary,
                 child: InkWell(
                   onTap: () {
+                    // Get first available lesson for AR demo
+                    final firstLesson = AppConstants.allLessons.first;
                     Navigator.pushNamed(
                       context,
                       '/ar-view',
-                      arguments: {
-                        'lessonId': '1',
-                        'lessonTitle': 'AR Science Lab',
-                      },
+                      arguments: firstLesson,
                     );
                   },
                   borderRadius: BorderRadius.circular(AppConstants.radiusM),
@@ -298,24 +297,33 @@ class _DashboardHome extends StatelessWidget {
             ),
             const SizedBox(height: AppConstants.paddingM),
 
-            LessonCard(
-              lesson: LessonModel(
-                id: '1',
-                title: 'Laws of Motion',
-                description: 'Learn about Newton\'s three laws of motion',
-                subject: 'Physics',
-                gradeLevel: 'Grade 10',
-                content: '',
-                teacherId: '1',
-                createdAt: DateTime.now(),
-                isPublished: true,
-              ),
-              showProgress: true,
-              progress: 0.65,
-              onTap: () {
-                Navigator.pushNamed(context, '/lesson-detail');
-              },
-            ),
+            // Show lessons from constants
+            ...AppConstants.allLessons.take(2).map((lesson) => Padding(
+                  padding: const EdgeInsets.only(bottom: AppConstants.paddingM),
+                  child: LessonCard(
+                    lesson: LessonModel(
+                      id: lesson['id'],
+                      title: lesson['title'],
+                      description: lesson['description'],
+                      subject: lesson['subject'],
+                      gradeLevel: lesson['grade'],
+                      content: '',
+                      teacherId: '1',
+                      createdAt: DateTime.now(),
+                      isPublished: true,
+                    ),
+                    showProgress: true,
+                    progress:
+                        0.3 + (AppConstants.allLessons.indexOf(lesson) * 0.2),
+                    onTap: () {
+                      Navigator.pushNamed(
+                        context,
+                        '/lesson-detail',
+                        arguments: lesson,
+                      );
+                    },
+                  ),
+                )),
 
             const SizedBox(height: AppConstants.paddingXL),
 
@@ -333,14 +341,16 @@ class _DashboardHome extends StatelessWidget {
             ),
             const SizedBox(height: AppConstants.paddingM),
 
+            // Show quiz for first lesson
             QuizCard(
               quiz: QuizModel(
-                id: '1',
-                title: 'Chemistry Basics',
-                description: 'Test your knowledge on chemical reactions',
-                lessonId: '1',
-                subject: 'Chemistry',
-                gradeLevel: 'Grade 10',
+                id: 'quiz_${AppConstants.allLessons.first['id']}',
+                title: '${AppConstants.allLessons.first['subject']} Quiz',
+                description:
+                    'Test your knowledge on ${AppConstants.allLessons.first['title']}',
+                lessonId: AppConstants.allLessons.first['id'],
+                subject: AppConstants.allLessons.first['subject'],
+                gradeLevel: AppConstants.allLessons.first['grade'],
                 questions: [],
                 duration: 30,
                 createdAt: DateTime.now(),
@@ -380,11 +390,15 @@ class _LessonsPage extends StatelessWidget {
                 children: [
                   _FilterChip(label: 'All', isSelected: true),
                   const SizedBox(width: AppConstants.paddingS),
-                  _FilterChip(label: 'Physics'),
+                  _FilterChip(label: 'Grade 9'),
                   const SizedBox(width: AppConstants.paddingS),
-                  _FilterChip(label: 'Chemistry'),
+                  _FilterChip(label: 'Grade 10'),
                   const SizedBox(width: AppConstants.paddingS),
-                  _FilterChip(label: 'Biology'),
+                  ...AppConstants.subjects.map((subject) => Padding(
+                        padding:
+                            const EdgeInsets.only(left: AppConstants.paddingS),
+                        child: _FilterChip(label: subject),
+                      )),
                 ],
               ),
             ),
@@ -395,24 +409,29 @@ class _LessonsPage extends StatelessWidget {
             child: ListView.builder(
               padding:
                   const EdgeInsets.symmetric(vertical: AppConstants.paddingM),
-              itemCount: 5,
+              itemCount: AppConstants.allLessons.length,
               itemBuilder: (context, index) {
+                final lesson = AppConstants.allLessons[index];
                 return LessonCard(
                   lesson: LessonModel(
-                    id: '$index',
-                    title: 'Lesson ${index + 1}',
-                    description: 'Description for lesson ${index + 1}',
-                    subject: 'Physics',
-                    gradeLevel: 'Grade 10',
+                    id: lesson['id'],
+                    title: lesson['title'],
+                    description: lesson['description'],
+                    subject: lesson['subject'],
+                    gradeLevel: lesson['grade'],
                     content: '',
                     teacherId: '1',
                     createdAt: DateTime.now(),
                     isPublished: true,
                   ),
                   showProgress: true,
-                  progress: (index + 1) * 0.2,
+                  progress: (index + 1) * 0.15,
                   onTap: () {
-                    Navigator.pushNamed(context, '/lesson-detail');
+                    Navigator.pushNamed(
+                      context,
+                      '/lesson-detail',
+                      arguments: lesson,
+                    );
                   },
                 );
               },

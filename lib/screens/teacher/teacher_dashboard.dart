@@ -263,7 +263,8 @@ class _DashboardHome extends StatelessWidget {
 
             _ActivityCard(
               title: 'Quiz Submitted',
-              subtitle: '25 students completed Physics Quiz 3',
+              subtitle:
+                  '25 students completed ${AppConstants.allLessons.first['subject']} Quiz',
               time: '2 hours ago',
               icon: Icons.assignment_turned_in_outlined,
               color: AppColors.success,
@@ -271,7 +272,8 @@ class _DashboardHome extends StatelessWidget {
 
             _ActivityCard(
               title: 'New Lesson Published',
-              subtitle: 'Laws of Motion is now available',
+              subtitle:
+                  '${AppConstants.allLessons.first['title']} is now available',
               time: '5 hours ago',
               icon: Icons.publish_outlined,
               color: AppColors.studentPrimary,
@@ -297,13 +299,14 @@ class _LessonsManagement extends StatelessWidget {
       ),
       body: ListView.builder(
         padding: const EdgeInsets.all(AppConstants.paddingM),
-        itemCount: 5,
+        itemCount: AppConstants.allLessons.length,
         itemBuilder: (context, index) {
+          final lesson = AppConstants.allLessons[index];
           return _LessonManagementCard(
-            title: 'Lesson ${index + 1}',
-            subject: 'Physics',
-            gradeLevel: 'Grade 10',
-            students: 45,
+            title: lesson['title'],
+            subject: lesson['subject'],
+            gradeLevel: lesson['grade'],
+            students: 30 + (index * 15), // Varying student counts
             isPublished: index % 2 == 0,
           );
         },
@@ -365,11 +368,12 @@ class _StudentsPage extends StatelessWidget {
         padding: const EdgeInsets.all(AppConstants.paddingM),
         itemCount: 10,
         itemBuilder: (context, index) {
+          final gradeLevel = index < 5 ? 'Grade 9' : 'Grade 10';
           return _StudentCard(
             name: 'Student ${index + 1}',
-            gradeLevel: 'Grade 10',
+            gradeLevel: gradeLevel,
             avgScore: 75.0 + (index * 2),
-            completedLessons: 12 + index,
+            completedLessons: 6 + index,
           );
         },
       ),

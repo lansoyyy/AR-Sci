@@ -40,12 +40,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
   void _handleRegister() {
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
-      
+
       // Simulate registration
       Future.delayed(const Duration(seconds: 2), () {
         if (mounted) {
           setState(() => _isLoading = false);
-          Navigator.pushReplacementNamed(context, '/login', arguments: widget.role);
+          Navigator.pushReplacementNamed(context, '/login',
+              arguments: widget.role);
         }
       });
     }
@@ -76,7 +77,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const SizedBox(height: AppConstants.paddingL),
-                  
+
                   // Back Button
                   Align(
                     alignment: Alignment.centerLeft,
@@ -85,9 +86,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       onPressed: () => Navigator.pop(context),
                     ),
                   ),
-                  
+
                   const SizedBox(height: AppConstants.paddingL),
-                  
+
                   // Title
                   Text(
                     'Create ${widget.role.toUpperCase()} Account',
@@ -98,9 +99,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ),
                     textAlign: TextAlign.center,
                   ),
-                  
+
                   const SizedBox(height: AppConstants.paddingXL),
-                  
+
                   // Name Field
                   TextFormField(
                     controller: _nameController,
@@ -115,9 +116,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       return null;
                     },
                   ),
-                  
+
                   const SizedBox(height: AppConstants.paddingL),
-                  
+
                   // Email Field
                   TextFormField(
                     controller: _emailController,
@@ -136,9 +137,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       return null;
                     },
                   ),
-                  
+
                   const SizedBox(height: AppConstants.paddingL),
-                  
+
                   // Role-specific fields
                   if (widget.role == 'student') ...[
                     DropdownButtonFormField<String>(
@@ -147,7 +148,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         labelText: 'Grade Level',
                         prefixIcon: Icon(Icons.school_outlined),
                       ),
-                      items: AppConstants.gradeLevels.map((grade) {
+                      items: const ['Grade 9', 'Grade 10'].map((grade) {
                         return DropdownMenuItem(
                           value: grade,
                           child: Text(grade),
@@ -165,7 +166,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ),
                     const SizedBox(height: AppConstants.paddingL),
                   ],
-                  
+
                   if (widget.role == 'teacher') ...[
                     DropdownButtonFormField<String>(
                       value: _selectedSubject,
@@ -191,7 +192,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ),
                     const SizedBox(height: AppConstants.paddingL),
                   ],
-                  
+
                   // Password Field
                   TextFormField(
                     controller: _passwordController,
@@ -201,7 +202,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       prefixIcon: const Icon(Icons.lock_outline),
                       suffixIcon: IconButton(
                         icon: Icon(
-                          _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                          _obscurePassword
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
                         ),
                         onPressed: () {
                           setState(() => _obscurePassword = !_obscurePassword);
@@ -218,9 +221,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       return null;
                     },
                   ),
-                  
+
                   const SizedBox(height: AppConstants.paddingL),
-                  
+
                   // Confirm Password Field
                   TextFormField(
                     controller: _confirmPasswordController,
@@ -230,10 +233,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       prefixIcon: const Icon(Icons.lock_outline),
                       suffixIcon: IconButton(
                         icon: Icon(
-                          _obscureConfirmPassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                          _obscureConfirmPassword
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
                         ),
                         onPressed: () {
-                          setState(() => _obscureConfirmPassword = !_obscureConfirmPassword);
+                          setState(() => _obscureConfirmPassword =
+                              !_obscureConfirmPassword);
                         },
                       ),
                     ),
@@ -247,9 +253,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       return null;
                     },
                   ),
-                  
+
                   const SizedBox(height: AppConstants.paddingXL),
-                  
+
                   // Register Button
                   CustomButton(
                     text: 'Register',
@@ -258,9 +264,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     fullWidth: true,
                     backgroundColor: _roleColor,
                   ),
-                  
+
                   const SizedBox(height: AppConstants.paddingL),
-                  
+
                   // Login Link
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,

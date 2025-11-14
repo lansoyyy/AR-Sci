@@ -104,24 +104,80 @@ class AppConstants {
   static const String userTypeStudent = 'student';
   static const String userTypeTeacher = 'teacher';
   static const String userTypeAdmin = 'admin';
-  
+
   // Grade Levels
   static const List<String> gradeLevels = [
-    'Grade 7',
-    'Grade 8',
     'Grade 9',
     'Grade 10',
-    'Grade 11',
-    'Grade 12',
   ];
-  
+
   // Subjects
   static const List<String> subjects = [
     'Biology',
     'Chemistry',
     'Physics',
     'Earth Science',
-    'General Science',
+  ];
+
+  // Grade 9 Lessons with AR Items
+  static const List<Map<String, dynamic>> grade9Lessons = [
+    {
+      'id': 'g9_periodic',
+      'title': 'Periodic Table',
+      'subject': 'Chemistry',
+      'grade': 'Grade 9',
+      'description':
+          'Explore elements and their properties through interactive AR',
+      'arItems': [
+        '3D Element Models',
+        'Atomic Structure',
+        'Element Properties'
+      ],
+      'icon': Icons.science_outlined,
+      'color': 'chemistry',
+    },
+    {
+      'id': 'g9_volcano',
+      'title': 'Volcano & Climate Change',
+      'subject': 'Earth Science',
+      'grade': 'Grade 9',
+      'description': 'Understand volcanic activity and its impact on climate',
+      'arItems': ['3D Volcano Model', 'Eruption Simulation', 'Climate Effects'],
+      'icon': Icons.terrain_outlined,
+      'color': 'earthScience',
+    },
+    {
+      'id': 'g9_respiratory',
+      'title': 'Respiratory & Circulatory Systems',
+      'subject': 'Biology',
+      'grade': 'Grade 9',
+      'description':
+          'Learn how respiratory and circulatory systems work together',
+      'arItems': ['3D Heart Model', 'Lung Structure', 'Blood Flow Animation'],
+      'icon': Icons.favorite_outlined,
+      'color': 'biology',
+    },
+  ];
+
+  // Grade 10 Lessons with AR Items
+  static const List<Map<String, dynamic>> grade10Lessons = [
+    {
+      'id': 'g10_physics',
+      'title': 'Forces & Gravity',
+      'subject': 'Physics',
+      'grade': 'Grade 10',
+      'description':
+          'Explore fundamental forces and gravitational interactions',
+      'arItems': ['Force Vectors', 'Gravity Simulation', 'Orbital Mechanics'],
+      'icon': Icons.speed_outlined,
+      'color': 'physics',
+    },
+  ];
+
+  // All Lessons Combined
+  static const List<Map<String, dynamic>> allLessons = [
+    ...grade9Lessons,
+    ...grade10Lessons,
   ];
 
   // Medication Status
