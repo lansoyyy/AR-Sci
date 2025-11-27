@@ -317,44 +317,11 @@ Color _getSubjectColor(String? colorName) {
 
 List<Map<String, dynamic>> _getContentSections(Map<String, dynamic> lesson) {
   switch (lesson['id']) {
-    case 'g9_periodic':
+    case 'g9_volcanoes':
       return [
         {
-          'title': 'Introduction to Elements',
-          'duration': '5 min',
-          'isCompleted': true,
-          'isActive': false
-        },
-        {
-          'title': 'Atomic Structure',
-          'duration': '10 min',
-          'isCompleted': true,
-          'isActive': false
-        },
-        {
-          'title': 'Periodic Trends',
-          'duration': '12 min',
-          'isCompleted': false,
-          'isActive': true
-        },
-        {
-          'title': 'Element Properties',
-          'duration': '8 min',
-          'isCompleted': false,
-          'isActive': false
-        },
-        {
-          'title': 'Practice with AR Models',
-          'duration': '15 min',
-          'isCompleted': false,
-          'isActive': false
-        },
-      ];
-    case 'g9_volcano':
-      return [
-        {
-          'title': 'Volcano Formation',
-          'duration': '8 min',
+          'title': 'Introduction to Volcanoes',
+          'duration': '6 min',
           'isCompleted': true,
           'isActive': false
         },
@@ -365,58 +332,157 @@ List<Map<String, dynamic>> _getContentSections(Map<String, dynamic> lesson) {
           'isActive': false
         },
         {
-          'title': 'Eruption Process',
+          'title': 'Causes of Eruptions',
           'duration': '12 min',
           'isCompleted': false,
           'isActive': true
         },
         {
-          'title': 'Climate Impact',
+          'title': 'Volcanic Hazards & Risks',
           'duration': '10 min',
           'isCompleted': false,
           'isActive': false
         },
         {
-          'title': 'AR Volcano Simulation',
+          'title': 'AR Volcano Exploration',
           'duration': '15 min',
           'isCompleted': false,
           'isActive': false
         },
       ];
-    case 'g9_respiratory':
+    case 'g9_earthquakes':
       return [
         {
-          'title': 'Introduction to Body Systems',
-          'duration': '5 min',
+          'title': 'Earth’s Plates and Faults',
+          'duration': '8 min',
           'isCompleted': true,
           'isActive': false
         },
         {
-          'title': 'Respiratory System',
+          'title': 'How Earthquakes Happen',
           'duration': '10 min',
           'isCompleted': true,
           'isActive': false
         },
         {
-          'title': 'Circulatory System',
+          'title': 'Seismic Waves',
           'duration': '12 min',
           'isCompleted': false,
           'isActive': true
         },
         {
-          'title': 'System Interaction',
+          'title': 'Measuring Earthquakes',
+          'duration': '10 min',
+          'isCompleted': false,
+          'isActive': false
+        },
+        {
+          'title': 'Preparedness and Safety',
           'duration': '8 min',
           'isCompleted': false,
           'isActive': false
         },
+      ];
+    case 'g9_climate':
+      return [
         {
-          'title': 'AR Body Models',
+          'title': 'Weather vs Climate',
+          'duration': '6 min',
+          'isCompleted': true,
+          'isActive': false
+        },
+        {
+          'title': 'Factors Affecting Climate',
+          'duration': '12 min',
+          'isCompleted': true,
+          'isActive': false
+        },
+        {
+          'title': 'Climate Zones',
+          'duration': '10 min',
+          'isCompleted': false,
+          'isActive': true
+        },
+        {
+          'title': 'Climate Change Impacts',
+          'duration': '12 min',
+          'isCompleted': false,
+          'isActive': false
+        },
+        {
+          'title': 'AR Climate Visualizations',
           'duration': '15 min',
           'isCompleted': false,
           'isActive': false
         },
       ];
-    case 'g10_physics':
+    case 'g9_constellations':
+      return [
+        {
+          'title': 'Patterns in the Night Sky',
+          'duration': '6 min',
+          'isCompleted': true,
+          'isActive': false
+        },
+        {
+          'title': 'Major Constellations',
+          'duration': '12 min',
+          'isCompleted': true,
+          'isActive': false
+        },
+        {
+          'title': 'Seasonal Sky Changes',
+          'duration': '10 min',
+          'isCompleted': false,
+          'isActive': true
+        },
+        {
+          'title': 'Constellations and Navigation',
+          'duration': '10 min',
+          'isCompleted': false,
+          'isActive': false
+        },
+        {
+          'title': 'AR Star Map Exploration',
+          'duration': '15 min',
+          'isCompleted': false,
+          'isActive': false
+        },
+      ];
+    case 'g9_energy':
+      return [
+        {
+          'title': 'Forms of Energy',
+          'duration': '8 min',
+          'isCompleted': true,
+          'isActive': false
+        },
+        {
+          'title': 'Work and Power',
+          'duration': '10 min',
+          'isCompleted': true,
+          'isActive': false
+        },
+        {
+          'title': 'Energy Transformations',
+          'duration': '12 min',
+          'isCompleted': false,
+          'isActive': true
+        },
+        {
+          'title': 'Conservation of Energy',
+          'duration': '10 min',
+          'isCompleted': false,
+          'isActive': false
+        },
+        {
+          'title': 'Energy in Everyday Life',
+          'duration': '8 min',
+          'isCompleted': false,
+          'isActive': false
+        },
+      ];
+    case 'g9_forces':
       return [
         {
           'title': 'Introduction to Forces',
@@ -426,18 +492,18 @@ List<Map<String, dynamic>> _getContentSections(Map<String, dynamic> lesson) {
         },
         {
           'title': 'Types of Forces',
-          'duration': '10 min',
+          'duration': '12 min',
           'isCompleted': true,
           'isActive': false
         },
         {
-          'title': 'Gravity and Motion',
-          'duration': '12 min',
+          'title': 'Net Force and Equilibrium',
+          'duration': '10 min',
           'isCompleted': false,
           'isActive': true
         },
         {
-          'title': 'Force Calculations',
+          'title': 'Friction and Air Resistance',
           'duration': '10 min',
           'isCompleted': false,
           'isActive': false
@@ -445,6 +511,105 @@ List<Map<String, dynamic>> _getContentSections(Map<String, dynamic> lesson) {
         {
           'title': 'AR Force Simulations',
           'duration': '15 min',
+          'isCompleted': false,
+          'isActive': false
+        },
+      ];
+    case 'g9_motion':
+      return [
+        {
+          'title': 'Describing Motion',
+          'duration': '6 min',
+          'isCompleted': true,
+          'isActive': false
+        },
+        {
+          'title': 'Speed and Velocity',
+          'duration': '10 min',
+          'isCompleted': true,
+          'isActive': false
+        },
+        {
+          'title': 'Acceleration',
+          'duration': '10 min',
+          'isCompleted': false,
+          'isActive': true
+        },
+        {
+          'title': 'Graphs of Motion',
+          'duration': '12 min',
+          'isCompleted': false,
+          'isActive': false
+        },
+        {
+          'title': 'Motion in Real Life',
+          'duration': '8 min',
+          'isCompleted': false,
+          'isActive': false
+        },
+      ];
+    case 'g9_electricity':
+      return [
+        {
+          'title': 'Basic Electric Quantities',
+          'duration': '8 min',
+          'isCompleted': true,
+          'isActive': false
+        },
+        {
+          'title': 'Simple Circuits',
+          'duration': '10 min',
+          'isCompleted': true,
+          'isActive': false
+        },
+        {
+          'title': 'Series and Parallel Circuits',
+          'duration': '12 min',
+          'isCompleted': false,
+          'isActive': true
+        },
+        {
+          'title': 'Safety with Electricity',
+          'duration': '8 min',
+          'isCompleted': false,
+          'isActive': false
+        },
+        {
+          'title': 'AR Circuit Builder',
+          'duration': '15 min',
+          'isCompleted': false,
+          'isActive': false
+        },
+      ];
+    case 'g9_waves':
+      return [
+        {
+          'title': 'What Are Waves?',
+          'duration': '8 min',
+          'isCompleted': true,
+          'isActive': false
+        },
+        {
+          'title': 'Wave Properties',
+          'duration': '10 min',
+          'isCompleted': true,
+          'isActive': false
+        },
+        {
+          'title': 'Sound Waves',
+          'duration': '10 min',
+          'isCompleted': false,
+          'isActive': true
+        },
+        {
+          'title': 'Light Waves',
+          'duration': '10 min',
+          'isCompleted': false,
+          'isActive': false
+        },
+        {
+          'title': 'Wave Applications',
+          'duration': '8 min',
           'isCompleted': false,
           'isActive': false
         },

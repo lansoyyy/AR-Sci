@@ -134,7 +134,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     decoration: BoxDecoration(
                       color: AppColors.textWhite.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(AppConstants.radiusRound),
+                      borderRadius:
+                          BorderRadius.circular(AppConstants.radiusRound),
                     ),
                     child: Text(
                       widget.role.toUpperCase(),
@@ -147,7 +148,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ],
               ),
             ),
-            
+
             // Form Section
             Padding(
               padding: const EdgeInsets.all(AppConstants.paddingL),
@@ -166,7 +167,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ),
                     const SizedBox(height: AppConstants.paddingL),
-                    
+
                     TextFormField(
                       controller: _nameController,
                       enabled: _isEditing,
@@ -176,7 +177,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ),
                     const SizedBox(height: AppConstants.paddingL),
-                    
+
                     TextFormField(
                       controller: _emailController,
                       enabled: _isEditing,
@@ -186,17 +187,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ),
                     const SizedBox(height: AppConstants.paddingL),
-                    
+
                     if (widget.role == 'student')
                       TextFormField(
-                        initialValue: 'Grade 10',
+                        initialValue: 'Grade 9',
                         enabled: _isEditing,
                         decoration: const InputDecoration(
                           labelText: 'Grade Level',
                           prefixIcon: Icon(Icons.school_outlined),
                         ),
                       ),
-                    
+
                     if (widget.role == 'teacher')
                       TextFormField(
                         initialValue: 'Physics',
@@ -206,9 +207,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           prefixIcon: Icon(Icons.book_outlined),
                         ),
                       ),
-                    
+
                     const SizedBox(height: AppConstants.paddingXL),
-                    
+
                     // Settings Section
                     const Text(
                       'Settings',
@@ -219,7 +220,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ),
                     const SizedBox(height: AppConstants.paddingL),
-                    
+
                     _SettingsTile(
                       icon: Icons.notifications_outlined,
                       title: 'Notifications',
@@ -229,22 +230,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         activeColor: _roleColor,
                       ),
                     ),
-                    
+
                     _SettingsTile(
                       icon: Icons.lock_outline,
                       title: 'Change Password',
                       onTap: () {},
                     ),
-                    
+
                     _SettingsTile(
                       icon: Icons.language_outlined,
                       title: 'Language',
                       subtitle: 'English',
                       onTap: () {},
                     ),
-                    
+
                     const SizedBox(height: AppConstants.paddingXL),
-                    
+
                     // Save Button (shown when editing)
                     if (_isEditing)
                       CustomButton(
@@ -253,16 +254,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           if (_formKey.currentState!.validate()) {
                             setState(() => _isEditing = false);
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Profile updated successfully')),
+                              const SnackBar(
+                                  content:
+                                      Text('Profile updated successfully')),
                             );
                           }
                         },
                         fullWidth: true,
                         backgroundColor: _roleColor,
                       ),
-                    
+
                     const SizedBox(height: AppConstants.paddingL),
-                    
+
                     // Logout Button
                     CustomButton(
                       text: 'Logout',

@@ -148,7 +148,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         labelText: 'Grade Level',
                         prefixIcon: Icon(Icons.school_outlined),
                       ),
-                      items: const ['Grade 9', 'Grade 10'].map((grade) {
+                      items: AppConstants.gradeLevels.map((grade) {
                         return DropdownMenuItem(
                           value: grade,
                           child: Text(grade),

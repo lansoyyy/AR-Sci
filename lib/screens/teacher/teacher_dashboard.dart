@@ -368,10 +368,9 @@ class _StudentsPage extends StatelessWidget {
         padding: const EdgeInsets.all(AppConstants.paddingM),
         itemCount: 10,
         itemBuilder: (context, index) {
-          final gradeLevel = index < 5 ? 'Grade 9' : 'Grade 10';
           return _StudentCard(
             name: 'Student ${index + 1}',
-            gradeLevel: gradeLevel,
+            gradeLevel: 'Grade 9',
             avgScore: 75.0 + (index * 2),
             completedLessons: 6 + index,
           );

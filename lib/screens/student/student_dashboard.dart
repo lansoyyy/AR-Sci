@@ -137,7 +137,7 @@ class _DashboardHome extends StatelessWidget {
                           BorderRadius.circular(AppConstants.radiusRound),
                     ),
                     child: const Text(
-                      'Grade 10',
+                      'Grade 9',
                       style: TextStyle(
                         color: AppColors.textWhite,
                         fontWeight: FontWeight.w600,
@@ -369,11 +369,52 @@ class _DashboardHome extends StatelessWidget {
   }
 }
 
-class _LessonsPage extends StatelessWidget {
+class _LessonsPage extends StatefulWidget {
   const _LessonsPage();
 
   @override
+  State<_LessonsPage> createState() => _LessonsPageState();
+}
+
+class _LessonsPageState extends State<_LessonsPage> {
+  String _selectedFilter = 'All';
+
+  List<Map<String, dynamic>> get _filteredLessons {
+    final all = AppConstants.allLessons;
+
+    if (_selectedFilter == 'All') {
+      return all;
+    }
+
+    if (_selectedFilter == 'Quarter 3' || _selectedFilter == 'Quarter 4') {
+      return all
+          .where((lesson) => lesson['quarter'] == _selectedFilter)
+          .toList();
+    }
+
+    if (_selectedFilter == 'Grade 9') {
+      return all.where((lesson) => lesson['grade'] == 'Grade 9').toList();
+    }
+
+    if (AppConstants.subjects.contains(_selectedFilter)) {
+      return all
+          .where((lesson) => lesson['subject'] == _selectedFilter)
+          .toList();
+    }
+
+    return all;
+  }
+
+  void _onFilterSelected(String label) {
+    setState(() {
+      _selectedFilter = label;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final lessons = _filteredLessons;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('My Lessons'),
@@ -388,16 +429,38 @@ class _LessonsPage extends StatelessWidget {
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: [
-                  _FilterChip(label: 'All', isSelected: true),
+                  _FilterChip(
+                    label: 'All',
+                    isSelected: _selectedFilter == 'All',
+                    onSelected: (_) => _onFilterSelected('All'),
+                  ),
                   const SizedBox(width: AppConstants.paddingS),
-                  _FilterChip(label: 'Grade 9'),
+                  _FilterChip(
+                    label: 'Quarter 3',
+                    isSelected: _selectedFilter == 'Quarter 3',
+                    onSelected: (_) => _onFilterSelected('Quarter 3'),
+                  ),
                   const SizedBox(width: AppConstants.paddingS),
-                  _FilterChip(label: 'Grade 10'),
+                  _FilterChip(
+                    label: 'Quarter 4',
+                    isSelected: _selectedFilter == 'Quarter 4',
+                    onSelected: (_) => _onFilterSelected('Quarter 4'),
+                  ),
+                  const SizedBox(width: AppConstants.paddingS),
+                  _FilterChip(
+                    label: 'Grade 9',
+                    isSelected: _selectedFilter == 'Grade 9',
+                    onSelected: (_) => _onFilterSelected('Grade 9'),
+                  ),
                   const SizedBox(width: AppConstants.paddingS),
                   ...AppConstants.subjects.map((subject) => Padding(
                         padding:
                             const EdgeInsets.only(left: AppConstants.paddingS),
-                        child: _FilterChip(label: subject),
+                        child: _FilterChip(
+                          label: subject,
+                          isSelected: _selectedFilter == subject,
+                          onSelected: (_) => _onFilterSelected(subject),
+                        ),
                       )),
                 ],
               ),
@@ -409,9 +472,9 @@ class _LessonsPage extends StatelessWidget {
             child: ListView.builder(
               padding:
                   const EdgeInsets.symmetric(vertical: AppConstants.paddingM),
-              itemCount: AppConstants.allLessons.length,
+              itemCount: lessons.length,
               itemBuilder: (context, index) {
-                final lesson = AppConstants.allLessons[index];
+                final lesson = lessons[index];
                 return LessonCard(
                   lesson: LessonModel(
                     id: lesson['id'],
@@ -464,7 +527,7 @@ class _QuizzesPage extends StatelessWidget {
               description: 'Test your knowledge',
               lessonId: '1',
               subject: 'Physics',
-              gradeLevel: 'Grade 10',
+              gradeLevel: 'Grade 9',
               questions: List.generate(
                   10,
                   (i) => QuizQuestion(
@@ -609,15 +672,20 @@ class _ProgressPage extends StatelessWidget {
 class _FilterChip extends StatelessWidget {
   final String label;
   final bool isSelected;
+  final ValueChanged<bool> onSelected;
 
-  const _FilterChip({required this.label, this.isSelected = false});
+  const _FilterChip({
+    required this.label,
+    this.isSelected = false,
+    required this.onSelected,
+  });
 
   @override
   Widget build(BuildContext context) {
     return FilterChip(
       label: Text(label),
       selected: isSelected,
-      onSelected: (value) {},
+      onSelected: onSelected,
       selectedColor: AppColors.studentPrimary.withOpacity(0.2),
       checkmarkColor: AppColors.studentPrimary,
     );

@@ -258,7 +258,7 @@ class _ARViewScreenState extends State<ARViewScreen> {
                       const SizedBox(width: AppConstants.paddingS),
                       _ARModeChip(
                         icon: Icons.science_outlined,
-                        label: 'Periodic Table',
+                        label: '3D Explorer',
                         isSelected: _selectedARMode == 'periodic',
                         color: AppColors.periodicTable,
                         onTap: () {
@@ -411,39 +411,59 @@ class _ARViewScreenState extends State<ARViewScreen> {
       case 'labels':
         return 'Interactive Learning Labels';
       case 'periodic':
-        return 'AR Periodic Table';
+        return '3D Explorer';
       default:
         return 'AR View';
     }
   }
 
   String _getARModeDescription() {
-    final lessonId = _lessonData?['id'];
+    final lessonId = _lessonData?['id'] as String?;
     switch (_selectedARMode) {
       case 'simulation':
-        if (lessonId == 'g9_periodic') {
-          return 'Watch animated atomic structures and element behaviors. Interact with 3D models to understand electron configurations and bonding patterns.';
-        } else if (lessonId == 'g9_volcano') {
-          return 'Experience volcanic eruptions in AR. Watch the formation process, magma flow, and climate impact in real-time simulation.';
-        } else if (lessonId == 'g9_respiratory') {
-          return 'Explore animated models of respiratory and circulatory systems. Watch how oxygen flows and blood circulates through the body.';
-        } else if (lessonId == 'g10_physics') {
-          return 'Interact with force vectors and gravity simulations. See how different forces affect object motion in real-time 3D space.';
+        if (lessonId == 'g9_volcanoes') {
+          return 'Experience volcanic eruptions in AR. See magma movement, ash clouds, and lava flows in real-time simulations.';
+        } else if (lessonId == 'g9_earthquakes') {
+          return 'See how tectonic plates move and generate seismic waves. Visualize epicenters, focus points, and ground shaking in 3D.';
+        } else if (lessonId == 'g9_climate') {
+          return 'Observe how sunlight, atmosphere, and oceans interact to create different climates and weather patterns.';
+        } else if (lessonId == 'g9_constellations') {
+          return 'Watch constellations form in the night sky and see how Earth’s motion changes what we observe over time.';
+        } else if (lessonId == 'g9_energy') {
+          return 'Explore how energy is transformed between kinetic, potential, thermal, and electrical forms using interactive simulations.';
+        } else if (lessonId == 'g9_forces') {
+          return 'Visualize pushes, pulls, friction, and gravity acting on objects to see how forces change motion.';
+        } else if (lessonId == 'g9_motion') {
+          return 'Track objects in motion with distance–time and velocity–time animations that respond as you change variables.';
+        } else if (lessonId == 'g9_electricity') {
+          return 'Simulate current flow in simple circuits and see how bulbs, resistors, and switches respond in real time.';
+        } else if (lessonId == 'g9_waves') {
+          return 'Observe mechanical and electromagnetic waves as they reflect, refract, and interfere with each other.';
         }
-        return 'Watch animated models of scientific systems. Play, pause, or slow down each phase for better comprehension.';
+        return 'Watch animated models that bring this lesson to life. Play, pause, or slow down each phase for better understanding.';
       case 'labels':
-        if (lessonId == 'g9_periodic') {
-          return 'Tap on elements to learn their properties, atomic numbers, and chemical behaviors. Interactive labels show detailed information.';
-        } else if (lessonId == 'g9_volcano') {
-          return 'Tap on volcano parts to learn about magma chambers, vents, and eruption types. Labels explain geological processes.';
-        } else if (lessonId == 'g9_respiratory') {
-          return 'Tap on organs and blood vessels to learn their names and functions. Interactive labels show how systems work together.';
-        } else if (lessonId == 'g10_physics') {
-          return 'Tap on force vectors and objects to learn about magnitude, direction, and effects. Labels explain physics concepts.';
+        if (lessonId == 'g9_volcanoes') {
+          return 'Tap on volcano parts to learn about magma chambers, vents, and eruption types. Labels explain each structure.';
+        } else if (lessonId == 'g9_earthquakes') {
+          return 'Tap on faults, plates, and instruments like seismographs to see what role they play during an earthquake.';
+        } else if (lessonId == 'g9_climate') {
+          return 'Tap on climate graphs, symbols, and regions to learn what they represent and how they are interpreted.';
+        } else if (lessonId == 'g9_constellations') {
+          return 'Tap on stars and constellation lines to reveal names, stories, and how they are used for navigation.';
+        } else if (lessonId == 'g9_energy') {
+          return 'Tap on objects to see which type of energy they show and how energy is being transformed.';
+        } else if (lessonId == 'g9_forces') {
+          return 'Tap on force arrows and contact points to learn about magnitude, direction, and type of force.';
+        } else if (lessonId == 'g9_motion') {
+          return 'Tap on graphs and moving objects to see what changing speed or direction does to the motion.';
+        } else if (lessonId == 'g9_electricity') {
+          return 'Tap on circuit components to learn their symbols, functions, and how they affect current, voltage, and resistance.';
+        } else if (lessonId == 'g9_waves') {
+          return 'Tap on crests, troughs, and ray diagrams to see how wavelength, frequency, and amplitude are related.';
         }
-        return 'Tap on parts to learn their names, definitions, functions, and importance. Pop-up info cards provide detailed explanations.';
+        return 'Tap on parts of the AR scene to reveal names, descriptions, and key facts for this lesson.';
       case 'periodic':
-        return 'Explore the periodic table in 3D AR format. Select elements to view their atomic structure, model, or sample appearance.';
+        return 'Explore detailed 3D models related to this topic, such as volcano interiors, tectonic plates, the night sky, circuits, or wave patterns.';
       default:
         return '';
     }
