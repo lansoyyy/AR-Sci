@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "32423154258",
+    "project_id": "arfusion-4a9b0",
+    "storage_bucket": "arfusion-4a9b0.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:32423154258:android:1476371bf6891d83f6c58b",
+        "android_client_info": {
+          "package_name": "com.example.ar_sci"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA0EMLpyLtBvi6Y5qn2ETRyHvAiF0uyByI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
