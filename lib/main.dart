@@ -10,7 +10,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await Firebase.initializeApp(
-    name: 'powernotify-64b1d',
+    name: 'arfusion-4a9b0',
     options: DefaultFirebaseOptions.currentPlatform,
   );
   // Set preferred orientations
