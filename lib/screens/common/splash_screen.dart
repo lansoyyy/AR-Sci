@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../utils/colors.dart';
 import '../../utils/constants.dart';
 
@@ -9,7 +11,8 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
   late Animation<double> _fadeAnimation;
@@ -31,13 +34,50 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     );
 
     _controller.forward();
+    _navigateNext();
+  }
 
-    // Navigate to role selection after 3 seconds
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted) {
-        Navigator.pushReplacementNamed(context, '/role-selection');
+  Future<void> _navigateNext() async {
+    // Keep splash visible for a short time
+    await Future.delayed(const Duration(seconds: 3));
+
+    if (!mounted) return;
+
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) {
+      Navigator.pushReplacementNamed(context, '/role-selection');
+      return;
+    }
+
+    String role = 'student';
+    try {
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUser.uid)
+          .get();
+
+      if (userDoc.exists) {
+        final data = userDoc.data();
+        if (data != null && data['role'] is String) {
+          role = data['role'] as String;
+        }
       }
-    });
+    } catch (_) {}
+
+    if (!mounted) return;
+
+    switch (role) {
+      case 'teacher':
+        Navigator.pushReplacementNamed(context, '/teacher-dashboard');
+        break;
+      case 'admin':
+        Navigator.pushReplacementNamed(context, '/admin-dashboard');
+        break;
+      case 'student':
+      default:
+        Navigator.pushReplacementNamed(context, '/student-dashboard');
+        break;
+    }
   }
 
   @override
@@ -71,7 +111,8 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                     height: 120,
                     decoration: BoxDecoration(
                       color: AppColors.textWhite,
-                      borderRadius: BorderRadius.circular(AppConstants.radiusXL),
+                      borderRadius:
+                          BorderRadius.circular(AppConstants.radiusXL),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withOpacity(0.2),
@@ -87,7 +128,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                     ),
                   ),
                   const SizedBox(height: AppConstants.paddingXL),
-                  
+
                   // App Name
                   const Text(
                     AppConstants.appName,
@@ -99,7 +140,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                     ),
                   ),
                   const SizedBox(height: AppConstants.paddingS),
-                  
+
                   // Tagline
                   const Text(
                     AppConstants.appTagline,
@@ -110,10 +151,11 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                     ),
                   ),
                   const SizedBox(height: AppConstants.paddingXXL),
-                  
+
                   // Loading Indicator
                   const CircularProgressIndicator(
-                    valueColor: AlwaysStoppedAnimation<Color>(AppColors.textWhite),
+                    valueColor:
+                        AlwaysStoppedAnimation<Color>(AppColors.textWhite),
                   ),
                 ],
               ),

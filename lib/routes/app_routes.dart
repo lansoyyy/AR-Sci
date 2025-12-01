@@ -5,6 +5,7 @@ import '../screens/common/login_screen.dart';
 import '../screens/common/register_screen.dart';
 import '../screens/common/profile_screen.dart';
 import '../screens/common/notifications_screen.dart';
+import '../screens/common/forgot_password_screen.dart';
 import '../screens/student/student_dashboard.dart';
 import '../screens/student/lesson_detail_screen.dart';
 import '../screens/student/ar_view_screen.dart';
@@ -36,6 +37,7 @@ class AppRoutes {
     return {
       splash: (context) => const SplashScreen(),
       roleSelection: (context) => const RoleSelectionScreen(),
+      forgotPassword: (context) => const ForgotPasswordScreen(),
       studentDashboard: (context) => const StudentDashboard(),
       teacherDashboard: (context) => const TeacherDashboard(),
       adminDashboard: (context) => const AdminDashboard(),

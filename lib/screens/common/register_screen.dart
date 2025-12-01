@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../utils/colors.dart';
 import '../../utils/constants.dart';
 import '../../widgets/custom_button.dart';
+import '../../models/user_model.dart';
 
 class RegisterScreen extends StatefulWidget {
   final String role;
@@ -37,18 +40,76 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
-  void _handleRegister() {
+  Future<void> _handleRegister() async {
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
 
       // Simulate registration
-      Future.delayed(const Duration(seconds: 2), () {
-        if (mounted) {
-          setState(() => _isLoading = false);
-          Navigator.pushReplacementNamed(context, '/login',
-              arguments: widget.role);
+      try {
+        final credential =
+            await FirebaseAuth.instance.createUserWithEmailAndPassword(
+          email: _emailController.text.trim(),
+          password: _passwordController.text.trim(),
+        );
+
+        final user = credential.user;
+        if (user == null) {
+          throw FirebaseAuthException(
+            code: 'user-not-found',
+            message: 'User not found',
+          );
         }
-      });
+
+        String? gradeLevel;
+        String? subject;
+
+        if (widget.role == 'student') {
+          gradeLevel = _selectedGrade ?? 'Grade 9';
+        } else if (widget.role == 'teacher') {
+          subject = _selectedSubject;
+        }
+
+        final userModel = UserModel(
+          id: user.uid,
+          name: _nameController.text.trim(),
+          email: _emailController.text.trim(),
+          role: widget.role,
+          gradeLevel: gradeLevel,
+          subject: subject,
+          createdAt: DateTime.now(),
+        );
+
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .set(userModel.toJson());
+
+        if (!mounted) return;
+        setState(() => _isLoading = false);
+        Navigator.pushReplacementNamed(
+          context,
+          '/login',
+          arguments: widget.role,
+        );
+      } on FirebaseAuthException catch (e) {
+        if (!mounted) return;
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              e.message ?? 'Failed to register. Please try again.',
+            ),
+          ),
+        );
+      } catch (_) {
+        if (!mounted) return;
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('An unexpected error occurred. Please try again.'),
+          ),
+        );
+      }
     }
   }
 

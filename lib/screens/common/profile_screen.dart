@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../utils/colors.dart';
 import '../../utils/constants.dart';
 import '../../widgets/custom_button.dart';
@@ -269,7 +270,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     // Logout Button
                     CustomButton(
                       text: 'Logout',
-                      onPressed: () {
+                      onPressed: () async {
+                        await FirebaseAuth.instance.signOut();
+                        if (!mounted) return;
                         Navigator.pushNamedAndRemoveUntil(
                           context,
                           '/role-selection',

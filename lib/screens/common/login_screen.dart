@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../utils/colors.dart';
 import '../../utils/constants.dart';
 import '../../widgets/custom_button.dart';
@@ -45,29 +47,73 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  void _handleLogin() {
+  Future<void> _handleLogin() async {
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
-      
-      // Simulate login
-      Future.delayed(const Duration(seconds: 2), () {
-        if (mounted) {
-          setState(() => _isLoading = false);
-          
-          // Navigate to appropriate dashboard
-          switch (widget.role) {
-            case 'student':
-              Navigator.pushReplacementNamed(context, '/student-dashboard');
-              break;
-            case 'teacher':
-              Navigator.pushReplacementNamed(context, '/teacher-dashboard');
-              break;
-            case 'admin':
-              Navigator.pushReplacementNamed(context, '/admin-dashboard');
-              break;
-          }
+
+      try {
+        final credential =
+            await FirebaseAuth.instance.signInWithEmailAndPassword(
+          email: _emailController.text.trim(),
+          password: _passwordController.text.trim(),
+        );
+
+        final user = credential.user;
+        if (user == null) {
+          throw FirebaseAuthException(
+            code: 'user-not-found',
+            message: 'User not found',
+          );
         }
-      });
+
+        String role = widget.role;
+        try {
+          final userDoc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .get();
+          if (userDoc.exists) {
+            final data = userDoc.data();
+            if (data != null && data['role'] is String) {
+              role = data['role'] as String;
+            }
+          }
+        } catch (_) {}
+
+        if (!mounted) return;
+        setState(() => _isLoading = false);
+
+        switch (role) {
+          case 'student':
+            Navigator.pushReplacementNamed(context, '/student-dashboard');
+            break;
+          case 'teacher':
+            Navigator.pushReplacementNamed(context, '/teacher-dashboard');
+            break;
+          case 'admin':
+            Navigator.pushReplacementNamed(context, '/admin-dashboard');
+            break;
+          default:
+            Navigator.pushReplacementNamed(context, '/student-dashboard');
+            break;
+        }
+      } on FirebaseAuthException catch (e) {
+        if (!mounted) return;
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.message ?? 'Failed to login. Please try again.'),
+          ),
+        );
+      } catch (_) {
+        if (!mounted) return;
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('An unexpected error occurred. Please try again.'),
+          ),
+        );
+      }
     }
   }
 
@@ -94,7 +140,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const SizedBox(height: AppConstants.paddingXL),
-                  
+
                   // Back Button
                   Align(
                     alignment: Alignment.centerLeft,
@@ -103,9 +149,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       onPressed: () => Navigator.pop(context),
                     ),
                   ),
-                  
+
                   const SizedBox(height: AppConstants.paddingL),
-                  
+
                   // Role Icon
                   Center(
                     child: Container(
@@ -122,9 +168,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                   ),
-                  
+
                   const SizedBox(height: AppConstants.paddingL),
-                  
+
                   // Title
                   Text(
                     '${widget.role.toUpperCase()} LOGIN',
@@ -135,9 +181,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     textAlign: TextAlign.center,
                   ),
-                  
+
                   const SizedBox(height: AppConstants.paddingS),
-                  
+
                   const Text(
                     'Sign in to continue',
                     style: TextStyle(
@@ -146,9 +192,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     textAlign: TextAlign.center,
                   ),
-                  
+
                   const SizedBox(height: AppConstants.paddingXL),
-                  
+
                   // Email Field
                   TextFormField(
                     controller: _emailController,
@@ -167,9 +213,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       return null;
                     },
                   ),
-                  
+
                   const SizedBox(height: AppConstants.paddingL),
-                  
+
                   // Password Field
                   TextFormField(
                     controller: _passwordController,
@@ -179,7 +225,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       prefixIcon: const Icon(Icons.lock_outline),
                       suffixIcon: IconButton(
                         icon: Icon(
-                          _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                          _obscurePassword
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
                         ),
                         onPressed: () {
                           setState(() => _obscurePassword = !_obscurePassword);
@@ -196,9 +244,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       return null;
                     },
                   ),
-                  
+
                   const SizedBox(height: AppConstants.paddingM),
-                  
+
                   // Forgot Password
                   Align(
                     alignment: Alignment.centerRight,
@@ -212,9 +260,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                   ),
-                  
+
                   const SizedBox(height: AppConstants.paddingL),
-                  
+
                   // Login Button
                   CustomButton(
                     text: 'Login',
@@ -223,9 +271,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     fullWidth: true,
                     backgroundColor: _roleColor,
                   ),
-                  
+
                   const SizedBox(height: AppConstants.paddingL),
-                  
+
                   // Register Link
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -236,7 +284,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       TextButton(
                         onPressed: () {
-                          Navigator.pushNamed(context, '/register', arguments: widget.role);
+                          Navigator.pushNamed(context, '/register',
+                              arguments: widget.role);
                         },
                         child: Text(
                           'Register',
