@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../utils/colors.dart';
 import '../../utils/constants.dart';
 import '../../widgets/custom_button.dart';
@@ -15,9 +16,15 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController(text: 'John Doe');
-  final _emailController = TextEditingController(text: 'john.doe@example.com');
+  final _nameController = TextEditingController(text: '');
+  final _emailController = TextEditingController(text: '');
+  final _gradeController = TextEditingController(text: 'Grade 9');
+  final _subjectController = TextEditingController(text: 'Physics');
   bool _isEditing = false;
+  bool _isSaving = false;
+  String? _roleFromDb;
+  String? _gradeLevel;
+  String? _subject;
 
   Color get _roleColor {
     switch (widget.role) {
@@ -33,9 +40,141 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    _loadUserProfile();
+  }
+
+  Future<void> _loadUserProfile() async {
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) {
+        return;
+      }
+
+      final snapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUser.uid)
+          .get();
+
+      final data = snapshot.data();
+      if (data == null) {
+        return;
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        _nameController.text =
+            (data['name'] as String?) ?? _nameController.text;
+        _emailController.text =
+            (data['email'] as String?) ?? _emailController.text;
+        _roleFromDb = data['role'] as String?;
+        _gradeLevel = data['gradeLevel'] as String?;
+        _subject = data['subject'] as String?;
+
+        if (_gradeLevel != null && _gradeLevel!.isNotEmpty) {
+          _gradeController.text = _gradeLevel!;
+        }
+        if (_subject != null && _subject!.isNotEmpty) {
+          _subjectController.text = _subject!;
+        }
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _saveProfile() async {
+    try {
+      setState(() => _isSaving = true);
+
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) {
+        setState(() => _isSaving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No logged in user. Please login again.'),
+          ),
+        );
+        return;
+      }
+
+      final newName = _nameController.text.trim();
+      final newEmail = _emailController.text.trim();
+
+      String? gradeLevel;
+      String? subject;
+
+      if (widget.role == 'student') {
+        gradeLevel = _gradeController.text.trim();
+      }
+
+      if (widget.role == 'teacher') {
+        subject = _subjectController.text.trim();
+      }
+
+      if (newEmail.isNotEmpty && newEmail != currentUser.email) {
+        await currentUser.updateEmail(newEmail);
+      }
+
+      final updates = <String, dynamic>{
+        'name': newName,
+        'email': newEmail,
+      };
+
+      if (gradeLevel != null && gradeLevel.isNotEmpty) {
+        updates['gradeLevel'] = gradeLevel;
+      }
+
+      if (subject != null && subject.isNotEmpty) {
+        updates['subject'] = subject;
+      }
+
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUser.uid)
+          .update(updates);
+
+      if (!mounted) return;
+
+      setState(() {
+        _isSaving = false;
+        _isEditing = false;
+        _gradeLevel = gradeLevel ?? _gradeLevel;
+        _subject = subject ?? _subject;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Profile updated successfully'),
+        ),
+      );
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      setState(() => _isSaving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            e.message ?? 'Failed to update profile. Please try again.',
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isSaving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('An unexpected error occurred. Please try again.'),
+        ),
+      );
+    }
+  }
+
+  @override
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
+    _gradeController.dispose();
+    _subjectController.dispose();
     super.dispose();
   }
 
@@ -139,7 +278,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           BorderRadius.circular(AppConstants.radiusRound),
                     ),
                     child: Text(
-                      widget.role.toUpperCase(),
+                      (_roleFromDb ?? widget.role).toUpperCase(),
                       style: const TextStyle(
                         color: AppColors.textWhite,
                         fontWeight: FontWeight.w600,
@@ -191,7 +330,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                     if (widget.role == 'student')
                       TextFormField(
-                        initialValue: 'Grade 9',
+                        controller: _gradeController,
                         enabled: _isEditing,
                         decoration: const InputDecoration(
                           labelText: 'Grade Level',
@@ -201,7 +340,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                     if (widget.role == 'teacher')
                       TextFormField(
-                        initialValue: 'Physics',
+                        controller: _subjectController,
                         enabled: _isEditing,
                         decoration: const InputDecoration(
                           labelText: 'Subject',
@@ -251,16 +390,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     if (_isEditing)
                       CustomButton(
                         text: 'Save Changes',
-                        onPressed: () {
-                          if (_formKey.currentState!.validate()) {
-                            setState(() => _isEditing = false);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                  content:
-                                      Text('Profile updated successfully')),
-                            );
-                          }
-                        },
+                        onPressed: _isSaving
+                            ? null
+                            : () {
+                                if (_formKey.currentState!.validate()) {
+                                  _saveProfile();
+                                }
+                              },
+                        isLoading: _isSaving,
                         fullWidth: true,
                         backgroundColor: _roleColor,
                       ),
