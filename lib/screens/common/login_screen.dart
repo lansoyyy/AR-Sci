@@ -67,6 +67,7 @@ class _LoginScreenState extends State<LoginScreen> {
         }
 
         String role = widget.role;
+        bool isVerified = true;
         try {
           final userDoc = await FirebaseFirestore.instance
               .collection('users')
@@ -77,11 +78,23 @@ class _LoginScreenState extends State<LoginScreen> {
             if (data != null && data['role'] is String) {
               role = data['role'] as String;
             }
+            if (data != null && data['verified'] is bool) {
+              isVerified = data['verified'] as bool;
+            }
           }
         } catch (_) {}
 
         if (!mounted) return;
         setState(() => _isLoading = false);
+
+        if (!isVerified) {
+          Navigator.pushReplacementNamed(
+            context,
+            '/pending-verification',
+            arguments: role,
+          );
+          return;
+        }
 
         switch (role) {
           case 'student':

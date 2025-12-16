@@ -73,7 +73,8 @@ class _DashboardHome extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.notifications_outlined),
             onPressed: () {
-              Navigator.pushNamed(context, '/notifications', arguments: 'admin');
+              Navigator.pushNamed(context, '/notifications',
+                  arguments: 'admin');
             },
           ),
           IconButton(
@@ -129,7 +130,8 @@ class _DashboardHome extends StatelessWidget {
                     ),
                     decoration: BoxDecoration(
                       color: AppColors.textWhite.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(AppConstants.radiusRound),
+                      borderRadius:
+                          BorderRadius.circular(AppConstants.radiusRound),
                     ),
                     child: const Text(
                       'System Administrator',
@@ -142,12 +144,13 @@ class _DashboardHome extends StatelessWidget {
                 ],
               ),
             ),
-            
+
             const SizedBox(height: AppConstants.paddingL),
-            
+
             // System Stats
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingM),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: AppConstants.paddingM),
               child: Row(
                 children: [
                   Expanded(
@@ -171,11 +174,12 @@ class _DashboardHome extends StatelessWidget {
                 ],
               ),
             ),
-            
+
             const SizedBox(height: AppConstants.paddingM),
-            
+
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingM),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: AppConstants.paddingM),
               child: Row(
                 children: [
                   Expanded(
@@ -200,9 +204,9 @@ class _DashboardHome extends StatelessWidget {
                 ],
               ),
             ),
-            
+
             const SizedBox(height: AppConstants.paddingXL),
-            
+
             // User Distribution
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: AppConstants.paddingM),
@@ -216,9 +220,10 @@ class _DashboardHome extends StatelessWidget {
               ),
             ),
             const SizedBox(height: AppConstants.paddingM),
-            
+
             Card(
-              margin: const EdgeInsets.symmetric(horizontal: AppConstants.paddingM),
+              margin:
+                  const EdgeInsets.symmetric(horizontal: AppConstants.paddingM),
               child: Padding(
                 padding: const EdgeInsets.all(AppConstants.paddingL),
                 child: Column(
@@ -247,9 +252,9 @@ class _DashboardHome extends StatelessWidget {
                 ),
               ),
             ),
-            
+
             const SizedBox(height: AppConstants.paddingXL),
-            
+
             // Quick Actions
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: AppConstants.paddingM),
@@ -263,15 +268,17 @@ class _DashboardHome extends StatelessWidget {
               ),
             ),
             const SizedBox(height: AppConstants.paddingM),
-            
+
             FeatureCard(
               title: 'Manage Users',
               description: 'Add, edit, or remove user accounts',
               icon: Icons.people_outline,
               iconColor: AppColors.adminPrimary,
-              onTap: () {},
+              onTap: () {
+                Navigator.pushNamed(context, '/admin-verify-accounts');
+              },
             ),
-            
+
             FeatureCard(
               title: 'Content Review',
               description: 'Review and approve pending content',
@@ -279,7 +286,7 @@ class _DashboardHome extends StatelessWidget {
               iconColor: AppColors.warning,
               onTap: () {},
             ),
-            
+
             FeatureCard(
               title: 'System Reports',
               description: 'View detailed analytics and reports',
@@ -287,7 +294,7 @@ class _DashboardHome extends StatelessWidget {
               iconColor: AppColors.info,
               onTap: () {},
             ),
-            
+
             FeatureCard(
               title: 'Announcements',
               description: 'Send notifications to all users',
@@ -295,7 +302,7 @@ class _DashboardHome extends StatelessWidget {
               iconColor: AppColors.error,
               onTap: () {},
             ),
-            
+
             const SizedBox(height: AppConstants.paddingL),
           ],
         ),
@@ -345,10 +352,11 @@ class _UserManagement extends StatelessWidget {
               ],
             ),
           ),
-          
+
           // Search Bar
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingM),
+            padding:
+                const EdgeInsets.symmetric(horizontal: AppConstants.paddingM),
             child: TextField(
               decoration: InputDecoration(
                 hintText: 'Search users...',
@@ -359,13 +367,14 @@ class _UserManagement extends StatelessWidget {
               ),
             ),
           ),
-          
+
           const SizedBox(height: AppConstants.paddingM),
-          
+
           // Users List
           Expanded(
             child: ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingM),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: AppConstants.paddingM),
               itemCount: 10,
               itemBuilder: (context, index) {
                 return _UserCard(
@@ -426,11 +435,12 @@ class _ContentManagement extends StatelessWidget {
               ],
             ),
           ),
-          
+
           // Content List
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingM),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: AppConstants.paddingM),
               children: [
                 const Text(
                   'Pending Approval',
@@ -440,14 +450,12 @@ class _ContentManagement extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: AppConstants.paddingM),
-                
                 _ContentReviewCard(
                   title: 'Laws of Motion',
                   type: 'Lesson',
                   author: 'Prof. Jane Smith',
                   subject: 'Physics',
                 ),
-                
                 _ContentReviewCard(
                   title: 'Chemical Reactions Quiz',
                   type: 'Quiz',
@@ -484,28 +492,23 @@ class _SettingsPage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: AppConstants.paddingM),
-          
           _SettingsTile(
             icon: Icons.school_outlined,
             title: 'Academic Year',
             subtitle: '2024-2025',
             onTap: () {},
           ),
-          
           _SettingsTile(
             icon: Icons.notifications_outlined,
             title: 'Notification Settings',
             onTap: () {},
           ),
-          
           _SettingsTile(
             icon: Icons.security_outlined,
             title: 'Security & Privacy',
             onTap: () {},
           ),
-          
           const SizedBox(height: AppConstants.paddingXL),
-          
           const Text(
             'System Management',
             style: TextStyle(
@@ -514,19 +517,16 @@ class _SettingsPage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: AppConstants.paddingM),
-          
           _SettingsTile(
             icon: Icons.backup_outlined,
             title: 'Backup & Restore',
             onTap: () {},
           ),
-          
           _SettingsTile(
             icon: Icons.analytics_outlined,
             title: 'System Analytics',
             onTap: () {},
           ),
-          
           _SettingsTile(
             icon: Icons.bug_report_outlined,
             title: 'Error Logs',
@@ -554,7 +554,7 @@ class _UserDistributionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final percentage = (count / total);
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -609,8 +609,10 @@ class _FilterButton extends StatelessWidget {
     return ElevatedButton(
       onPressed: onTap,
       style: ElevatedButton.styleFrom(
-        backgroundColor: isSelected ? AppColors.adminPrimary : AppColors.surfaceLight,
-        foregroundColor: isSelected ? AppColors.textWhite : AppColors.textPrimary,
+        backgroundColor:
+            isSelected ? AppColors.adminPrimary : AppColors.surfaceLight,
+        foregroundColor:
+            isSelected ? AppColors.textWhite : AppColors.textPrimary,
         elevation: isSelected ? 2 : 0,
       ),
       child: Text(label),
@@ -741,7 +743,8 @@ class _ContentReviewCard extends StatelessWidget {
                   ),
                   decoration: BoxDecoration(
                     color: AppColors.warning.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(AppConstants.radiusRound),
+                    borderRadius:
+                        BorderRadius.circular(AppConstants.radiusRound),
                   ),
                   child: Text(
                     type,

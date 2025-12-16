@@ -6,11 +6,13 @@ import '../screens/common/register_screen.dart';
 import '../screens/common/profile_screen.dart';
 import '../screens/common/notifications_screen.dart';
 import '../screens/common/forgot_password_screen.dart';
+import '../screens/common/pending_verification_screen.dart';
 import '../screens/student/student_dashboard.dart';
 import '../screens/student/lesson_detail_screen.dart';
 import '../screens/student/ar_view_screen.dart';
 import '../screens/teacher/teacher_dashboard.dart';
 import '../screens/admin/admin_dashboard.dart';
+import '../screens/admin/account_verification_screen.dart';
 
 class AppRoutes {
   static const String splash = '/';
@@ -20,6 +22,7 @@ class AppRoutes {
   static const String forgotPassword = '/forgot-password';
   static const String profile = '/profile';
   static const String notifications = '/notifications';
+  static const String pendingVerification = '/pending-verification';
 
   // Student Routes
   static const String studentDashboard = '/student-dashboard';
@@ -32,6 +35,7 @@ class AppRoutes {
 
   // Admin Routes
   static const String adminDashboard = '/admin-dashboard';
+  static const String adminVerifyAccounts = '/admin-verify-accounts';
 
   static Map<String, WidgetBuilder> getRoutes() {
     return {
@@ -69,6 +73,17 @@ class AppRoutes {
         final role = settings.arguments as String? ?? 'student';
         return MaterialPageRoute(
           builder: (context) => NotificationsScreen(role: role),
+        );
+
+      case pendingVerification:
+        final role = settings.arguments as String? ?? 'student';
+        return MaterialPageRoute(
+          builder: (context) => PendingVerificationScreen(role: role),
+        );
+
+      case adminVerifyAccounts:
+        return MaterialPageRoute(
+          builder: (context) => const AccountVerificationScreen(),
         );
 
       case arView:

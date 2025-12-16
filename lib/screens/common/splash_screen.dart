@@ -50,6 +50,7 @@ class _SplashScreenState extends State<SplashScreen>
     }
 
     String role = 'student';
+    bool isVerified = true;
     try {
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
@@ -61,10 +62,22 @@ class _SplashScreenState extends State<SplashScreen>
         if (data != null && data['role'] is String) {
           role = data['role'] as String;
         }
+        if (data != null && data['verified'] is bool) {
+          isVerified = data['verified'] as bool;
+        }
       }
     } catch (_) {}
 
     if (!mounted) return;
+
+    if (!isVerified) {
+      Navigator.pushReplacementNamed(
+        context,
+        '/pending-verification',
+        arguments: role,
+      );
+      return;
+    }
 
     switch (role) {
       case 'teacher':

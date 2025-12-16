@@ -79,16 +79,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
           createdAt: DateTime.now(),
         );
 
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .set(userModel.toJson());
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+          ...userModel.toJson(),
+          'verified': widget.role == 'admin',
+        });
 
         if (!mounted) return;
         setState(() => _isLoading = false);
         Navigator.pushReplacementNamed(
           context,
-          '/login',
+          '/pending-verification',
           arguments: widget.role,
         );
       } on FirebaseAuthException catch (e) {
