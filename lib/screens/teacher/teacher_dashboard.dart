@@ -242,7 +242,9 @@ class _DashboardHome extends StatelessWidget {
               description: 'Check student performance and analytics',
               icon: Icons.analytics_outlined,
               iconColor: AppColors.warning,
-              onTap: () {},
+              onTap: () {
+                Navigator.pushNamed(context, '/teacher-score-reports');
+              },
             ),
 
             const SizedBox(height: AppConstants.paddingXL),

@@ -11,6 +11,7 @@ import '../screens/student/student_dashboard.dart';
 import '../screens/student/lesson_detail_screen.dart';
 import '../screens/student/ar_view_screen.dart';
 import '../screens/teacher/teacher_dashboard.dart';
+import '../screens/teacher/score_reports_screen.dart';
 import '../screens/admin/admin_dashboard.dart';
 import '../screens/admin/account_verification_screen.dart';
 
@@ -32,6 +33,7 @@ class AppRoutes {
 
   // Teacher Routes
   static const String teacherDashboard = '/teacher-dashboard';
+  static const String teacherScoreReports = '/teacher-score-reports';
 
   // Admin Routes
   static const String adminDashboard = '/admin-dashboard';
@@ -84,6 +86,11 @@ class AppRoutes {
       case adminVerifyAccounts:
         return MaterialPageRoute(
           builder: (context) => const AccountVerificationScreen(),
+        );
+
+      case teacherScoreReports:
+        return MaterialPageRoute(
+          builder: (context) => const TeacherScoreReportsScreen(),
         );
 
       case arView:
