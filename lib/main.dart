@@ -10,7 +10,6 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await Firebase.initializeApp(
-    name: 'arfusion-4a9b0',
     options: DefaultFirebaseOptions.currentPlatform,
   );
   // Set preferred orientations
