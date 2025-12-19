@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 /// App-wide constants
 class AppConstants {
   // App Information
-  static const String appName = 'AR SCI';
-  static const String appFullName = 'AR SCI Mobile App';
+  static const String appName = 'AR Fusion';
+  static const String appFullName = 'AR Fusion Mobile App';
   static const String appVersion = '1.0.0';
   static const String appTagline = 'Science Education Reimagined';
 
