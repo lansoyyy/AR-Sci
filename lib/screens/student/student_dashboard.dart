@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../utils/colors.dart';
 import '../../utils/constants.dart';
 import '../../widgets/stat_card.dart';
@@ -6,6 +8,7 @@ import '../../widgets/lesson_card.dart';
 import '../../widgets/quiz_card.dart';
 import '../../models/lesson_model.dart';
 import '../../models/quiz_model.dart';
+import '../../models/user_model.dart';
 
 class StudentDashboard extends StatefulWidget {
   const StudentDashboard({super.key});
@@ -16,6 +19,8 @@ class StudentDashboard extends StatefulWidget {
 
 class _StudentDashboardState extends State<StudentDashboard> {
   int _selectedIndex = 0;
+  UserModel? _currentUser;
+  bool _isLoading = true;
 
   final List<Widget> _screens = [
     const _DashboardHome(),
@@ -25,9 +30,48 @@ class _StudentDashboardState extends State<StudentDashboard> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+
+        if (userDoc.exists) {
+          final data = userDoc.data();
+          if (data != null) {
+            setState(() {
+              _currentUser = UserModel.fromJson(data);
+              _isLoading = false;
+            });
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading user data: $e');
+      setState(() => _isLoading = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    // Update screens with current user data
+    final updatedScreens = <Widget>[
+      _DashboardHome(currentUser: _currentUser, isLoading: _isLoading),
+      const _LessonsPage(),
+      const _QuizzesPage(),
+      const _ProgressPage(),
+    ];
+
     return Scaffold(
-      body: _screens[_selectedIndex],
+      body: updatedScreens[_selectedIndex],
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         onTap: (index) {
@@ -64,7 +108,13 @@ class _StudentDashboardState extends State<StudentDashboard> {
 }
 
 class _DashboardHome extends StatelessWidget {
-  const _DashboardHome();
+  final UserModel? currentUser;
+  final bool isLoading;
+
+  const _DashboardHome({
+    this.currentUser,
+    this.isLoading = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -117,33 +167,34 @@ class _DashboardHome extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: AppConstants.paddingS),
-                  const Text(
-                    'John Doe',
-                    style: TextStyle(
+                  Text(
+                    isLoading ? 'Loading...' : (currentUser?.name ?? 'Student'),
+                    style: const TextStyle(
                       fontSize: AppConstants.fontXXL,
                       fontWeight: FontWeight.bold,
                       color: AppColors.textWhite,
                     ),
                   ),
                   const SizedBox(height: AppConstants.paddingS),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppConstants.paddingM,
-                      vertical: AppConstants.paddingS,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.textWhite.withOpacity(0.2),
-                      borderRadius:
-                          BorderRadius.circular(AppConstants.radiusRound),
-                    ),
-                    child: const Text(
-                      'Grade 9',
-                      style: TextStyle(
-                        color: AppColors.textWhite,
-                        fontWeight: FontWeight.w600,
+                  if (currentUser?.gradeLevel != null)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppConstants.paddingM,
+                        vertical: AppConstants.paddingS,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.textWhite.withOpacity(0.2),
+                        borderRadius:
+                            BorderRadius.circular(AppConstants.radiusRound),
+                      ),
+                      child: Text(
+                        currentUser!.gradeLevel!,
+                        style: const TextStyle(
+                          color: AppColors.textWhite,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
-                  ),
                 ],
               ),
             ),

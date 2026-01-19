@@ -25,7 +25,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _obscureConfirmPassword = true;
   bool _isLoading = false;
   String? _selectedGrade;
-  String? _selectedSubject;
 
   Color get _roleColor {
     switch (widget.role) {
@@ -44,12 +43,35 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
 
-      // Simulate registration
+      final email = _emailController.text.trim();
+      final password = _passwordController.text.trim();
+
       try {
+        // Check if email already exists in Firestore (prevent duplicates)
+        final existingUser = await FirebaseFirestore.instance
+            .collection('users')
+            .where('email', isEqualTo: email)
+            .limit(1)
+            .get();
+
+        if (existingUser.docs.isNotEmpty) {
+          if (!mounted) return;
+          setState(() => _isLoading = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                  'This email is already registered. Please use a different email or login.'),
+              backgroundColor: AppColors.error,
+            ),
+          );
+          return;
+        }
+
+        // Create user in Firebase Auth
         final credential =
             await FirebaseAuth.instance.createUserWithEmailAndPassword(
-          email: _emailController.text.trim(),
-          password: _passwordController.text.trim(),
+          email: email,
+          password: password,
         );
 
         final user = credential.user;
@@ -61,27 +83,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
         }
 
         String? gradeLevel;
-        String? subject;
 
         if (widget.role == 'student') {
           gradeLevel = _selectedGrade ?? 'Grade 9';
-        } else if (widget.role == 'teacher') {
-          subject = _selectedSubject;
         }
 
         final userModel = UserModel(
           id: user.uid,
           name: _nameController.text.trim(),
-          email: _emailController.text.trim(),
+          email: email,
           role: widget.role,
           gradeLevel: gradeLevel,
-          subject: subject,
+          subject:
+              null, // Teachers no longer select subject during registration
           createdAt: DateTime.now(),
         );
 
         await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
           ...userModel.toJson(),
-          'verified': widget.role == 'admin',
+          'verified': false, // All new accounts require verification
         });
 
         if (!mounted) return;
@@ -94,19 +114,34 @@ class _RegisterScreenState extends State<RegisterScreen> {
       } on FirebaseAuthException catch (e) {
         if (!mounted) return;
         setState(() => _isLoading = false);
+
+        String errorMessage = 'Failed to register. Please try again.';
+        if (e.code == 'email-already-in-use') {
+          errorMessage =
+              'This email is already in use. Please use a different email.';
+        } else if (e.code == 'weak-password') {
+          errorMessage =
+              'The password is too weak. Please use a stronger password.';
+        } else if (e.code == 'invalid-email') {
+          errorMessage = 'The email address is not valid.';
+        } else if (e.message != null) {
+          errorMessage = e.message!;
+        }
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              e.message ?? 'Failed to register. Please try again.',
-            ),
+            content: Text(errorMessage),
+            backgroundColor: AppColors.error,
           ),
         );
-      } catch (_) {
+      } catch (e) {
         if (!mounted) return;
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('An unexpected error occurred. Please try again.'),
+          SnackBar(
+            content: Text(
+                'An unexpected error occurred. Please try again. Error: $e'),
+            backgroundColor: AppColors.error,
           ),
         );
       }
@@ -228,31 +263,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     const SizedBox(height: AppConstants.paddingL),
                   ],
 
-                  if (widget.role == 'teacher') ...[
-                    DropdownButtonFormField<String>(
-                      value: _selectedSubject,
-                      decoration: const InputDecoration(
-                        labelText: 'Subject',
-                        prefixIcon: Icon(Icons.book_outlined),
-                      ),
-                      items: AppConstants.subjects.map((subject) {
-                        return DropdownMenuItem(
-                          value: subject,
-                          child: Text(subject),
-                        );
-                      }).toList(),
-                      onChanged: (value) {
-                        setState(() => _selectedSubject = value);
-                      },
-                      validator: (value) {
-                        if (value == null) {
-                          return 'Please select your subject';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: AppConstants.paddingL),
-                  ],
+                  // Subject selection removed for teachers - general registration
 
                   // Password Field
                   TextFormField(

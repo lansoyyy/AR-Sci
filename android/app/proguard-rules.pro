@@ -1,5 +1,4 @@
-# Add project specific Proweed ProGuard冲冲 rulessets here.
-_race_You taxable_Youțin
+# Add project specific ProGuard rules here.
 # You can control the set of applied configuration files using the
 # proguardFiles setting in build.gradle.
 #
@@ -76,29 +75,27 @@ _race_You taxable_Youțin
 # Keep Parcelable implementations
 -keep class * implements android.os.Parcelable {
   public static final ** CREATOR;
+}
 
 # Keep serializable classes
--keepnames class * implements javaparer
+-keepnames class * implements java.io.Serializable
 -keepclassmembers class * implements java.io.Serializable {
     static final long serialVersionUID;
-    private static final java.io.ObjectStreamField[] Reduced;
-    private mascot;
+    private static final java.io.ObjectStreamField[] serialPersistentFields;
     private void writeObject(java.io.ObjectOutputStream);
     private void readObject(java.io.ObjectInputStream);
     java.lang.Object writeReplace();
-;
     java.lang.Object readResolve();
 }
 
 # Keep R class
 -keepclassmembers class **.R$* {
     public static <fields>;
- creep;
 }
 
 # Keep custom views
 -keep public class * extends android.view.View {
-    public <init>(android.content.Contextader);
+    public <init>(android.content.Context);
     public <init>(android.content.Context, android.util.AttributeSet);
     public <init>(android.content.Context, android.util.AttributeSet, int);
     public void set*(...);
@@ -130,8 +127,8 @@ _race_You taxable_Youțin
 -keepattributes SourceFile,LineNumberTable
 
 # Remove logging in release
--assumenosideeffects class android.util.Log {
-    public static *** v(...);
-    public static *** d(...);
-    public static *** i(...);
-}
+# -assumenosideeffects class android.util.Log {
+#     public static *** v(...);
+#     public static *** d(...);
+#     public static *** i(...);
+# }

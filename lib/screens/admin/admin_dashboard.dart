@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../utils/colors.dart';
 import '../../utils/constants.dart';
 import '../../widgets/stat_card.dart';
 import '../../widgets/feature_card.dart';
+import '../../models/user_model.dart';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -311,8 +314,53 @@ class _DashboardHome extends StatelessWidget {
   }
 }
 
-class _UserManagement extends StatelessWidget {
+class _UserManagement extends StatefulWidget {
   const _UserManagement();
+
+  @override
+  State<_UserManagement> createState() => _UserManagementState();
+}
+
+class _UserManagementState extends State<_UserManagement> {
+  String _selectedFilter = 'all';
+  final TextEditingController _searchController = TextEditingController();
+
+  Query<Map<String, dynamic>> _getUsersQuery() {
+    Query<Map<String, dynamic>> query =
+        FirebaseFirestore.instance.collection('users');
+
+    // Filter by role if selected
+    if (_selectedFilter == 'student') {
+      query = query.where('role', isEqualTo: 'student');
+    } else if (_selectedFilter == 'teacher') {
+      query = query.where('role', isEqualTo: 'teacher');
+    }
+
+    return query.orderBy('createdAt', descending: true);
+  }
+
+  Future<void> _deleteUser(String userId, String email) async {
+    try {
+      // Delete from Firestore
+      await FirebaseFirestore.instance.collection('users').doc(userId).delete();
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('User deleted successfully'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to delete user: $e'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -330,23 +378,25 @@ class _UserManagement extends StatelessWidget {
               children: [
                 Expanded(
                   child: _FilterButton(
-                    label: 'All (1245)',
-                    isSelected: true,
-                    onTap: () {},
+                    label: 'All',
+                    isSelected: _selectedFilter == 'all',
+                    onTap: () => setState(() => _selectedFilter = 'all'),
                   ),
                 ),
                 const SizedBox(width: AppConstants.paddingS),
                 Expanded(
                   child: _FilterButton(
                     label: 'Students',
-                    onTap: () {},
+                    isSelected: _selectedFilter == 'student',
+                    onTap: () => setState(() => _selectedFilter = 'student'),
                   ),
                 ),
                 const SizedBox(width: AppConstants.paddingS),
                 Expanded(
                   child: _FilterButton(
                     label: 'Teachers',
-                    onTap: () {},
+                    isSelected: _selectedFilter == 'teacher',
+                    onTap: () => setState(() => _selectedFilter = 'teacher'),
                   ),
                 ),
               ],
@@ -358,13 +408,24 @@ class _UserManagement extends StatelessWidget {
             padding:
                 const EdgeInsets.symmetric(horizontal: AppConstants.paddingM),
             child: TextField(
+              controller: _searchController,
               decoration: InputDecoration(
-                hintText: 'Search users...',
+                hintText: 'Search users by name or email...',
                 prefixIcon: const Icon(Icons.search),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(AppConstants.radiusM),
                 ),
+                suffixIcon: _searchController.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() {});
+                        },
+                      )
+                    : null,
               ),
+              onChanged: (value) => setState(() {}),
             ),
           ),
 
@@ -372,28 +433,72 @@ class _UserManagement extends StatelessWidget {
 
           // Users List
           Expanded(
-            child: ListView.builder(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: AppConstants.paddingM),
-              itemCount: 10,
-              itemBuilder: (context, index) {
-                return _UserCard(
-                  name: 'User ${index + 1}',
-                  email: 'user${index + 1}@example.com',
-                  role: index % 3 == 0 ? 'Teacher' : 'Student',
-                  isActive: index % 2 == 0,
+            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: _getUsersQuery().snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Text(
+                      'Error loading users: ${snapshot.error}',
+                      style: const TextStyle(color: AppColors.error),
+                    ),
+                  );
+                }
+
+                final allDocs = snapshot.data?.docs ?? [];
+
+                // Filter by search text
+                final searchTerm = _searchController.text.toLowerCase().trim();
+                final filteredDocs = allDocs.where((doc) {
+                  final data = doc.data();
+                  final name = (data['name'] as String? ?? '').toLowerCase();
+                  final email = (data['email'] as String? ?? '').toLowerCase();
+                  return name.contains(searchTerm) ||
+                      email.contains(searchTerm);
+                }).toList();
+
+                if (filteredDocs.isEmpty) {
+                  return const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(AppConstants.paddingL),
+                      child: Text(
+                        'No users found.',
+                        style: TextStyle(
+                          fontSize: AppConstants.fontL,
+                          color: AppColors.textSecondary,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  );
+                }
+
+                return ListView.builder(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: AppConstants.paddingM),
+                  itemCount: filteredDocs.length,
+                  itemBuilder: (context, index) {
+                    final doc = filteredDocs[index];
+                    final data = doc.data();
+                    final userModel = UserModel.fromJson(data);
+
+                    return _UserCard(
+                      userModel: userModel,
+                      onDelete: () => _deleteUser(doc.id, userModel.email),
+                    );
+                  },
                 );
               },
             ),
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {},
-        backgroundColor: AppColors.adminPrimary,
-        icon: const Icon(Icons.person_add),
-        label: const Text('Add User'),
-      ),
+      floatingActionButton:
+          null, // Remove Add User button - registration is handled by users
     );
   }
 }
@@ -621,17 +726,26 @@ class _FilterButton extends StatelessWidget {
 }
 
 class _UserCard extends StatelessWidget {
-  final String name;
-  final String email;
-  final String role;
-  final bool isActive;
+  final UserModel userModel;
+  final VoidCallback onDelete;
 
   const _UserCard({
-    required this.name,
-    required this.email,
-    required this.role,
-    required this.isActive,
+    required this.userModel,
+    required this.onDelete,
   });
+
+  Color _getRoleColor() {
+    switch (userModel.role) {
+      case 'student':
+        return AppColors.studentPrimary;
+      case 'teacher':
+        return AppColors.teacherPrimary;
+      case 'admin':
+        return AppColors.adminPrimary;
+      default:
+        return AppColors.primary;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -639,20 +753,88 @@ class _UserCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: AppConstants.paddingM),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: isActive ? AppColors.success : AppColors.textLight,
+          backgroundColor: _getRoleColor().withOpacity(0.15),
           child: Icon(
             Icons.person,
-            color: AppColors.textWhite,
+            color: _getRoleColor(),
           ),
         ),
-        title: Text(name),
-        subtitle: Text('$email\n$role'),
+        title: Text(
+          userModel.name,
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(userModel.email),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: _getRoleColor().withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    userModel.role.toUpperCase(),
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: _getRoleColor(),
+                    ),
+                  ),
+                ),
+                if (userModel.gradeLevel != null) ...[
+                  const SizedBox(width: 8),
+                  Text(
+                    userModel.gradeLevel!,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ],
+        ),
         isThreeLine: true,
-        trailing: PopupMenuButton(
+        trailing: PopupMenuButton<String>(
+          onSelected: (value) {
+            if (value == 'delete') {
+              showDialog(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('Delete User'),
+                  content: Text(
+                    'Are you sure you want to delete ${userModel.name}? This action cannot be undone.',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Cancel'),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        onDelete();
+                      },
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.error,
+                      ),
+                      child: const Text('Delete'),
+                    ),
+                  ],
+                ),
+              );
+            }
+          },
           itemBuilder: (context) => [
-            const PopupMenuItem(value: 'edit', child: Text('Edit')),
             const PopupMenuItem(value: 'delete', child: Text('Delete')),
-            const PopupMenuItem(value: 'suspend', child: Text('Suspend')),
           ],
         ),
       ),

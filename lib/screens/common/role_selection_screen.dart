@@ -18,7 +18,7 @@ class RoleSelectionScreen extends StatelessWidget {
             child: Column(
               children: [
                 const SizedBox(height: AppConstants.paddingXL),
-                
+
                 // Header
                 const Text(
                   'Welcome to',
@@ -44,36 +44,31 @@ class RoleSelectionScreen extends StatelessWidget {
                     color: AppColors.textSecondary,
                   ),
                 ),
-                
+
                 const Spacer(),
-                
+
                 // Role Cards
                 _RoleCard(
                   title: 'Student',
-                  description: 'Access lessons, take quizzes, and track your progress',
+                  description:
+                      'Access lessons, take quizzes, and track your progress',
                   icon: Icons.school_outlined,
                   color: AppColors.studentPrimary,
-                  onTap: () => Navigator.pushNamed(context, '/login', arguments: 'student'),
+                  onTap: () => Navigator.pushNamed(context, '/login',
+                      arguments: 'student'),
                 ),
                 const SizedBox(height: AppConstants.paddingL),
-                
+
                 _RoleCard(
                   title: 'Teacher',
-                  description: 'Create lessons, manage quizzes, and monitor students',
+                  description:
+                      'Create lessons, manage quizzes, and monitor students',
                   icon: Icons.person_outline,
                   color: AppColors.teacherPrimary,
-                  onTap: () => Navigator.pushNamed(context, '/login', arguments: 'teacher'),
+                  onTap: () => Navigator.pushNamed(context, '/login',
+                      arguments: 'teacher'),
                 ),
-                const SizedBox(height: AppConstants.paddingL),
-                
-                _RoleCard(
-                  title: 'Admin',
-                  description: 'Manage users, content, and system settings',
-                  icon: Icons.admin_panel_settings_outlined,
-                  color: AppColors.adminPrimary,
-                  onTap: () => Navigator.pushNamed(context, '/login', arguments: 'admin'),
-                ),
-                
+
                 const Spacer(),
               ],
             ),
