@@ -441,6 +441,7 @@ class _UserManagementState extends State<_UserManagement> {
                 }
 
                 if (snapshot.hasError) {
+                  print(snapshot.error);
                   return Center(
                     child: Text(
                       'Error loading users: ${snapshot.error}',

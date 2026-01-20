@@ -68,6 +68,16 @@ class RoleSelectionScreen extends StatelessWidget {
                   onTap: () => Navigator.pushNamed(context, '/login',
                       arguments: 'teacher'),
                 ),
+                const SizedBox(height: AppConstants.paddingL),
+
+                _RoleCard(
+                  title: 'Admin',
+                  description: 'Manage users, content, and system settings',
+                  icon: Icons.admin_panel_settings_outlined,
+                  color: AppColors.adminPrimary,
+                  onTap: () => Navigator.pushNamed(context, '/login',
+                      arguments: 'admin'),
+                ),
 
                 const Spacer(),
               ],

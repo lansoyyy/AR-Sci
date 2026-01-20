@@ -51,11 +51,35 @@ class _LoginScreenState extends State<LoginScreen> {
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
 
+      final email = _emailController.text.trim();
+      final password = _passwordController.text.trim();
+
       try {
+        // Hardcoded admin credentials
+        if (widget.role == 'admin') {
+          if (email == 'admin@arsci.com' && password == 'admin123') {
+            if (!mounted) return;
+            setState(() => _isLoading = false);
+            Navigator.pushReplacementNamed(context, '/admin-dashboard');
+            return;
+          } else {
+            if (!mounted) return;
+            setState(() => _isLoading = false);
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Invalid admin credentials'),
+                backgroundColor: AppColors.error,
+              ),
+            );
+            return;
+          }
+        }
+
+        // Firebase Auth for students and teachers
         final credential =
             await FirebaseAuth.instance.signInWithEmailAndPassword(
-          email: _emailController.text.trim(),
-          password: _passwordController.text.trim(),
+          email: email,
+          password: password,
         );
 
         final user = credential.user;
@@ -103,9 +127,6 @@ class _LoginScreenState extends State<LoginScreen> {
           case 'teacher':
             Navigator.pushReplacementNamed(context, '/teacher-dashboard');
             break;
-          case 'admin':
-            Navigator.pushReplacementNamed(context, '/admin-dashboard');
-            break;
           default:
             Navigator.pushReplacementNamed(context, '/student-dashboard');
             break;
@@ -116,6 +137,7 @@ class _LoginScreenState extends State<LoginScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(e.message ?? 'Failed to login. Please try again.'),
+            backgroundColor: AppColors.error,
           ),
         );
       } catch (_) {
@@ -124,6 +146,7 @@ class _LoginScreenState extends State<LoginScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('An unexpected error occurred. Please try again.'),
+            backgroundColor: AppColors.error,
           ),
         );
       }
