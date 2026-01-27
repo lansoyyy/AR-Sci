@@ -11,8 +11,11 @@ import '../screens/student/student_dashboard.dart';
 import '../screens/student/lesson_detail_screen.dart';
 import '../screens/student/ar_view_screen.dart';
 import '../screens/teacher/teacher_dashboard.dart';
+import '../screens/teacher/student_approval_screen.dart';
 import '../screens/teacher/score_reports_screen.dart';
 import '../screens/admin/admin_dashboard.dart';
+import '../screens/admin/admin_create_lesson_screen.dart';
+import '../screens/admin/admin_create_quiz_screen.dart';
 import '../screens/admin/account_verification_screen.dart';
 
 class AppRoutes {
@@ -34,10 +37,13 @@ class AppRoutes {
   // Teacher Routes
   static const String teacherDashboard = '/teacher-dashboard';
   static const String teacherScoreReports = '/teacher-score-reports';
+  static const String teacherApproveStudents = '/teacher-approve-students';
 
   // Admin Routes
   static const String adminDashboard = '/admin-dashboard';
   static const String adminVerifyAccounts = '/admin-verify-accounts';
+  static const String adminCreateLesson = '/admin-create-lesson';
+  static const String adminCreateQuiz = '/admin-create-quiz';
 
   static Map<String, WidgetBuilder> getRoutes() {
     return {
@@ -88,9 +94,24 @@ class AppRoutes {
           builder: (context) => const AccountVerificationScreen(),
         );
 
+      case adminCreateLesson:
+        return MaterialPageRoute(
+          builder: (context) => const AdminCreateLessonScreen(),
+        );
+
+      case adminCreateQuiz:
+        return MaterialPageRoute(
+          builder: (context) => const AdminCreateQuizScreen(),
+        );
+
       case teacherScoreReports:
         return MaterialPageRoute(
           builder: (context) => const TeacherScoreReportsScreen(),
+        );
+
+      case teacherApproveStudents:
+        return MaterialPageRoute(
+          builder: (context) => const TeacherStudentApprovalScreen(),
         );
 
       case arView:
