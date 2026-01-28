@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../utils/colors.dart';
 import '../../utils/constants.dart';
 import '../../widgets/stat_card.dart';
@@ -346,17 +347,57 @@ class _LessonsManagement extends StatelessWidget {
         title: const Text('Manage Lessons'),
         backgroundColor: AppColors.teacherPrimary,
       ),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(AppConstants.paddingM),
-        itemCount: AppConstants.allLessons.length,
-        itemBuilder: (context, index) {
-          final lesson = AppConstants.allLessons[index];
-          return _LessonManagementCard(
-            title: lesson['title'],
-            subject: lesson['subject'],
-            gradeLevel: lesson['grade'],
-            students: 30 + (index * 15), // Varying student counts
-            isPublished: index % 2 == 0,
+      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: FirebaseFirestore.instance.collection('lessons').snapshots(),
+        builder: (context, snapshot) {
+          final firebaseLessons = (snapshot.data?.docs ??
+                  <QueryDocumentSnapshot<Map<String, dynamic>>>[])
+              .map((d) => <String, dynamic>{
+                    ...d.data(),
+                    'id': d.data()['id'] ?? d.id,
+                  })
+              .toList();
+
+          final seenIds = <String>{};
+          final merged = <Map<String, dynamic>>[
+            ...firebaseLessons.where((l) {
+              final id = (l['id'] ?? '').toString();
+              return id.isNotEmpty && seenIds.add(id);
+            }),
+            ...AppConstants.allLessons.where((l) {
+              final id = (l['id'] ?? '').toString();
+              return id.isNotEmpty && seenIds.add(id);
+            }),
+          ];
+
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              merged.isEmpty) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (merged.isEmpty) {
+            return const Center(
+              child: Text(
+                'No lessons available.',
+                style: TextStyle(color: AppColors.textSecondary),
+              ),
+            );
+          }
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(AppConstants.paddingM),
+            itemCount: merged.length,
+            itemBuilder: (context, index) {
+              final lesson = merged[index];
+              return _LessonManagementCard(
+                title: (lesson['title'] ?? '').toString(),
+                subject: (lesson['subject'] ?? '').toString(),
+                gradeLevel:
+                    (lesson['gradeLevel'] ?? lesson['grade'] ?? '').toString(),
+                students: 30 + (index * 15),
+                isPublished: lesson['isPublished'] == true,
+              );
+            },
           );
         },
       ),
@@ -380,16 +421,46 @@ class _QuizzesManagement extends StatelessWidget {
         title: const Text('Manage Quizzes'),
         backgroundColor: AppColors.teacherPrimary,
       ),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(AppConstants.paddingM),
-        itemCount: 5,
-        itemBuilder: (context, index) {
-          return _QuizManagementCard(
-            title: 'Quiz ${index + 1}',
-            questions: 10,
-            duration: 30,
-            submissions: 32,
-            avgScore: 85.0,
+      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: FirebaseFirestore.instance.collection('quizzes').snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          final quizzes = (snapshot.data?.docs ??
+                  <QueryDocumentSnapshot<Map<String, dynamic>>>[])
+              .map((d) => <String, dynamic>{
+                    ...d.data(),
+                    'id': d.data()['id'] ?? d.id,
+                  })
+              .toList();
+
+          if (quizzes.isEmpty) {
+            return const Center(
+              child: Text(
+                'No quizzes available.',
+                style: TextStyle(color: AppColors.textSecondary),
+              ),
+            );
+          }
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(AppConstants.paddingM),
+            itemCount: quizzes.length,
+            itemBuilder: (context, index) {
+              final quiz = quizzes[index];
+              final questionsList = quiz['questions'] as List? ?? const [];
+              return _QuizManagementCard(
+                title: (quiz['title'] ?? '').toString(),
+                questions: questionsList.length,
+                duration: quiz['duration'] is int
+                    ? quiz['duration'] as int
+                    : int.tryParse((quiz['duration'] ?? '').toString()) ?? 30,
+                submissions: 0,
+                avgScore: 0,
+              );
+            },
           );
         },
       ),

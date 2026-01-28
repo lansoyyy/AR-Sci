@@ -22,9 +22,25 @@ class _AdminCreateQuizScreenState extends State<AdminCreateQuizScreen> {
 
   String _selectedSubject = AppConstants.subjects.first;
   String _selectedGradeLevel = AppConstants.gradeLevels.first;
-  String _selectedLessonId = AppConstants.allLessons.first['id'] as String;
+  String _selectedLessonId = '';
   bool _isPublished = true;
   bool _isSaving = false;
+
+  List<Map<String, dynamic>> _mergeLessons(
+    List<Map<String, dynamic>> firebaseLessons,
+  ) {
+    final seenIds = <String>{};
+    return <Map<String, dynamic>>[
+      ...firebaseLessons.where((l) {
+        final id = (l['id'] ?? '').toString();
+        return id.isNotEmpty && seenIds.add(id);
+      }),
+      ...AppConstants.allLessons.where((l) {
+        final id = (l['id'] ?? '').toString();
+        return id.isNotEmpty && seenIds.add(id);
+      }),
+    ];
+  }
 
   Future<void> _saveQuiz() async {
     if (!_formKey.currentState!.validate()) return;
@@ -36,7 +52,11 @@ class _AdminCreateQuizScreenState extends State<AdminCreateQuizScreen> {
 
       final duration = int.tryParse(_durationController.text.trim()) ?? 30;
 
+      final docRef = FirebaseFirestore.instance.collection('quizzes').doc();
+      final quizId = docRef.id;
+
       final payload = <String, dynamic>{
+        'id': quizId,
         'title': _titleController.text.trim(),
         'description': _descriptionController.text.trim(),
         'lessonId': _selectedLessonId,
@@ -49,8 +69,7 @@ class _AdminCreateQuizScreenState extends State<AdminCreateQuizScreen> {
         if (currentUser != null) 'createdBy': currentUser.uid,
       };
 
-      final docRef = await FirebaseFirestore.instance.collection('quizzes').add(payload);
-      await docRef.update({'id': docRef.id});
+      await docRef.set(payload);
 
       if (!mounted) return;
       setState(() => _isSaving = false);
@@ -60,11 +79,17 @@ class _AdminCreateQuizScreenState extends State<AdminCreateQuizScreen> {
       );
 
       Navigator.pop(context);
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       setState(() => _isSaving = false);
+
+      debugPrint('Failed to create quiz: $e');
+
+      final message = e is FirebaseException
+          ? '${e.code}: ${e.message ?? 'Unknown Firebase error'}'
+          : e.toString();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to create quiz.')),
+        SnackBar(content: Text('Failed to create quiz. $message')),
       );
     }
   }
@@ -120,21 +145,83 @@ class _AdminCreateQuizScreenState extends State<AdminCreateQuizScreen> {
                 },
               ),
               const SizedBox(height: AppConstants.paddingL),
-              DropdownButtonFormField<String>(
-                value: _selectedLessonId,
-                decoration: const InputDecoration(
-                  labelText: 'Lesson',
-                  prefixIcon: Icon(Icons.menu_book_outlined),
-                ),
-                items: AppConstants.allLessons
-                    .map((l) => DropdownMenuItem<String>(
-                          value: l['id'] as String,
-                          child: Text(l['title'] as String),
-                        ))
-                    .toList(),
-                onChanged: (value) {
-                  if (value == null) return;
-                  setState(() => _selectedLessonId = value);
+              StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                stream: FirebaseFirestore.instance
+                    .collection('lessons')
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  final firebaseLessons = (snapshot.data?.docs ??
+                          <QueryDocumentSnapshot<Map<String, dynamic>>>[])
+                      .map((d) => <String, dynamic>{
+                            ...d.data(),
+                            'id': d.data()['id'] ?? d.id,
+                          })
+                      .toList();
+
+                  final lessons = _mergeLessons(firebaseLessons);
+
+                  if (_selectedLessonId.isEmpty && lessons.isNotEmpty) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (!mounted) return;
+                      final first = lessons.first;
+                      setState(() {
+                        _selectedLessonId = (first['id'] ?? '').toString();
+                        _selectedSubject =
+                            (first['subject'] ?? _selectedSubject).toString();
+                        _selectedGradeLevel = (first['gradeLevel'] ??
+                                first['grade'] ??
+                                _selectedGradeLevel)
+                            .toString();
+                      });
+                    });
+                  }
+
+                  final selectedLessonExists = lessons.any(
+                      (l) => (l['id'] ?? '').toString() == _selectedLessonId);
+                  final safeSelectedLessonId = selectedLessonExists
+                      ? _selectedLessonId
+                      : (lessons.isNotEmpty
+                          ? (lessons.first['id'] ?? '').toString()
+                          : null);
+
+                  return DropdownButtonFormField<String>(
+                    value: safeSelectedLessonId,
+                    decoration: const InputDecoration(
+                      labelText: 'Lesson',
+                      prefixIcon: Icon(Icons.menu_book_outlined),
+                    ),
+                    items: lessons
+                        .map((l) => DropdownMenuItem<String>(
+                              value: (l['id'] ?? '').toString(),
+                              child: Text((l['title'] ?? '').toString()),
+                            ))
+                        .toList(),
+                    onChanged: lessons.isEmpty
+                        ? null
+                        : (value) {
+                            if (value == null) return;
+                            final picked = lessons.firstWhere(
+                              (l) => (l['id'] ?? '').toString() == value,
+                              orElse: () => lessons.first,
+                            );
+                            setState(() {
+                              _selectedLessonId = value;
+                              _selectedSubject =
+                                  (picked['subject'] ?? _selectedSubject)
+                                      .toString();
+                              _selectedGradeLevel = (picked['gradeLevel'] ??
+                                      picked['grade'] ??
+                                      _selectedGradeLevel)
+                                  .toString();
+                            });
+                          },
+                    validator: (value) {
+                      if ((value ?? '').trim().isEmpty) {
+                        return 'Please select a lesson';
+                      }
+                      return null;
+                    },
+                  );
                 },
               ),
               const SizedBox(height: AppConstants.paddingL),

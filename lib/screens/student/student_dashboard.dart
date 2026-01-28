@@ -144,6 +144,62 @@ class _StudentDashboardState extends State<StudentDashboard> {
   }
 }
 
+DateTime _parseFirestoreDate(dynamic value) {
+  if (value is String) {
+    return DateTime.tryParse(value) ?? DateTime.now();
+  }
+  if (value is Timestamp) {
+    return value.toDate();
+  }
+  return DateTime.now();
+}
+
+LessonModel _lessonModelFromMap(Map<String, dynamic> lesson) {
+  final createdAt = _parseFirestoreDate(lesson['createdAt']);
+  return LessonModel(
+    id: (lesson['id'] ?? '').toString(),
+    title: (lesson['title'] ?? '').toString(),
+    description: (lesson['description'] ?? '').toString(),
+    subject: (lesson['subject'] ?? '').toString(),
+    gradeLevel: (lesson['gradeLevel'] ?? lesson['grade'] ?? '').toString(),
+    content: (lesson['content'] ?? '').toString(),
+    imageUrls:
+        (lesson['imageUrls'] as List?)?.map((e) => e.toString()).toList() ??
+            const <String>[],
+    videoUrls:
+        (lesson['videoUrls'] as List?)?.map((e) => e.toString()).toList() ??
+            const <String>[],
+    teacherId:
+        (lesson['teacherId'] ?? lesson['createdBy'] ?? 'admin').toString(),
+    createdAt: createdAt,
+    isPublished: lesson['isPublished'] == true,
+  );
+}
+
+QuizModel _quizModelFromMap(Map<String, dynamic> quiz) {
+  final createdAt = _parseFirestoreDate(quiz['createdAt']);
+  final rawQuestions = quiz['questions'] as List? ?? const [];
+  final questions = rawQuestions
+      .whereType<Map>()
+      .map((q) => QuizQuestion.fromJson(Map<String, dynamic>.from(q)))
+      .toList();
+
+  return QuizModel(
+    id: (quiz['id'] ?? '').toString(),
+    title: (quiz['title'] ?? '').toString(),
+    description: (quiz['description'] ?? '').toString(),
+    lessonId: (quiz['lessonId'] ?? '').toString(),
+    subject: (quiz['subject'] ?? '').toString(),
+    gradeLevel: (quiz['gradeLevel'] ?? quiz['grade'] ?? '').toString(),
+    questions: questions,
+    duration: quiz['duration'] is int
+        ? quiz['duration'] as int
+        : int.tryParse((quiz['duration'] ?? '').toString()) ?? 30,
+    createdAt: createdAt,
+    isPublished: quiz['isPublished'] == true,
+  );
+}
+
 class _DashboardHome extends StatelessWidget {
   final UserModel? currentUser;
   final bool isLoading;
@@ -305,14 +361,38 @@ class _DashboardHome extends StatelessWidget {
               child: Card(
                 color: AppColors.studentPrimary,
                 child: InkWell(
-                  onTap: () {
-                    // Get first available lesson for AR demo
-                    final firstLesson = AppConstants.allLessons.first;
-                    Navigator.pushNamed(
-                      context,
-                      '/ar-view',
-                      arguments: firstLesson,
-                    );
+                  onTap: () async {
+                    try {
+                      final snapshot = await FirebaseFirestore.instance
+                          .collection('lessons')
+                          .where('isPublished', isEqualTo: true)
+                          .limit(1)
+                          .get();
+
+                      final firstDoc =
+                          snapshot.docs.isNotEmpty ? snapshot.docs.first : null;
+
+                      final firstLesson = firstDoc != null
+                          ? <String, dynamic>{
+                              ...firstDoc.data(),
+                              'id': firstDoc.data()['id'] ?? firstDoc.id,
+                            }
+                          : AppConstants.allLessons.first;
+
+                      if (!context.mounted) return;
+                      Navigator.pushNamed(
+                        context,
+                        '/ar-view',
+                        arguments: firstLesson,
+                      );
+                    } catch (_) {
+                      if (!context.mounted) return;
+                      Navigator.pushNamed(
+                        context,
+                        '/ar-view',
+                        arguments: AppConstants.allLessons.first,
+                      );
+                    }
                   },
                   borderRadius: BorderRadius.circular(AppConstants.radiusM),
                   child: Padding(
@@ -386,32 +466,55 @@ class _DashboardHome extends StatelessWidget {
             const SizedBox(height: AppConstants.paddingM),
 
             // Show lessons from constants
-            ...AppConstants.allLessons.take(2).map((lesson) => Padding(
-                  padding: const EdgeInsets.only(bottom: AppConstants.paddingM),
-                  child: LessonCard(
-                    lesson: LessonModel(
-                      id: lesson['id'],
-                      title: lesson['title'],
-                      description: lesson['description'],
-                      subject: lesson['subject'],
-                      gradeLevel: lesson['grade'],
-                      content: '',
-                      teacherId: '1',
-                      createdAt: DateTime.now(),
-                      isPublished: true,
-                    ),
-                    showProgress: true,
-                    progress:
-                        0.3 + (AppConstants.allLessons.indexOf(lesson) * 0.2),
-                    onTap: () {
-                      Navigator.pushNamed(
-                        context,
-                        '/lesson-detail',
-                        arguments: lesson,
-                      );
-                    },
-                  ),
-                )),
+            StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: FirebaseFirestore.instance
+                  .collection('lessons')
+                  .where('isPublished', isEqualTo: true)
+                  .limit(2)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                final firebaseLessons = (snapshot.data?.docs ??
+                        <QueryDocumentSnapshot<Map<String, dynamic>>>[])
+                    .map((d) => <String, dynamic>{
+                          ...d.data(),
+                          'id': d.data()['id'] ?? d.id,
+                        })
+                    .toList();
+
+                final lessonsToShow = firebaseLessons.isNotEmpty
+                    ? firebaseLessons
+                    : AppConstants.allLessons.take(2).toList();
+
+                if (snapshot.connectionState == ConnectionState.waiting &&
+                    lessonsToShow.isEmpty) {
+                  return const Padding(
+                    padding: EdgeInsets.all(AppConstants.paddingM),
+                    child: Center(child: CircularProgressIndicator()),
+                  );
+                }
+
+                return Column(
+                  children: lessonsToShow.map((lesson) {
+                    return Padding(
+                      padding:
+                          const EdgeInsets.only(bottom: AppConstants.paddingM),
+                      child: LessonCard(
+                        lesson: _lessonModelFromMap(lesson),
+                        showProgress: true,
+                        progress: 0.3 + (lessonsToShow.indexOf(lesson) * 0.2),
+                        onTap: () {
+                          Navigator.pushNamed(
+                            context,
+                            '/lesson-detail',
+                            arguments: lesson,
+                          );
+                        },
+                      ),
+                    );
+                  }).toList(),
+                );
+              },
+            ),
 
             const SizedBox(height: AppConstants.paddingXL),
 
@@ -430,22 +533,66 @@ class _DashboardHome extends StatelessWidget {
             const SizedBox(height: AppConstants.paddingM),
 
             // Show quiz for first lesson
-            QuizCard(
-              quiz: QuizModel(
-                id: 'quiz_${AppConstants.allLessons.first['id']}',
-                title: '${AppConstants.allLessons.first['subject']} Quiz',
-                description:
-                    'Test your knowledge on ${AppConstants.allLessons.first['title']}',
-                lessonId: AppConstants.allLessons.first['id'],
-                subject: AppConstants.allLessons.first['subject'],
-                gradeLevel: AppConstants.allLessons.first['grade'],
-                questions: [],
-                duration: 30,
-                createdAt: DateTime.now(),
-                isPublished: true,
-              ),
-              onTap: () {
-                Navigator.pushNamed(context, '/quiz-detail');
+            StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: FirebaseFirestore.instance
+                  .collection('quizzes')
+                  .where('isPublished', isEqualTo: true)
+                  .limit(1)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                final docs = snapshot.data?.docs ??
+                    <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+                if (snapshot.connectionState == ConnectionState.waiting &&
+                    docs.isEmpty) {
+                  return const Padding(
+                    padding: EdgeInsets.all(AppConstants.paddingM),
+                    child: Center(child: CircularProgressIndicator()),
+                  );
+                }
+
+                if (docs.isEmpty) {
+                  final firstLesson = AppConstants.allLessons.first;
+                  final fallbackQuiz = {
+                    'id': 'quiz_${firstLesson['id']}',
+                    'title': '${firstLesson['subject']} Quiz',
+                    'description':
+                        'Test your knowledge on ${firstLesson['title']}',
+                    'lessonId': firstLesson['id'],
+                    'subject': firstLesson['subject'],
+                    'gradeLevel': firstLesson['grade'],
+                    'questions': <Map<String, dynamic>>[],
+                    'duration': 30,
+                    'createdAt': DateTime.now().toIso8601String(),
+                    'isPublished': true,
+                  };
+
+                  return QuizCard(
+                    quiz: _quizModelFromMap(fallbackQuiz),
+                    onTap: () {
+                      Navigator.pushNamed(
+                        context,
+                        '/quiz-detail',
+                        arguments: fallbackQuiz,
+                      );
+                    },
+                  );
+                }
+
+                final quizMap = <String, dynamic>{
+                  ...docs.first.data(),
+                  'id': docs.first.data()['id'] ?? docs.first.id,
+                };
+
+                return QuizCard(
+                  quiz: _quizModelFromMap(quizMap),
+                  onTap: () {
+                    Navigator.pushNamed(
+                      context,
+                      '/quiz-detail',
+                      arguments: quizMap,
+                    );
+                  },
+                );
               },
             ),
 
@@ -467,9 +614,7 @@ class _LessonsPage extends StatefulWidget {
 class _LessonsPageState extends State<_LessonsPage> {
   String _selectedFilter = 'All';
 
-  List<Map<String, dynamic>> get _filteredLessons {
-    final all = AppConstants.allLessons;
-
+  List<Map<String, dynamic>> _applyFilter(List<Map<String, dynamic>> all) {
     if (_selectedFilter == 'All') {
       return all;
     }
@@ -481,7 +626,10 @@ class _LessonsPageState extends State<_LessonsPage> {
     }
 
     if (_selectedFilter == 'Grade 9') {
-      return all.where((lesson) => lesson['grade'] == 'Grade 9').toList();
+      return all
+          .where((lesson) =>
+              lesson['grade'] == 'Grade 9' || lesson['gradeLevel'] == 'Grade 9')
+          .toList();
     }
 
     if (AppConstants.subjects.contains(_selectedFilter)) {
@@ -501,8 +649,6 @@ class _LessonsPageState extends State<_LessonsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final lessons = _filteredLessons;
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('My Lessons'),
@@ -557,31 +703,64 @@ class _LessonsPageState extends State<_LessonsPage> {
 
           // Lessons List
           Expanded(
-            child: ListView.builder(
-              padding:
-                  const EdgeInsets.symmetric(vertical: AppConstants.paddingM),
-              itemCount: lessons.length,
-              itemBuilder: (context, index) {
-                final lesson = lessons[index];
-                return LessonCard(
-                  lesson: LessonModel(
-                    id: lesson['id'],
-                    title: lesson['title'],
-                    description: lesson['description'],
-                    subject: lesson['subject'],
-                    gradeLevel: lesson['grade'],
-                    content: '',
-                    teacherId: '1',
-                    createdAt: DateTime.now(),
-                    isPublished: true,
-                  ),
-                  showProgress: true,
-                  progress: (index + 1) * 0.15,
-                  onTap: () {
-                    Navigator.pushNamed(
-                      context,
-                      '/lesson-detail',
-                      arguments: lesson,
+            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: FirebaseFirestore.instance
+                  .collection('lessons')
+                  .where('isPublished', isEqualTo: true)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                final firebaseLessons = (snapshot.data?.docs ??
+                        <QueryDocumentSnapshot<Map<String, dynamic>>>[])
+                    .map((d) => <String, dynamic>{
+                          ...d.data(),
+                          'id': d.data()['id'] ?? d.id,
+                        })
+                    .toList();
+
+                final seenIds = <String>{};
+                final merged = <Map<String, dynamic>>[
+                  ...firebaseLessons.where((l) {
+                    final id = (l['id'] ?? '').toString();
+                    return id.isNotEmpty && seenIds.add(id);
+                  }),
+                  ...AppConstants.allLessons.where((l) {
+                    final id = (l['id'] ?? '').toString();
+                    return id.isNotEmpty && seenIds.add(id);
+                  }),
+                ];
+
+                final lessons = _applyFilter(merged);
+
+                if (lessons.isEmpty) {
+                  return const Center(
+                    child: Text(
+                      'No lessons available.',
+                      style: TextStyle(color: AppColors.textSecondary),
+                    ),
+                  );
+                }
+
+                return ListView.builder(
+                  padding: const EdgeInsets.symmetric(
+                      vertical: AppConstants.paddingM),
+                  itemCount: lessons.length,
+                  itemBuilder: (context, index) {
+                    final lesson = lessons[index];
+                    return LessonCard(
+                      lesson: _lessonModelFromMap(lesson),
+                      showProgress: true,
+                      progress: (index + 1) * 0.15,
+                      onTap: () {
+                        Navigator.pushNamed(
+                          context,
+                          '/lesson-detail',
+                          arguments: lesson,
+                        );
+                      },
                     );
                   },
                 );
@@ -604,33 +783,48 @@ class _QuizzesPage extends StatelessWidget {
         title: const Text('Quizzes'),
         backgroundColor: AppColors.studentPrimary,
       ),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(AppConstants.paddingM),
-        itemCount: 5,
-        itemBuilder: (context, index) {
-          return QuizCard(
-            quiz: QuizModel(
-              id: '$index',
-              title: 'Quiz ${index + 1}',
-              description: 'Test your knowledge',
-              lessonId: '1',
-              subject: 'Physics',
-              gradeLevel: 'Grade 9',
-              questions: List.generate(
-                  10,
-                  (i) => QuizQuestion(
-                        id: '$i',
-                        question: 'Question $i',
-                        type: QuestionType.multipleChoice,
-                        options: ['A', 'B', 'C', 'D'],
-                        correctAnswer: 'A',
-                      )),
-              duration: 30,
-              createdAt: DateTime.now(),
-              isPublished: true,
-            ),
-            onTap: () {
-              Navigator.pushNamed(context, '/quiz-detail');
+      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: FirebaseFirestore.instance
+            .collection('quizzes')
+            .where('isPublished', isEqualTo: true)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          final quizzes = (snapshot.data?.docs ??
+                  <QueryDocumentSnapshot<Map<String, dynamic>>>[])
+              .map((d) => <String, dynamic>{
+                    ...d.data(),
+                    'id': d.data()['id'] ?? d.id,
+                  })
+              .toList();
+
+          if (quizzes.isEmpty) {
+            return const Center(
+              child: Text(
+                'No quizzes available.',
+                style: TextStyle(color: AppColors.textSecondary),
+              ),
+            );
+          }
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(AppConstants.paddingM),
+            itemCount: quizzes.length,
+            itemBuilder: (context, index) {
+              final quiz = quizzes[index];
+              return QuizCard(
+                quiz: _quizModelFromMap(quiz),
+                onTap: () {
+                  Navigator.pushNamed(
+                    context,
+                    '/quiz-detail',
+                    arguments: quiz,
+                  );
+                },
+              );
             },
           );
         },

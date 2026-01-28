@@ -9,6 +9,7 @@ import '../screens/common/forgot_password_screen.dart';
 import '../screens/common/pending_verification_screen.dart';
 import '../screens/student/student_dashboard.dart';
 import '../screens/student/lesson_detail_screen.dart';
+import '../screens/student/quiz_detail_screen.dart';
 import '../screens/student/ar_view_screen.dart';
 import '../screens/teacher/teacher_dashboard.dart';
 import '../screens/teacher/student_approval_screen.dart';
@@ -54,6 +55,7 @@ class AppRoutes {
       teacherDashboard: (context) => const TeacherDashboard(),
       adminDashboard: (context) => const AdminDashboard(),
       lessonDetail: (context) => const LessonDetailScreen(),
+      quizDetail: (context) => const QuizDetailScreen(),
     };
   }
 

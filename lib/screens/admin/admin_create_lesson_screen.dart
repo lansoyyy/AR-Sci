@@ -10,7 +10,8 @@ class AdminCreateLessonScreen extends StatefulWidget {
   const AdminCreateLessonScreen({super.key});
 
   @override
-  State<AdminCreateLessonScreen> createState() => _AdminCreateLessonScreenState();
+  State<AdminCreateLessonScreen> createState() =>
+      _AdminCreateLessonScreenState();
 }
 
 class _AdminCreateLessonScreenState extends State<AdminCreateLessonScreen> {
@@ -22,6 +23,7 @@ class _AdminCreateLessonScreenState extends State<AdminCreateLessonScreen> {
 
   String _selectedSubject = AppConstants.subjects.first;
   String _selectedGradeLevel = AppConstants.gradeLevels.first;
+  String _selectedQuarter = 'Quarter 3';
   bool _isPublished = true;
   bool _isSaving = false;
 
@@ -33,21 +35,27 @@ class _AdminCreateLessonScreenState extends State<AdminCreateLessonScreen> {
     try {
       final currentUser = FirebaseAuth.instance.currentUser;
 
+      final docRef = FirebaseFirestore.instance.collection('lessons').doc();
+      final lessonId = docRef.id;
+
       final payload = <String, dynamic>{
+        'id': lessonId,
         'title': _titleController.text.trim(),
         'description': _descriptionController.text.trim(),
         'subject': _selectedSubject,
         'gradeLevel': _selectedGradeLevel,
+        'quarter': _selectedQuarter,
+        'color': _subjectToColorName(_selectedSubject),
         'content': _contentController.text.trim(),
         'imageUrls': <String>[],
         'videoUrls': <String>[],
+        'arItems': <String>[],
         'createdAt': DateTime.now().toIso8601String(),
         'isPublished': _isPublished,
         if (currentUser != null) 'createdBy': currentUser.uid,
       };
 
-      final docRef = await FirebaseFirestore.instance.collection('lessons').add(payload);
-      await docRef.update({'id': docRef.id});
+      await docRef.set(payload);
 
       if (!mounted) return;
       setState(() => _isSaving = false);
@@ -57,11 +65,17 @@ class _AdminCreateLessonScreenState extends State<AdminCreateLessonScreen> {
       );
 
       Navigator.pop(context);
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       setState(() => _isSaving = false);
+
+      debugPrint('Failed to create lesson: $e');
+
+      final message = e is FirebaseException
+          ? '${e.code}: ${e.message ?? 'Unknown Firebase error'}'
+          : e.toString();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to create lesson.')),
+        SnackBar(content: Text('Failed to create lesson. $message')),
       );
     }
   }
@@ -147,6 +161,24 @@ class _AdminCreateLessonScreenState extends State<AdminCreateLessonScreen> {
                 },
               ),
               const SizedBox(height: AppConstants.paddingL),
+              DropdownButtonFormField<String>(
+                value: _selectedQuarter,
+                decoration: const InputDecoration(
+                  labelText: 'Quarter',
+                  prefixIcon: Icon(Icons.calendar_month_outlined),
+                ),
+                items: const [
+                  DropdownMenuItem(
+                      value: 'Quarter 3', child: Text('Quarter 3')),
+                  DropdownMenuItem(
+                      value: 'Quarter 4', child: Text('Quarter 4')),
+                ],
+                onChanged: (value) {
+                  if (value == null) return;
+                  setState(() => _selectedQuarter = value);
+                },
+              ),
+              const SizedBox(height: AppConstants.paddingL),
               TextFormField(
                 controller: _contentController,
                 decoration: const InputDecoration(
@@ -180,4 +212,13 @@ class _AdminCreateLessonScreenState extends State<AdminCreateLessonScreen> {
       ),
     );
   }
+}
+
+String _subjectToColorName(String subject) {
+  final s = subject.toLowerCase();
+  if (s.contains('physics')) return 'physics';
+  if (s.contains('chemistry')) return 'chemistry';
+  if (s.contains('biology')) return 'biology';
+  if (s.contains('earth')) return 'earthScience';
+  return 'physics';
 }

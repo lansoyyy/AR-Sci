@@ -26,7 +26,11 @@ class LessonDetailScreen extends StatelessWidget {
     }
 
     final lesson = lessonData ?? AppConstants.allLessons.first;
-    final Color subjectColor = _getSubjectColor(lesson['color']);
+    final contentText =
+        lesson['content'] is String ? (lesson['content'] as String).trim() : '';
+    final Color subjectColor = _getSubjectColor(
+      lesson['color'] ?? _subjectToColorName(lesson['subject']),
+    );
     return Scaffold(
       appBar: AppBar(
         title: Text(lesson['title']),
@@ -102,7 +106,7 @@ class LessonDetailScreen extends StatelessWidget {
                               BorderRadius.circular(AppConstants.radiusRound),
                         ),
                         child: Text(
-                          lesson['grade'],
+                          lesson['grade'] ?? lesson['gradeLevel'] ?? '',
                           style: const TextStyle(
                             color: AppColors.textSecondary,
                             fontSize: AppConstants.fontS,
@@ -136,6 +140,27 @@ class LessonDetailScreen extends StatelessWidget {
                       height: 1.5,
                     ),
                   ),
+
+                  if (contentText.isNotEmpty) ...[
+                    const SizedBox(height: AppConstants.paddingL),
+                    const Text(
+                      'Lesson Text',
+                      style: TextStyle(
+                        fontSize: AppConstants.fontL,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: AppConstants.paddingS),
+                    Text(
+                      contentText,
+                      style: const TextStyle(
+                        fontSize: AppConstants.fontM,
+                        color: AppColors.textSecondary,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
 
                   if (lesson['id'] == 'g9_volcanoes') ...[
                     const SizedBox(height: AppConstants.paddingXL),
@@ -598,6 +623,15 @@ Color _getSubjectColor(String? colorName) {
     default:
       return AppColors.studentPrimary;
   }
+}
+
+String? _subjectToColorName(dynamic subject) {
+  final s = subject is String ? subject.toLowerCase() : '';
+  if (s.contains('physics')) return 'physics';
+  if (s.contains('chemistry')) return 'chemistry';
+  if (s.contains('biology')) return 'biology';
+  if (s.contains('earth')) return 'earthScience';
+  return null;
 }
 
 List<Map<String, dynamic>> _getContentSections(Map<String, dynamic> lesson) {
