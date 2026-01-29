@@ -52,13 +52,6 @@ class _StudentDashboardState extends State<StudentDashboard> {
     }
   }
 
-  final List<Widget> _screens = [
-    const _DashboardHome(),
-    const _LessonsPage(),
-    const _QuizzesPage(),
-    const _ProgressPage(),
-  ];
-
   @override
   void initState() {
     super.initState();
@@ -211,6 +204,7 @@ class _DashboardHome extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final studentId = FirebaseAuth.instance.currentUser?.uid;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Student Dashboard'),
@@ -298,57 +292,107 @@ class _DashboardHome extends StatelessWidget {
             Padding(
               padding:
                   const EdgeInsets.symmetric(horizontal: AppConstants.paddingM),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: StatCard(
-                      title: 'Lessons',
-                      value: '12',
-                      icon: Icons.book_outlined,
-                      color: AppColors.studentPrimary,
-                      subtitle: 'Completed',
-                    ),
-                  ),
-                  const SizedBox(width: AppConstants.paddingM),
-                  Expanded(
-                    child: StatCard(
-                      title: 'Quizzes',
-                      value: '8',
-                      icon: Icons.quiz_outlined,
-                      color: AppColors.success,
-                      subtitle: 'Passed',
-                    ),
-                  ),
-                ],
-              ),
-            ),
+              child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                stream: FirebaseFirestore.instance
+                    .collection('lessons')
+                    .where('isPublished', isEqualTo: true)
+                    .snapshots(),
+                builder: (context, lessonsSnapshot) {
+                  final lessonsCount = lessonsSnapshot.data?.docs.length ?? 0;
 
-            const SizedBox(height: AppConstants.paddingM),
+                  return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                    stream: FirebaseFirestore.instance
+                        .collection('quizzes')
+                        .where('isPublished', isEqualTo: true)
+                        .snapshots(),
+                    builder: (context, quizzesSnapshot) {
+                      final quizzesCount =
+                          quizzesSnapshot.data?.docs.length ?? 0;
 
-            Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: AppConstants.paddingM),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: StatCard(
-                      title: 'Avg Score',
-                      value: '85%',
-                      icon: Icons.star_outline,
-                      color: AppColors.warning,
-                    ),
-                  ),
-                  const SizedBox(width: AppConstants.paddingM),
-                  Expanded(
-                    child: StatCard(
-                      title: 'Streak',
-                      value: '7',
-                      icon: Icons.local_fire_department_outlined,
-                      color: AppColors.error,
-                      subtitle: 'Days',
-                    ),
-                  ),
-                ],
+                      final resultsStream = studentId == null
+                          ? const Stream<
+                              QuerySnapshot<Map<String, dynamic>>>.empty()
+                          : FirebaseFirestore.instance
+                              .collection('quiz_results')
+                              .where('studentId', isEqualTo: studentId)
+                              .snapshots();
+
+                      return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                        stream: resultsStream,
+                        builder: (context, resultsSnapshot) {
+                          final resultDocs = resultsSnapshot.data?.docs ?? [];
+                          final attempts = resultDocs.length;
+
+                          double avg = 0;
+                          if (attempts > 0) {
+                            final totalPct = resultDocs.map((d) {
+                              final data = d.data();
+                              final score =
+                                  (data['score'] as num?)?.toDouble() ?? 0;
+                              final totalPoints =
+                                  (data['totalPoints'] as num?)?.toDouble() ??
+                                      0;
+                              if (totalPoints <= 0) return 0.0;
+                              return (score / totalPoints) * 100;
+                            }).reduce((a, b) => a + b);
+                            avg = totalPct / attempts;
+                          }
+
+                          return Column(
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: StatCard(
+                                      title: 'Lessons',
+                                      value: lessonsCount.toString(),
+                                      icon: Icons.book_outlined,
+                                      color: AppColors.studentPrimary,
+                                      subtitle: 'Available',
+                                    ),
+                                  ),
+                                  const SizedBox(width: AppConstants.paddingM),
+                                  Expanded(
+                                    child: StatCard(
+                                      title: 'Quizzes',
+                                      value: quizzesCount.toString(),
+                                      icon: Icons.quiz_outlined,
+                                      color: AppColors.success,
+                                      subtitle: 'Available',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: AppConstants.paddingM),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: StatCard(
+                                      title: 'Avg Score',
+                                      value: '${avg.toStringAsFixed(0)}%',
+                                      icon: Icons.star_outline,
+                                      color: AppColors.warning,
+                                    ),
+                                  ),
+                                  const SizedBox(width: AppConstants.paddingM),
+                                  Expanded(
+                                    child: StatCard(
+                                      title: 'Attempts',
+                                      value: attempts.toString(),
+                                      icon: Icons.assignment_turned_in_outlined,
+                                      color: AppColors.error,
+                                      subtitle: 'Quizzes',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          );
+                        },
+                      );
+                    },
+                  );
+                },
               ),
             ),
 
@@ -369,15 +413,20 @@ class _DashboardHome extends StatelessWidget {
                           .limit(1)
                           .get();
 
-                      final firstDoc =
-                          snapshot.docs.isNotEmpty ? snapshot.docs.first : null;
+                      if (snapshot.docs.isEmpty) {
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                              content: Text('No lessons available.')),
+                        );
+                        return;
+                      }
 
-                      final firstLesson = firstDoc != null
-                          ? <String, dynamic>{
-                              ...firstDoc.data(),
-                              'id': firstDoc.data()['id'] ?? firstDoc.id,
-                            }
-                          : AppConstants.allLessons.first;
+                      final firstDoc = snapshot.docs.first;
+                      final firstLesson = <String, dynamic>{
+                        ...firstDoc.data(),
+                        'id': firstDoc.data()['id'] ?? firstDoc.id,
+                      };
 
                       if (!context.mounted) return;
                       Navigator.pushNamed(
@@ -385,12 +434,10 @@ class _DashboardHome extends StatelessWidget {
                         '/ar-view',
                         arguments: firstLesson,
                       );
-                    } catch (_) {
+                    } catch (e) {
                       if (!context.mounted) return;
-                      Navigator.pushNamed(
-                        context,
-                        '/ar-view',
-                        arguments: AppConstants.allLessons.first,
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Failed to open AR. $e')),
                       );
                     }
                   },
@@ -473,6 +520,13 @@ class _DashboardHome extends StatelessWidget {
                   .limit(2)
                   .snapshots(),
               builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Padding(
+                    padding: EdgeInsets.all(AppConstants.paddingM),
+                    child: Center(child: CircularProgressIndicator()),
+                  );
+                }
+
                 final firebaseLessons = (snapshot.data?.docs ??
                         <QueryDocumentSnapshot<Map<String, dynamic>>>[])
                     .map((d) => <String, dynamic>{
@@ -481,27 +535,26 @@ class _DashboardHome extends StatelessWidget {
                         })
                     .toList();
 
-                final lessonsToShow = firebaseLessons.isNotEmpty
-                    ? firebaseLessons
-                    : AppConstants.allLessons.take(2).toList();
-
-                if (snapshot.connectionState == ConnectionState.waiting &&
-                    lessonsToShow.isEmpty) {
+                if (firebaseLessons.isEmpty) {
                   return const Padding(
                     padding: EdgeInsets.all(AppConstants.paddingM),
-                    child: Center(child: CircularProgressIndicator()),
+                    child: Center(
+                      child: Text(
+                        'No lessons available.',
+                        style: TextStyle(color: AppColors.textSecondary),
+                      ),
+                    ),
                   );
                 }
 
                 return Column(
-                  children: lessonsToShow.map((lesson) {
+                  children: firebaseLessons.map((lesson) {
                     return Padding(
                       padding:
                           const EdgeInsets.only(bottom: AppConstants.paddingM),
                       child: LessonCard(
                         lesson: _lessonModelFromMap(lesson),
-                        showProgress: true,
-                        progress: 0.3 + (lessonsToShow.indexOf(lesson) * 0.2),
+                        showProgress: false,
                         onTap: () {
                           Navigator.pushNamed(
                             context,
@@ -537,13 +590,12 @@ class _DashboardHome extends StatelessWidget {
               stream: FirebaseFirestore.instance
                   .collection('quizzes')
                   .where('isPublished', isEqualTo: true)
-                  .limit(1)
+                  .limit(2)
                   .snapshots(),
               builder: (context, snapshot) {
                 final docs = snapshot.data?.docs ??
                     <QueryDocumentSnapshot<Map<String, dynamic>>>[];
-                if (snapshot.connectionState == ConnectionState.waiting &&
-                    docs.isEmpty) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Padding(
                     padding: EdgeInsets.all(AppConstants.paddingM),
                     child: Center(child: CircularProgressIndicator()),
@@ -551,47 +603,41 @@ class _DashboardHome extends StatelessWidget {
                 }
 
                 if (docs.isEmpty) {
-                  final firstLesson = AppConstants.allLessons.first;
-                  final fallbackQuiz = {
-                    'id': 'quiz_${firstLesson['id']}',
-                    'title': '${firstLesson['subject']} Quiz',
-                    'description':
-                        'Test your knowledge on ${firstLesson['title']}',
-                    'lessonId': firstLesson['id'],
-                    'subject': firstLesson['subject'],
-                    'gradeLevel': firstLesson['grade'],
-                    'questions': <Map<String, dynamic>>[],
-                    'duration': 30,
-                    'createdAt': DateTime.now().toIso8601String(),
-                    'isPublished': true,
-                  };
-
-                  return QuizCard(
-                    quiz: _quizModelFromMap(fallbackQuiz),
-                    onTap: () {
-                      Navigator.pushNamed(
-                        context,
-                        '/quiz-detail',
-                        arguments: fallbackQuiz,
-                      );
-                    },
+                  return const Padding(
+                    padding: EdgeInsets.all(AppConstants.paddingM),
+                    child: Center(
+                      child: Text(
+                        'No quizzes available.',
+                        style: TextStyle(color: AppColors.textSecondary),
+                      ),
+                    ),
                   );
                 }
 
-                final quizMap = <String, dynamic>{
-                  ...docs.first.data(),
-                  'id': docs.first.data()['id'] ?? docs.first.id,
-                };
+                final items = docs
+                    .map((d) => <String, dynamic>{
+                          ...d.data(),
+                          'id': d.data()['id'] ?? d.id,
+                        })
+                    .toList();
 
-                return QuizCard(
-                  quiz: _quizModelFromMap(quizMap),
-                  onTap: () {
-                    Navigator.pushNamed(
-                      context,
-                      '/quiz-detail',
-                      arguments: quizMap,
+                return Column(
+                  children: items.map((quizMap) {
+                    return Padding(
+                      padding:
+                          const EdgeInsets.only(bottom: AppConstants.paddingM),
+                      child: QuizCard(
+                        quiz: _quizModelFromMap(quizMap),
+                        onTap: () {
+                          Navigator.pushNamed(
+                            context,
+                            '/quiz-detail',
+                            arguments: quizMap,
+                          );
+                        },
+                      ),
                     );
-                  },
+                  }).toList(),
                 );
               },
             ),
@@ -619,20 +665,32 @@ class _LessonsPageState extends State<_LessonsPage> {
       return all;
     }
 
-    if (_selectedFilter == 'Quarter 3' || _selectedFilter == 'Quarter 4') {
+    if (_selectedFilter.startsWith('Quarter')) {
       return all
           .where((lesson) => lesson['quarter'] == _selectedFilter)
           .toList();
     }
 
-    if (_selectedFilter == 'Grade 9') {
-      return all
-          .where((lesson) =>
-              lesson['grade'] == 'Grade 9' || lesson['gradeLevel'] == 'Grade 9')
-          .toList();
+    final grade = (all.isNotEmpty
+            ? (all.first['gradeLevel'] ?? all.first['grade'])
+            : null)
+        ?.toString();
+    if (grade != null && grade.isNotEmpty) {
+      final hasGrade = all.any((lesson) {
+        final g = (lesson['gradeLevel'] ?? lesson['grade'] ?? '').toString();
+        return g == _selectedFilter;
+      });
+      if (hasGrade) {
+        return all.where((lesson) {
+          final g = (lesson['gradeLevel'] ?? lesson['grade'] ?? '').toString();
+          return g == _selectedFilter;
+        }).toList();
+      }
     }
 
-    if (AppConstants.subjects.contains(_selectedFilter)) {
+    final hasSubject = all.any(
+        (lesson) => (lesson['subject'] ?? '').toString() == _selectedFilter);
+    if (hasSubject) {
       return all
           .where((lesson) => lesson['subject'] == _selectedFilter)
           .toList();
@@ -659,45 +717,58 @@ class _LessonsPageState extends State<_LessonsPage> {
           // Filter Chips
           Container(
             padding: const EdgeInsets.all(AppConstants.paddingM),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _FilterChip(
-                    label: 'All',
-                    isSelected: _selectedFilter == 'All',
-                    onSelected: (_) => _onFilterSelected('All'),
-                  ),
-                  const SizedBox(width: AppConstants.paddingS),
-                  _FilterChip(
-                    label: 'Quarter 3',
-                    isSelected: _selectedFilter == 'Quarter 3',
-                    onSelected: (_) => _onFilterSelected('Quarter 3'),
-                  ),
-                  const SizedBox(width: AppConstants.paddingS),
-                  _FilterChip(
-                    label: 'Quarter 4',
-                    isSelected: _selectedFilter == 'Quarter 4',
-                    onSelected: (_) => _onFilterSelected('Quarter 4'),
-                  ),
-                  const SizedBox(width: AppConstants.paddingS),
-                  _FilterChip(
-                    label: 'Grade 9',
-                    isSelected: _selectedFilter == 'Grade 9',
-                    onSelected: (_) => _onFilterSelected('Grade 9'),
-                  ),
-                  const SizedBox(width: AppConstants.paddingS),
-                  ...AppConstants.subjects.map((subject) => Padding(
+            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: FirebaseFirestore.instance
+                  .collection('lessons')
+                  .where('isPublished', isEqualTo: true)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                final docs = snapshot.data?.docs ?? [];
+                final quarters = docs
+                    .map((d) => (d.data()['quarter'] ?? '').toString())
+                    .where((s) => s.isNotEmpty)
+                    .toSet()
+                    .toList()
+                  ..sort();
+                final grades = docs
+                    .map((d) =>
+                        (d.data()['gradeLevel'] ?? d.data()['grade'] ?? '')
+                            .toString())
+                    .where((s) => s.isNotEmpty)
+                    .toSet()
+                    .toList()
+                  ..sort();
+                final subjects = docs
+                    .map((d) => (d.data()['subject'] ?? '').toString())
+                    .where((s) => s.isNotEmpty)
+                    .toSet()
+                    .toList()
+                  ..sort();
+
+                final labels = <String>[
+                  'All',
+                  ...quarters,
+                  ...grades,
+                  ...subjects,
+                ];
+
+                return SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: labels.map((label) {
+                      return Padding(
                         padding:
-                            const EdgeInsets.only(left: AppConstants.paddingS),
+                            const EdgeInsets.only(right: AppConstants.paddingS),
                         child: _FilterChip(
-                          label: subject,
-                          isSelected: _selectedFilter == subject,
-                          onSelected: (_) => _onFilterSelected(subject),
+                          label: label,
+                          isSelected: _selectedFilter == label,
+                          onSelected: (_) => _onFilterSelected(label),
                         ),
-                      )),
-                ],
-              ),
+                      );
+                    }).toList(),
+                  ),
+                );
+              },
             ),
           ),
 
@@ -713,6 +784,16 @@ class _LessonsPageState extends State<_LessonsPage> {
                   return const Center(child: CircularProgressIndicator());
                 }
 
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Text(
+                      'Failed to load lessons. ${snapshot.error}',
+                      style: const TextStyle(color: AppColors.error),
+                      textAlign: TextAlign.center,
+                    ),
+                  );
+                }
+
                 final firebaseLessons = (snapshot.data?.docs ??
                         <QueryDocumentSnapshot<Map<String, dynamic>>>[])
                     .map((d) => <String, dynamic>{
@@ -721,19 +802,7 @@ class _LessonsPageState extends State<_LessonsPage> {
                         })
                     .toList();
 
-                final seenIds = <String>{};
-                final merged = <Map<String, dynamic>>[
-                  ...firebaseLessons.where((l) {
-                    final id = (l['id'] ?? '').toString();
-                    return id.isNotEmpty && seenIds.add(id);
-                  }),
-                  ...AppConstants.allLessons.where((l) {
-                    final id = (l['id'] ?? '').toString();
-                    return id.isNotEmpty && seenIds.add(id);
-                  }),
-                ];
-
-                final lessons = _applyFilter(merged);
+                final lessons = _applyFilter(firebaseLessons);
 
                 if (lessons.isEmpty) {
                   return const Center(
@@ -752,8 +821,7 @@ class _LessonsPageState extends State<_LessonsPage> {
                     final lesson = lessons[index];
                     return LessonCard(
                       lesson: _lessonModelFromMap(lesson),
-                      showProgress: true,
-                      progress: (index + 1) * 0.15,
+                      showProgress: false,
                       onTap: () {
                         Navigator.pushNamed(
                           context,
@@ -778,56 +846,166 @@ class _QuizzesPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return const _QuizzesPageBody();
+  }
+}
+
+class _QuizzesPageBody extends StatefulWidget {
+  const _QuizzesPageBody();
+
+  @override
+  State<_QuizzesPageBody> createState() => _QuizzesPageBodyState();
+}
+
+class _QuizzesPageBodyState extends State<_QuizzesPageBody> {
+  String _selectedFilter = 'All';
+
+  void _onFilterSelected(String label) {
+    setState(() => _selectedFilter = label);
+  }
+
+  List<Map<String, dynamic>> _applyFilter(List<Map<String, dynamic>> all) {
+    if (_selectedFilter == 'All') return all;
+
+    final hasGrade = all.any((q) {
+      final g = (q['gradeLevel'] ?? q['grade'] ?? '').toString();
+      return g == _selectedFilter;
+    });
+
+    if (hasGrade) {
+      return all.where((q) {
+        final g = (q['gradeLevel'] ?? q['grade'] ?? '').toString();
+        return g == _selectedFilter;
+      }).toList();
+    }
+
+    final hasSubject =
+        all.any((q) => (q['subject'] ?? '').toString() == _selectedFilter);
+    if (hasSubject) {
+      return all
+          .where((q) => (q['subject'] ?? '').toString() == _selectedFilter)
+          .toList();
+    }
+
+    return all;
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Quizzes'),
         backgroundColor: AppColors.studentPrimary,
       ),
-      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance
-            .collection('quizzes')
-            .where('isPublished', isEqualTo: true)
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          final quizzes = (snapshot.data?.docs ??
-                  <QueryDocumentSnapshot<Map<String, dynamic>>>[])
-              .map((d) => <String, dynamic>{
-                    ...d.data(),
-                    'id': d.data()['id'] ?? d.id,
-                  })
-              .toList();
-
-          if (quizzes.isEmpty) {
-            return const Center(
-              child: Text(
-                'No quizzes available.',
-                style: TextStyle(color: AppColors.textSecondary),
-              ),
-            );
-          }
-
-          return ListView.builder(
+      body: Column(
+        children: [
+          // Filter Chips
+          Container(
             padding: const EdgeInsets.all(AppConstants.paddingM),
-            itemCount: quizzes.length,
-            itemBuilder: (context, index) {
-              final quiz = quizzes[index];
-              return QuizCard(
-                quiz: _quizModelFromMap(quiz),
-                onTap: () {
-                  Navigator.pushNamed(
-                    context,
-                    '/quiz-detail',
-                    arguments: quiz,
+            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: FirebaseFirestore.instance
+                  .collection('quizzes')
+                  .where('isPublished', isEqualTo: true)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                final docs = snapshot.data?.docs ?? [];
+                final grades = docs
+                    .map((d) =>
+                        (d.data()['gradeLevel'] ?? d.data()['grade'] ?? '')
+                            .toString())
+                    .where((s) => s.isNotEmpty)
+                    .toSet()
+                    .toList()
+                  ..sort();
+                final subjects = docs
+                    .map((d) => (d.data()['subject'] ?? '').toString())
+                    .where((s) => s.isNotEmpty)
+                    .toSet()
+                    .toList()
+                  ..sort();
+
+                final labels = <String>['All', ...grades, ...subjects];
+
+                return SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: labels.map((label) {
+                      return Padding(
+                        padding:
+                            const EdgeInsets.only(right: AppConstants.paddingS),
+                        child: _FilterChip(
+                          label: label,
+                          isSelected: _selectedFilter == label,
+                          onSelected: (_) => _onFilterSelected(label),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                );
+              },
+            ),
+          ),
+          Expanded(
+            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: FirebaseFirestore.instance
+                  .collection('quizzes')
+                  .where('isPublished', isEqualTo: true)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Text(
+                      'Failed to load quizzes. ${snapshot.error}',
+                      style: const TextStyle(color: AppColors.error),
+                      textAlign: TextAlign.center,
+                    ),
                   );
-                },
-              );
-            },
-          );
-        },
+                }
+
+                final quizzes = (snapshot.data?.docs ??
+                        <QueryDocumentSnapshot<Map<String, dynamic>>>[])
+                    .map((d) => <String, dynamic>{
+                          ...d.data(),
+                          'id': d.data()['id'] ?? d.id,
+                        })
+                    .toList();
+
+                final filtered = _applyFilter(quizzes);
+
+                if (filtered.isEmpty) {
+                  return const Center(
+                    child: Text(
+                      'No quizzes available.',
+                      style: TextStyle(color: AppColors.textSecondary),
+                    ),
+                  );
+                }
+
+                return ListView.builder(
+                  padding: const EdgeInsets.all(AppConstants.paddingM),
+                  itemCount: filtered.length,
+                  itemBuilder: (context, index) {
+                    final quiz = filtered[index];
+                    return QuizCard(
+                      quiz: _quizModelFromMap(quiz),
+                      onTap: () {
+                        Navigator.pushNamed(
+                          context,
+                          '/quiz-detail',
+                          arguments: quiz,
+                        );
+                      },
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -838,115 +1016,170 @@ class _ProgressPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final studentId = FirebaseAuth.instance.currentUser?.uid;
     return Scaffold(
       appBar: AppBar(
         title: const Text('My Progress'),
         backgroundColor: AppColors.studentPrimary,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(AppConstants.paddingM),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Overall Progress Card
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(AppConstants.paddingL),
-                child: Column(
-                  children: [
-                    const Text(
-                      'Overall Progress',
-                      style: TextStyle(
-                        fontSize: AppConstants.fontXL,
-                        fontWeight: FontWeight.bold,
-                      ),
+      body: studentId == null
+          ? const Center(
+              child: Text(
+                'You are not logged in.',
+                style: TextStyle(color: AppColors.textSecondary),
+              ),
+            )
+          : StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: FirebaseFirestore.instance
+                  .collection('quiz_results')
+                  .where('studentId', isEqualTo: studentId)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Text(
+                      'Failed to load progress. ${snapshot.error}',
+                      style: const TextStyle(color: AppColors.error),
+                      textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: AppConstants.paddingL),
-                    SizedBox(
-                      width: 150,
-                      height: 150,
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          SizedBox(
-                            width: 150,
-                            height: 150,
-                            child: CircularProgressIndicator(
-                              value: 0.75,
-                              strokeWidth: 12,
-                              backgroundColor: AppColors.divider,
-                              valueColor: const AlwaysStoppedAnimation<Color>(
-                                AppColors.studentPrimary,
-                              ),
-                            ),
-                          ),
-                          const Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
+                  );
+                }
+
+                final docs = snapshot.data?.docs ?? [];
+
+                final entries = docs.map((d) {
+                  final data = d.data();
+                  final quizId = (data['quizId'] ?? d.id).toString();
+                  final quizTitle = (data['quizTitle'] ?? '').toString();
+                  final score = (data['score'] as num?)?.toInt() ?? 0;
+                  final totalPoints =
+                      (data['totalPoints'] as num?)?.toInt() ?? 0;
+                  final completedAt = _parseFirestoreDate(data['completedAt']);
+                  final pct =
+                      totalPoints <= 0 ? 0.0 : (score / totalPoints) * 100;
+                  return {
+                    'quizId': quizId,
+                    'quizTitle': quizTitle,
+                    'score': score,
+                    'totalPoints': totalPoints,
+                    'completedAt': completedAt,
+                    'percentage': pct,
+                  };
+                }).toList()
+                  ..sort((a, b) {
+                    final ad = a['completedAt'] as DateTime;
+                    final bd = b['completedAt'] as DateTime;
+                    return bd.compareTo(ad);
+                  });
+
+                final attempts = entries.length;
+                double avg = 0;
+                double best = 0;
+                if (attempts > 0) {
+                  final totalPct = entries
+                      .map((e) => (e['percentage'] as double))
+                      .reduce((a, b) => a + b);
+                  avg = totalPct / attempts;
+                  best = entries
+                      .map((e) => (e['percentage'] as double))
+                      .reduce((a, b) => a > b ? a : b);
+                }
+
+                return SingleChildScrollView(
+                  padding: const EdgeInsets.all(AppConstants.paddingM),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Overall Progress Card
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(AppConstants.paddingL),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                '75%',
+                              const Text(
+                                'Quiz Progress',
                                 style: TextStyle(
-                                  fontSize: AppConstants.fontDisplay,
+                                  fontSize: AppConstants.fontXL,
                                   fontWeight: FontWeight.bold,
-                                  color: AppColors.studentPrimary,
                                 ),
                               ),
-                              Text(
-                                'Complete',
-                                style: TextStyle(
-                                  fontSize: AppConstants.fontM,
-                                  color: AppColors.textSecondary,
-                                ),
+                              const SizedBox(height: AppConstants.paddingM),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: StatCard(
+                                      title: 'Attempts',
+                                      value: attempts.toString(),
+                                      icon: Icons.quiz_outlined,
+                                      color: AppColors.studentPrimary,
+                                    ),
+                                  ),
+                                  const SizedBox(width: AppConstants.paddingM),
+                                  Expanded(
+                                    child: StatCard(
+                                      title: 'Average',
+                                      value: '${avg.toStringAsFixed(0)}%',
+                                      icon: Icons.star_outline,
+                                      color: AppColors.warning,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: AppConstants.paddingM),
+                              StatCard(
+                                title: 'Best',
+                                value: '${best.toStringAsFixed(0)}%',
+                                icon: Icons.emoji_events_outlined,
+                                color: AppColors.success,
                               ),
                             ],
                           ),
-                        ],
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
+
+                      const SizedBox(height: AppConstants.paddingXL),
+
+                      // Recent Scores
+                      const Text(
+                        'Recent Quiz Scores',
+                        style: TextStyle(
+                          fontSize: AppConstants.fontXL,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: AppConstants.paddingM),
+
+                      if (entries.isEmpty)
+                        const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(AppConstants.paddingM),
+                            child: Text(
+                              'No quiz results yet.',
+                              style: TextStyle(color: AppColors.textSecondary),
+                            ),
+                          ),
+                        )
+                      else
+                        ...entries.take(10).map((e) {
+                          final title = (e['quizTitle'] as String).isEmpty
+                              ? (e['quizId'] as String)
+                              : (e['quizTitle'] as String);
+                          return _ScoreCard(
+                            title: title,
+                            score: e['score'] as int,
+                            total: e['totalPoints'] as int,
+                          );
+                        }),
+                    ],
+                  ),
+                );
+              },
             ),
-
-            const SizedBox(height: AppConstants.paddingXL),
-
-            // Subject Progress
-            const Text(
-              'Subject Progress',
-              style: TextStyle(
-                fontSize: AppConstants.fontXL,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: AppConstants.paddingM),
-
-            _SubjectProgress(
-                subject: 'Physics', progress: 0.85, color: AppColors.physics),
-            _SubjectProgress(
-                subject: 'Chemistry',
-                progress: 0.70,
-                color: AppColors.chemistry),
-            _SubjectProgress(
-                subject: 'Biology', progress: 0.65, color: AppColors.biology),
-
-            const SizedBox(height: AppConstants.paddingXL),
-
-            // Recent Scores
-            const Text(
-              'Recent Quiz Scores',
-              style: TextStyle(
-                fontSize: AppConstants.fontXL,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: AppConstants.paddingM),
-
-            _ScoreCard(title: 'Physics Quiz 1', score: 90, total: 100),
-            _ScoreCard(title: 'Chemistry Quiz 2', score: 85, total: 100),
-            _ScoreCard(title: 'Biology Quiz 1', score: 78, total: 100),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -970,63 +1203,6 @@ class _FilterChip extends StatelessWidget {
       onSelected: onSelected,
       selectedColor: AppColors.studentPrimary.withOpacity(0.2),
       checkmarkColor: AppColors.studentPrimary,
-    );
-  }
-}
-
-class _SubjectProgress extends StatelessWidget {
-  final String subject;
-  final double progress;
-  final Color color;
-
-  const _SubjectProgress({
-    required this.subject,
-    required this.progress,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: AppConstants.paddingM),
-      child: Padding(
-        padding: const EdgeInsets.all(AppConstants.paddingM),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  subject,
-                  style: const TextStyle(
-                    fontSize: AppConstants.fontL,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                Text(
-                  '${(progress * 100).toInt()}%',
-                  style: TextStyle(
-                    fontSize: AppConstants.fontL,
-                    fontWeight: FontWeight.bold,
-                    color: color,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppConstants.paddingM),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(AppConstants.radiusRound),
-              child: LinearProgressIndicator(
-                value: progress,
-                backgroundColor: AppColors.divider,
-                valueColor: AlwaysStoppedAnimation<Color>(color),
-                minHeight: 8,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

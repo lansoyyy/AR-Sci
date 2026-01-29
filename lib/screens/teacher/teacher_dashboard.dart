@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../utils/colors.dart';
 import '../../utils/constants.dart';
+import '../../models/user_model.dart';
 import '../../widgets/stat_card.dart';
 import '../../widgets/feature_card.dart';
 
@@ -15,6 +17,8 @@ class TeacherDashboard extends StatefulWidget {
 
 class _TeacherDashboardState extends State<TeacherDashboard> {
   int _selectedIndex = 0;
+  UserModel? _currentUser;
+  bool _isLoading = true;
 
   Future<void> _handleBackPressed() async {
     if (_selectedIndex != 0) {
@@ -45,15 +49,50 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
     }
   }
 
-  final List<Widget> _screens = [
-    const _DashboardHome(),
-    const _LessonsManagement(),
-    const _QuizzesManagement(),
-    const _StudentsPage(),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      final data = userDoc.data();
+      if (data == null) {
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      setState(() {
+        _currentUser = UserModel.fromJson(data);
+        _isLoading = false;
+      });
+    } catch (e) {
+      debugPrint('Error loading user data: $e');
+      setState(() => _isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final updatedScreens = <Widget>[
+      _DashboardHome(currentUser: _currentUser, isLoading: _isLoading),
+      const _LessonsManagement(),
+      const _QuizzesManagement(),
+      const _StudentsPage(),
+    ];
+
     return PopScope(
       canPop: false,
       onPopInvoked: (didPop) {
@@ -61,7 +100,7 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
         _handleBackPressed();
       },
       child: Scaffold(
-        body: _screens[_selectedIndex],
+        body: updatedScreens[_selectedIndex],
         bottomNavigationBar: BottomNavigationBar(
           currentIndex: _selectedIndex,
           onTap: (index) {
@@ -99,10 +138,23 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
 }
 
 class _DashboardHome extends StatelessWidget {
-  const _DashboardHome();
+  final UserModel? currentUser;
+  final bool isLoading;
+
+  const _DashboardHome({
+    this.currentUser,
+    this.isLoading = false,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final teacherName = (currentUser?.name.trim().isNotEmpty ?? false)
+        ? currentUser!.name.trim()
+        : 'Teacher';
+    final teacherSubject = (currentUser?.subject?.trim().isNotEmpty ?? false)
+        ? currentUser!.subject!.trim()
+        : 'Teacher';
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Teacher Dashboard'),
@@ -152,9 +204,9 @@ class _DashboardHome extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: AppConstants.paddingS),
-                  const Text(
-                    'Prof. Jane Smith',
-                    style: TextStyle(
+                  Text(
+                    isLoading ? 'Loading...' : teacherName,
+                    style: const TextStyle(
                       fontSize: AppConstants.fontXXL,
                       fontWeight: FontWeight.bold,
                       color: AppColors.textWhite,
@@ -171,9 +223,9 @@ class _DashboardHome extends StatelessWidget {
                       borderRadius:
                           BorderRadius.circular(AppConstants.radiusRound),
                     ),
-                    child: const Text(
-                      'Physics Teacher',
-                      style: TextStyle(
+                    child: Text(
+                      isLoading ? 'Loading...' : teacherSubject,
+                      style: const TextStyle(
                         color: AppColors.textWhite,
                         fontWeight: FontWeight.w600,
                       ),
@@ -192,22 +244,59 @@ class _DashboardHome extends StatelessWidget {
               child: Row(
                 children: [
                   Expanded(
-                    child: StatCard(
-                      title: 'Students',
-                      value: '156',
-                      icon: Icons.people_outline,
-                      color: AppColors.teacherPrimary,
-                      subtitle: 'Active',
+                    child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                      stream: FirebaseFirestore.instance
+                          .collection('users')
+                          .where('role', isEqualTo: 'student')
+                          .where('verified', isEqualTo: true)
+                          .snapshots(),
+                      builder: (context, snapshot) {
+                        if (snapshot.hasError) {
+                          return const StatCard(
+                            title: 'Students',
+                            value: '-',
+                            icon: Icons.people_outline,
+                            color: AppColors.teacherPrimary,
+                            subtitle: 'Active',
+                          );
+                        }
+                        final count = snapshot.data?.docs.length ?? 0;
+                        return StatCard(
+                          title: 'Students',
+                          value: count.toString(),
+                          icon: Icons.people_outline,
+                          color: AppColors.teacherPrimary,
+                          subtitle: 'Active',
+                        );
+                      },
                     ),
                   ),
                   const SizedBox(width: AppConstants.paddingM),
                   Expanded(
-                    child: StatCard(
-                      title: 'Lessons',
-                      value: '24',
-                      icon: Icons.book_outlined,
-                      color: AppColors.studentPrimary,
-                      subtitle: 'Published',
+                    child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                      stream: FirebaseFirestore.instance
+                          .collection('lessons')
+                          .where('isPublished', isEqualTo: true)
+                          .snapshots(),
+                      builder: (context, snapshot) {
+                        if (snapshot.hasError) {
+                          return const StatCard(
+                            title: 'Lessons',
+                            value: '-',
+                            icon: Icons.book_outlined,
+                            color: AppColors.studentPrimary,
+                            subtitle: 'Published',
+                          );
+                        }
+                        final count = snapshot.data?.docs.length ?? 0;
+                        return StatCard(
+                          title: 'Lessons',
+                          value: count.toString(),
+                          icon: Icons.book_outlined,
+                          color: AppColors.studentPrimary,
+                          subtitle: 'Published',
+                        );
+                      },
                     ),
                   ),
                 ],
@@ -222,21 +311,78 @@ class _DashboardHome extends StatelessWidget {
               child: Row(
                 children: [
                   Expanded(
-                    child: StatCard(
-                      title: 'Avg Score',
-                      value: '82%',
-                      icon: Icons.trending_up_outlined,
-                      color: AppColors.success,
+                    child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                      stream: FirebaseFirestore.instance
+                          .collection('quiz_results')
+                          .snapshots(),
+                      builder: (context, snapshot) {
+                        if (snapshot.hasError) {
+                          return const StatCard(
+                            title: 'Avg Score',
+                            value: '-',
+                            icon: Icons.trending_up_outlined,
+                            color: AppColors.success,
+                          );
+                        }
+
+                        final docs = snapshot.data?.docs ?? [];
+                        if (docs.isEmpty) {
+                          return const StatCard(
+                            title: 'Avg Score',
+                            value: '0%',
+                            icon: Icons.trending_up_outlined,
+                            color: AppColors.success,
+                          );
+                        }
+
+                        final percentages = docs.map((d) {
+                          final data = d.data();
+                          final score =
+                              (data['score'] as num?)?.toDouble() ?? 0.0;
+                          final totalPoints =
+                              (data['totalPoints'] as num?)?.toDouble() ?? 0.0;
+                          if (totalPoints <= 0) return 0.0;
+                          return (score / totalPoints) * 100;
+                        }).toList();
+
+                        final avg = percentages.reduce((a, b) => a + b) /
+                            (percentages.isEmpty ? 1 : percentages.length);
+
+                        return StatCard(
+                          title: 'Avg Score',
+                          value: '${avg.toStringAsFixed(0)}%',
+                          icon: Icons.trending_up_outlined,
+                          color: AppColors.success,
+                        );
+                      },
                     ),
                   ),
                   const SizedBox(width: AppConstants.paddingM),
                   Expanded(
-                    child: StatCard(
-                      title: 'Quizzes',
-                      value: '18',
-                      icon: Icons.quiz_outlined,
-                      color: AppColors.warning,
-                      subtitle: 'Active',
+                    child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                      stream: FirebaseFirestore.instance
+                          .collection('quizzes')
+                          .where('isPublished', isEqualTo: true)
+                          .snapshots(),
+                      builder: (context, snapshot) {
+                        if (snapshot.hasError) {
+                          return const StatCard(
+                            title: 'Quizzes',
+                            value: '-',
+                            icon: Icons.quiz_outlined,
+                            color: AppColors.warning,
+                            subtitle: 'Active',
+                          );
+                        }
+                        final count = snapshot.data?.docs.length ?? 0;
+                        return StatCard(
+                          title: 'Quizzes',
+                          value: count.toString(),
+                          icon: Icons.quiz_outlined,
+                          color: AppColors.warning,
+                          subtitle: 'Active',
+                        );
+                      },
                     ),
                   ),
                 ],
@@ -264,7 +410,9 @@ class _DashboardHome extends StatelessWidget {
               description: 'Add a new lesson with content and materials',
               icon: Icons.add_box_outlined,
               iconColor: AppColors.teacherPrimary,
-              onTap: () {},
+              onTap: () {
+                Navigator.pushNamed(context, '/admin-create-lesson');
+              },
             ),
 
             FeatureCard(
@@ -272,28 +420,43 @@ class _DashboardHome extends StatelessWidget {
               description: 'Design a new quiz for your students',
               icon: Icons.quiz_outlined,
               iconColor: AppColors.studentPrimary,
-              onTap: () {},
-            ),
-
-            FeatureCard(
-              title: 'View Reports',
-              description: 'Check student performance and analytics',
-              icon: Icons.analytics_outlined,
-              iconColor: AppColors.warning,
               onTap: () {
-                Navigator.pushNamed(context, '/teacher-score-reports');
+                Navigator.pushNamed(context, '/admin-create-quiz');
               },
             ),
 
-            FeatureCard(
-              title: 'Approve Students',
-              description: 'Approve pending student registrations',
-              icon: Icons.verified_outlined,
-              iconColor: AppColors.success,
-              onTap: () {
-                Navigator.pushNamed(context, '/teacher-approve-students');
-              },
-            ),
+            // FeatureCard(
+            //   title: 'View Reports',
+            //   description: 'Check student performance and analytics',
+            //   icon: Icons.analytics_outlined,
+            //   iconColor: AppColors.warning,
+            //   onTap: () {
+            //     Navigator.pushNamed(context, '/teacher-score-reports');
+            //   },
+            // ),
+
+            // StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+            //   stream: FirebaseFirestore.instance
+            //       .collection('users')
+            //       .where('role', isEqualTo: 'student')
+            //       .where('verified', isEqualTo: false)
+            //       .snapshots(),
+            //   builder: (context, snapshot) {
+            //     final pending = snapshot.data?.docs.length ?? 0;
+            //     final suffix = pending == 0
+            //         ? 'No pending registrations'
+            //         : '$pending pending registrations';
+            //     return FeatureCard(
+            //       title: 'Approve Students',
+            //       description: suffix,
+            //       icon: Icons.verified_outlined,
+            //       iconColor: AppColors.success,
+            //       onTap: () {
+            //         Navigator.pushNamed(context, '/teacher-approve-students');
+            //       },
+            //     );
+            //   },
+            // ),
 
             const SizedBox(height: AppConstants.paddingXL),
 
@@ -311,22 +474,101 @@ class _DashboardHome extends StatelessWidget {
             ),
             const SizedBox(height: AppConstants.paddingM),
 
-            _ActivityCard(
-              title: 'Quiz Submitted',
-              subtitle:
-                  '25 students completed ${AppConstants.allLessons.first['subject']} Quiz',
-              time: '2 hours ago',
-              icon: Icons.assignment_turned_in_outlined,
-              color: AppColors.success,
+            StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: FirebaseFirestore.instance
+                  .collection('quiz_results')
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Padding(
+                    padding: EdgeInsets.all(AppConstants.paddingM),
+                    child: Center(child: CircularProgressIndicator()),
+                  );
+                }
+
+                final docs = snapshot.data?.docs ?? [];
+                final activities = docs.map((d) {
+                  final data = d.data();
+                  final quizTitle = (data['quizTitle'] as String?) ?? '';
+                  final quizId = (data['quizId'] as String?) ?? d.id;
+                  final completedAt = _parseFirestoreDate(data['completedAt']);
+                  return {
+                    'title': 'Quiz Submitted',
+                    'subtitle': quizTitle.isNotEmpty
+                        ? 'A student completed $quizTitle'
+                        : 'A student completed quiz $quizId',
+                    'time': _timeAgo(completedAt),
+                    'icon': Icons.assignment_turned_in_outlined,
+                    'color': AppColors.success,
+                    'dt': completedAt,
+                  };
+                }).toList()
+                  ..sort((a, b) {
+                    final ad = a['dt'] as DateTime;
+                    final bd = b['dt'] as DateTime;
+                    return bd.compareTo(ad);
+                  });
+
+                if (activities.isEmpty) {
+                  return const SizedBox.shrink();
+                }
+
+                return Column(
+                  children: activities.take(3).map((a) {
+                    return _ActivityCard(
+                      title: a['title'] as String,
+                      subtitle: a['subtitle'] as String,
+                      time: a['time'] as String,
+                      icon: a['icon'] as IconData,
+                      color: a['color'] as Color,
+                    );
+                  }).toList(),
+                );
+              },
             ),
 
-            _ActivityCard(
-              title: 'New Lesson Published',
-              subtitle:
-                  '${AppConstants.allLessons.first['title']} is now available',
-              time: '5 hours ago',
-              icon: Icons.publish_outlined,
-              color: AppColors.studentPrimary,
+            StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: FirebaseFirestore.instance
+                  .collection('lessons')
+                  .where('isPublished', isEqualTo: true)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                final docs = snapshot.data?.docs ?? [];
+                final lessons = docs.map((d) {
+                  final data = d.data();
+                  final title = (data['title'] as String?) ?? '';
+                  final createdAt = _parseFirestoreDate(data['createdAt']);
+                  return {
+                    'title': title,
+                    'dt': createdAt,
+                  };
+                }).toList()
+                  ..sort((a, b) {
+                    final ad = a['dt'] as DateTime;
+                    final bd = b['dt'] as DateTime;
+                    return bd.compareTo(ad);
+                  });
+
+                if (lessons.isEmpty) {
+                  return const SizedBox.shrink();
+                }
+
+                return Column(
+                  children: lessons.take(2).map((l) {
+                    final title = (l['title'] as String).isEmpty
+                        ? 'New lesson published'
+                        : '${l['title']} is now available';
+                    final dt = l['dt'] as DateTime;
+                    return _ActivityCard(
+                      title: 'New Lesson Published',
+                      subtitle: title,
+                      time: _timeAgo(dt),
+                      icon: Icons.publish_outlined,
+                      color: AppColors.studentPrimary,
+                    );
+                  }).toList(),
+                );
+              },
             ),
 
             const SizedBox(height: AppConstants.paddingL),
@@ -337,8 +579,142 @@ class _DashboardHome extends StatelessWidget {
   }
 }
 
-class _LessonsManagement extends StatelessWidget {
+class _LessonsManagement extends StatefulWidget {
   const _LessonsManagement();
+
+  @override
+  State<_LessonsManagement> createState() => _LessonsManagementState();
+}
+
+class _LessonsManagementState extends State<_LessonsManagement> {
+  Future<void> _confirmAndDelete({
+    required String lessonId,
+    required String title,
+  }) async {
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Lesson'),
+        content: Text('Delete "$title"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldDelete != true) return;
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('lessons')
+          .doc(lessonId)
+          .delete();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Lesson deleted.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to delete lesson. $e')),
+      );
+    }
+  }
+
+  Future<void> _showEditDialog({
+    required String lessonId,
+    required Map<String, dynamic> lesson,
+  }) async {
+    final titleController =
+        TextEditingController(text: (lesson['title'] ?? '').toString());
+    final descriptionController =
+        TextEditingController(text: (lesson['description'] ?? '').toString());
+    bool isPublished = lesson['isPublished'] == true;
+
+    final didSave = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setLocalState) {
+            return AlertDialog(
+              title: const Text('Edit Lesson'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: titleController,
+                      decoration: const InputDecoration(labelText: 'Title'),
+                    ),
+                    const SizedBox(height: AppConstants.paddingM),
+                    TextField(
+                      controller: descriptionController,
+                      maxLines: 3,
+                      decoration:
+                          const InputDecoration(labelText: 'Description'),
+                    ),
+                    const SizedBox(height: AppConstants.paddingM),
+                    SwitchListTile(
+                      value: isPublished,
+                      onChanged: (v) => setLocalState(() => isPublished = v),
+                      title: const Text('Published'),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (didSave != true) {
+      titleController.dispose();
+      descriptionController.dispose();
+      return;
+    }
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('lessons')
+          .doc(lessonId)
+          .update({
+        'title': titleController.text.trim(),
+        'description': descriptionController.text.trim(),
+        'isPublished': isPublished,
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Lesson updated.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update lesson. $e')),
+      );
+    } finally {
+      titleController.dispose();
+      descriptionController.dispose();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -350,7 +726,21 @@ class _LessonsManagement extends StatelessWidget {
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: FirebaseFirestore.instance.collection('lessons').snapshots(),
         builder: (context, snapshot) {
-          final firebaseLessons = (snapshot.data?.docs ??
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (snapshot.hasError) {
+            return Center(
+              child: Text(
+                'Failed to load lessons. ${snapshot.error}',
+                style: const TextStyle(color: AppColors.error),
+                textAlign: TextAlign.center,
+              ),
+            );
+          }
+
+          final lessons = (snapshot.data?.docs ??
                   <QueryDocumentSnapshot<Map<String, dynamic>>>[])
               .map((d) => <String, dynamic>{
                     ...d.data(),
@@ -358,24 +748,7 @@ class _LessonsManagement extends StatelessWidget {
                   })
               .toList();
 
-          final seenIds = <String>{};
-          final merged = <Map<String, dynamic>>[
-            ...firebaseLessons.where((l) {
-              final id = (l['id'] ?? '').toString();
-              return id.isNotEmpty && seenIds.add(id);
-            }),
-            ...AppConstants.allLessons.where((l) {
-              final id = (l['id'] ?? '').toString();
-              return id.isNotEmpty && seenIds.add(id);
-            }),
-          ];
-
-          if (snapshot.connectionState == ConnectionState.waiting &&
-              merged.isEmpty) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          if (merged.isEmpty) {
+          if (lessons.isEmpty) {
             return const Center(
               child: Text(
                 'No lessons available.',
@@ -386,23 +759,39 @@ class _LessonsManagement extends StatelessWidget {
 
           return ListView.builder(
             padding: const EdgeInsets.all(AppConstants.paddingM),
-            itemCount: merged.length,
+            itemCount: lessons.length,
             itemBuilder: (context, index) {
-              final lesson = merged[index];
+              final lesson = lessons[index];
+              final lessonId = (lesson['id'] ?? '').toString();
+              final title = (lesson['title'] ?? '').toString();
               return _LessonManagementCard(
-                title: (lesson['title'] ?? '').toString(),
+                title: title,
                 subject: (lesson['subject'] ?? '').toString(),
                 gradeLevel:
                     (lesson['gradeLevel'] ?? lesson['grade'] ?? '').toString(),
-                students: 30 + (index * 15),
                 isPublished: lesson['isPublished'] == true,
+                onTap: () {
+                  Navigator.pushNamed(
+                    context,
+                    '/lesson-detail',
+                    arguments: lesson,
+                  );
+                },
+                onEdit: lessonId.isEmpty
+                    ? null
+                    : () => _showEditDialog(lessonId: lessonId, lesson: lesson),
+                onDelete: lessonId.isEmpty
+                    ? null
+                    : () => _confirmAndDelete(lessonId: lessonId, title: title),
               );
             },
           );
         },
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {},
+        onPressed: () {
+          Navigator.pushNamed(context, '/admin-create-lesson');
+        },
         backgroundColor: AppColors.teacherPrimary,
         icon: const Icon(Icons.add),
         label: const Text('New Lesson'),
@@ -411,8 +800,115 @@ class _LessonsManagement extends StatelessWidget {
   }
 }
 
-class _QuizzesManagement extends StatelessWidget {
+class _QuizzesManagement extends StatefulWidget {
   const _QuizzesManagement();
+
+  @override
+  State<_QuizzesManagement> createState() => _QuizzesManagementState();
+}
+
+class _QuizzesManagementState extends State<_QuizzesManagement> {
+  Future<void> _showEditDialog({
+    required String quizId,
+    required Map<String, dynamic> quiz,
+  }) async {
+    final titleController =
+        TextEditingController(text: (quiz['title'] ?? '').toString());
+    final descriptionController =
+        TextEditingController(text: (quiz['description'] ?? '').toString());
+    final durationController = TextEditingController(
+      text: (quiz['duration'] ?? 30).toString(),
+    );
+    bool isPublished = quiz['isPublished'] == true;
+
+    final didSave = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setLocalState) {
+            return AlertDialog(
+              title: const Text('Edit Quiz'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: titleController,
+                      decoration: const InputDecoration(labelText: 'Title'),
+                    ),
+                    const SizedBox(height: AppConstants.paddingM),
+                    TextField(
+                      controller: descriptionController,
+                      maxLines: 3,
+                      decoration:
+                          const InputDecoration(labelText: 'Description'),
+                    ),
+                    const SizedBox(height: AppConstants.paddingM),
+                    TextField(
+                      controller: durationController,
+                      keyboardType: TextInputType.number,
+                      decoration:
+                          const InputDecoration(labelText: 'Duration (min)'),
+                    ),
+                    const SizedBox(height: AppConstants.paddingM),
+                    SwitchListTile(
+                      value: isPublished,
+                      onChanged: (v) => setLocalState(() => isPublished = v),
+                      title: const Text('Published'),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (didSave != true) {
+      titleController.dispose();
+      descriptionController.dispose();
+      durationController.dispose();
+      return;
+    }
+
+    try {
+      final duration = int.tryParse(durationController.text.trim()) ?? 30;
+      await FirebaseFirestore.instance
+          .collection('quizzes')
+          .doc(quizId)
+          .update({
+        'title': titleController.text.trim(),
+        'description': descriptionController.text.trim(),
+        'duration': duration,
+        'isPublished': isPublished,
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Quiz updated.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update quiz. $e')),
+      );
+    } finally {
+      titleController.dispose();
+      descriptionController.dispose();
+      durationController.dispose();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -426,6 +922,16 @@ class _QuizzesManagement extends StatelessWidget {
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
+          }
+
+          if (snapshot.hasError) {
+            return Center(
+              child: Text(
+                'Failed to load quizzes. ${snapshot.error}',
+                style: const TextStyle(color: AppColors.error),
+                textAlign: TextAlign.center,
+              ),
+            );
           }
 
           final quizzes = (snapshot.data?.docs ??
@@ -450,22 +956,76 @@ class _QuizzesManagement extends StatelessWidget {
             itemCount: quizzes.length,
             itemBuilder: (context, index) {
               final quiz = quizzes[index];
+              final quizId = (quiz['id'] ?? '').toString();
               final questionsList = quiz['questions'] as List? ?? const [];
-              return _QuizManagementCard(
-                title: (quiz['title'] ?? '').toString(),
-                questions: questionsList.length,
-                duration: quiz['duration'] is int
-                    ? quiz['duration'] as int
-                    : int.tryParse((quiz['duration'] ?? '').toString()) ?? 30,
-                submissions: 0,
-                avgScore: 0,
+              final duration = quiz['duration'] is int
+                  ? quiz['duration'] as int
+                  : int.tryParse((quiz['duration'] ?? '').toString()) ?? 30;
+
+              if (quizId.isEmpty) {
+                return _QuizManagementCard(
+                  title: (quiz['title'] ?? '').toString(),
+                  questions: questionsList.length,
+                  duration: duration,
+                  submissions: 0,
+                  avgScore: 0,
+                  onView: () {
+                    Navigator.pushNamed(
+                      context,
+                      '/quiz-detail',
+                      arguments: quiz,
+                    );
+                  },
+                  onEdit: null,
+                );
+              }
+
+              return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                stream: FirebaseFirestore.instance
+                    .collection('quiz_results')
+                    .where('quizId', isEqualTo: quizId)
+                    .snapshots(),
+                builder: (context, resultsSnapshot) {
+                  final resultDocs = resultsSnapshot.data?.docs ?? [];
+                  final submissions = resultDocs.length;
+                  double avg = 0;
+                  if (submissions > 0) {
+                    final totalPct = resultDocs.map((d) {
+                      final data = d.data();
+                      final score = (data['score'] as num?)?.toDouble() ?? 0.0;
+                      final totalPoints =
+                          (data['totalPoints'] as num?)?.toDouble() ?? 0.0;
+                      if (totalPoints <= 0) return 0.0;
+                      return (score / totalPoints) * 100;
+                    }).reduce((a, b) => a + b);
+                    avg = totalPct / submissions;
+                  }
+
+                  return _QuizManagementCard(
+                    title: (quiz['title'] ?? '').toString(),
+                    questions: questionsList.length,
+                    duration: duration,
+                    submissions: submissions,
+                    avgScore: avg,
+                    onView: () {
+                      Navigator.pushNamed(
+                        context,
+                        '/quiz-detail',
+                        arguments: quiz,
+                      );
+                    },
+                    onEdit: () => _showEditDialog(quizId: quizId, quiz: quiz),
+                  );
+                },
               );
             },
           );
         },
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {},
+        onPressed: () {
+          Navigator.pushNamed(context, '/admin-create-quiz');
+        },
         backgroundColor: AppColors.teacherPrimary,
         icon: const Icon(Icons.add),
         label: const Text('New Quiz'),
@@ -474,27 +1034,136 @@ class _QuizzesManagement extends StatelessWidget {
   }
 }
 
-class _StudentsPage extends StatelessWidget {
+class _StudentsPage extends StatefulWidget {
   const _StudentsPage();
 
   @override
+  State<_StudentsPage> createState() => _StudentsPageState();
+}
+
+class _StudentsPageState extends State<_StudentsPage> {
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final searchTerm = _searchController.text.trim().toLowerCase();
     return Scaffold(
       appBar: AppBar(
         title: const Text('Students'),
         backgroundColor: AppColors.teacherPrimary,
       ),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(AppConstants.paddingM),
-        itemCount: 10,
-        itemBuilder: (context, index) {
-          return _StudentCard(
-            name: 'Student ${index + 1}',
-            gradeLevel: 'Grade 9',
-            avgScore: 75.0 + (index * 2),
-            completedLessons: 6 + index,
-          );
-        },
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(AppConstants.paddingM),
+            child: TextField(
+              controller: _searchController,
+              decoration: const InputDecoration(
+                hintText: 'Search student name or email',
+                prefixIcon: Icon(Icons.search),
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+          ),
+          Expanded(
+            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: FirebaseFirestore.instance
+                  .collection('users')
+                  .where('role', isEqualTo: 'student')
+                  .where('verified', isEqualTo: true)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Text(
+                      'Failed to load students. ${snapshot.error}',
+                      style: const TextStyle(color: AppColors.error),
+                      textAlign: TextAlign.center,
+                    ),
+                  );
+                }
+
+                final docs = snapshot.data?.docs ?? [];
+                final filteredDocs = searchTerm.isEmpty
+                    ? docs
+                    : docs.where((doc) {
+                        final data = doc.data();
+                        final name =
+                            (data['name'] as String? ?? '').toLowerCase();
+                        final email =
+                            (data['email'] as String? ?? '').toLowerCase();
+                        return name.contains(searchTerm) ||
+                            email.contains(searchTerm);
+                      }).toList();
+
+                if (filteredDocs.isEmpty) {
+                  return const Center(
+                    child: Text(
+                      'No students found.',
+                      style: TextStyle(color: AppColors.textSecondary),
+                    ),
+                  );
+                }
+
+                return ListView.builder(
+                  padding: const EdgeInsets.all(AppConstants.paddingM),
+                  itemCount: filteredDocs.length,
+                  itemBuilder: (context, index) {
+                    final doc = filteredDocs[index];
+                    final data = doc.data();
+                    final studentId = doc.id;
+
+                    final name = (data['name'] as String?) ?? 'Student';
+                    final email = (data['email'] as String?) ?? '';
+                    final grade = (data['gradeLevel'] as String?) ?? '';
+
+                    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                      stream: FirebaseFirestore.instance
+                          .collection('quiz_results')
+                          .where('studentId', isEqualTo: studentId)
+                          .snapshots(),
+                      builder: (context, resultsSnapshot) {
+                        final resultDocs = resultsSnapshot.data?.docs ?? [];
+                        final attempts = resultDocs.length;
+                        double avg = 0;
+                        if (attempts > 0) {
+                          final totalPct = resultDocs.map((d) {
+                            final r = d.data();
+                            final score =
+                                (r['score'] as num?)?.toDouble() ?? 0.0;
+                            final totalPoints =
+                                (r['totalPoints'] as num?)?.toDouble() ?? 0.0;
+                            if (totalPoints <= 0) return 0.0;
+                            return (score / totalPoints) * 100;
+                          }).reduce((a, b) => a + b);
+                          avg = totalPct / attempts;
+                        }
+
+                        return _StudentCard(
+                          name: name,
+                          email: email,
+                          gradeLevel: grade,
+                          attempts: attempts,
+                          avgScore: avg,
+                        );
+                      },
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -558,98 +1227,98 @@ class _LessonManagementCard extends StatelessWidget {
   final String title;
   final String subject;
   final String gradeLevel;
-  final int students;
   final bool isPublished;
+  final VoidCallback? onTap;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
 
   const _LessonManagementCard({
     required this.title,
     required this.subject,
     required this.gradeLevel,
-    required this.students,
     required this.isPublished,
+    this.onTap,
+    this.onEdit,
+    this.onDelete,
   });
 
   @override
   Widget build(BuildContext context) {
     return Card(
       margin: const EdgeInsets.only(bottom: AppConstants.paddingM),
-      child: Padding(
-        padding: const EdgeInsets.all(AppConstants.paddingM),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: AppConstants.fontL,
-                      fontWeight: FontWeight.w600,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppConstants.radiusM),
+        child: Padding(
+          padding: const EdgeInsets.all(AppConstants.paddingM),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: AppConstants.fontL,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppConstants.paddingM,
-                    vertical: AppConstants.paddingS,
-                  ),
-                  decoration: BoxDecoration(
-                    color: isPublished
-                        ? AppColors.success.withOpacity(0.1)
-                        : AppColors.warning.withOpacity(0.1),
-                    borderRadius:
-                        BorderRadius.circular(AppConstants.radiusRound),
-                  ),
-                  child: Text(
-                    isPublished ? 'Published' : 'Draft',
-                    style: TextStyle(
-                      fontSize: AppConstants.fontS,
-                      fontWeight: FontWeight.w600,
-                      color:
-                          isPublished ? AppColors.success : AppColors.warning,
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppConstants.paddingM,
+                      vertical: AppConstants.paddingS,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isPublished
+                          ? AppColors.success.withOpacity(0.1)
+                          : AppColors.warning.withOpacity(0.1),
+                      borderRadius:
+                          BorderRadius.circular(AppConstants.radiusRound),
+                    ),
+                    child: Text(
+                      isPublished ? 'Published' : 'Draft',
+                      style: TextStyle(
+                        fontSize: AppConstants.fontS,
+                        fontWeight: FontWeight.w600,
+                        color:
+                            isPublished ? AppColors.success : AppColors.warning,
+                      ),
                     ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppConstants.paddingS),
-            Text(
-              '$subject • $gradeLevel',
-              style: const TextStyle(
-                fontSize: AppConstants.fontM,
-                color: AppColors.textSecondary,
+                ],
               ),
-            ),
-            const SizedBox(height: AppConstants.paddingS),
-            Text(
-              '$students students enrolled',
-              style: const TextStyle(
-                fontSize: AppConstants.fontS,
-                color: AppColors.textLight,
+              const SizedBox(height: AppConstants.paddingS),
+              Text(
+                '$subject • $gradeLevel',
+                style: const TextStyle(
+                  fontSize: AppConstants.fontM,
+                  color: AppColors.textSecondary,
+                ),
               ),
-            ),
-            const SizedBox(height: AppConstants.paddingM),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () {},
-                    icon: const Icon(Icons.edit_outlined, size: 18),
-                    label: const Text('Edit'),
+              const SizedBox(height: AppConstants.paddingM),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: onEdit,
+                      icon: const Icon(Icons.edit_outlined, size: 18),
+                      label: const Text('Edit'),
+                    ),
                   ),
-                ),
-                const SizedBox(width: AppConstants.paddingS),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () {},
-                    icon: const Icon(Icons.delete_outline, size: 18),
-                    label: const Text('Delete'),
+                  const SizedBox(width: AppConstants.paddingS),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: onDelete,
+                      icon: const Icon(Icons.delete_outline, size: 18),
+                      label: const Text('Delete'),
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ],
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -662,6 +1331,8 @@ class _QuizManagementCard extends StatelessWidget {
   final int duration;
   final int submissions;
   final double avgScore;
+  final VoidCallback? onView;
+  final VoidCallback? onEdit;
 
   const _QuizManagementCard({
     required this.title,
@@ -669,6 +1340,8 @@ class _QuizManagementCard extends StatelessWidget {
     required this.duration,
     required this.submissions,
     required this.avgScore,
+    this.onView,
+    this.onEdit,
   });
 
   @override
@@ -708,7 +1381,7 @@ class _QuizManagementCard extends StatelessWidget {
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: () {},
+                    onPressed: onView,
                     icon: const Icon(Icons.visibility_outlined, size: 18),
                     label: const Text('View'),
                   ),
@@ -716,7 +1389,7 @@ class _QuizManagementCard extends StatelessWidget {
                 const SizedBox(width: AppConstants.paddingS),
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: () {},
+                    onPressed: onEdit,
                     icon: const Icon(Icons.edit_outlined, size: 18),
                     label: const Text('Edit'),
                   ),
@@ -763,15 +1436,17 @@ class _QuizStat extends StatelessWidget {
 
 class _StudentCard extends StatelessWidget {
   final String name;
+  final String email;
   final String gradeLevel;
+  final int attempts;
   final double avgScore;
-  final int completedLessons;
 
   const _StudentCard({
     required this.name,
+    required this.email,
     required this.gradeLevel,
+    required this.attempts,
     required this.avgScore,
-    required this.completedLessons,
   });
 
   @override
@@ -784,7 +1459,12 @@ class _StudentCard extends StatelessWidget {
           child: Icon(Icons.person, color: AppColors.textWhite),
         ),
         title: Text(name),
-        subtitle: Text('$gradeLevel • $completedLessons lessons completed'),
+        subtitle: Text(
+          [
+            if (email.isNotEmpty) email,
+            if (gradeLevel.isNotEmpty) gradeLevel,
+          ].join(' • '),
+        ),
         trailing: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.end,
@@ -797,17 +1477,31 @@ class _StudentCard extends StatelessWidget {
                 color: AppColors.teacherPrimary,
               ),
             ),
-            const Text(
-              'Avg Score',
-              style: TextStyle(
+            Text(
+              '$attempts attempts',
+              style: const TextStyle(
                 fontSize: AppConstants.fontS,
                 color: AppColors.textSecondary,
               ),
             ),
           ],
         ),
-        onTap: () {},
+        onTap: null,
       ),
     );
   }
+}
+
+DateTime _parseFirestoreDate(dynamic value) {
+  if (value is Timestamp) return value.toDate();
+  if (value is String) return DateTime.tryParse(value) ?? DateTime.now();
+  return DateTime.now();
+}
+
+String _timeAgo(DateTime dt) {
+  final diff = DateTime.now().difference(dt);
+  if (diff.inMinutes < 1) return 'Just now';
+  if (diff.inMinutes < 60) return '${diff.inMinutes} min ago';
+  if (diff.inHours < 24) return '${diff.inHours} hours ago';
+  return '${diff.inDays} days ago';
 }
