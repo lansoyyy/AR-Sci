@@ -110,6 +110,15 @@ class AppConstants {
     'Grade 9',
   ];
 
+  static const List<String> studentSections = [
+    'St. Padre Pio',
+    'St. Isidore',
+    'St. Lorenzo',
+    'St. Andrew',
+    'St. Pedro',
+    'St. Thomas',
+  ];
+
   // Subjects
   static const List<String> subjects = [
     'Biology',

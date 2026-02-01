@@ -16,6 +16,7 @@ class TeacherStudentApprovalScreen extends StatefulWidget {
 class _TeacherStudentApprovalScreenState
     extends State<TeacherStudentApprovalScreen> {
   final TextEditingController _searchController = TextEditingController();
+  String _selectedSectionFilter = 'all';
 
   Query<Map<String, dynamic>> _query() {
     return FirebaseFirestore.instance
@@ -68,13 +69,38 @@ class _TeacherStudentApprovalScreenState
         children: [
           Padding(
             padding: const EdgeInsets.all(AppConstants.paddingM),
-            child: TextField(
-              controller: _searchController,
-              decoration: const InputDecoration(
-                hintText: 'Search student name or email',
-                prefixIcon: Icon(Icons.search),
-              ),
-              onChanged: (_) => setState(() {}),
+            child: Column(
+              children: [
+                DropdownButtonFormField<String>(
+                  value: _selectedSectionFilter,
+                  decoration: const InputDecoration(
+                    hintText: 'Filter by section',
+                    prefixIcon: Icon(Icons.groups_outlined),
+                  ),
+                  items: <DropdownMenuItem<String>>[
+                    const DropdownMenuItem(
+                      value: 'all',
+                      child: Text('All Sections'),
+                    ),
+                    ...AppConstants.studentSections.map(
+                      (s) => DropdownMenuItem(value: s, child: Text(s)),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    if (value == null) return;
+                    setState(() => _selectedSectionFilter = value);
+                  },
+                ),
+                const SizedBox(height: AppConstants.paddingM),
+                TextField(
+                  controller: _searchController,
+                  decoration: const InputDecoration(
+                    hintText: 'Search student name or email',
+                    prefixIcon: Icon(Icons.search),
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+              ],
             ),
           ),
           Expanded(
@@ -86,17 +112,22 @@ class _TeacherStudentApprovalScreenState
                 }
 
                 final docs = snapshot.data?.docs ?? [];
-                final filteredDocs = searchTerm.isEmpty
-                    ? docs
-                    : docs.where((doc) {
-                        final data = doc.data();
-                        final name =
-                            (data['name'] as String? ?? '').toLowerCase();
-                        final email =
-                            (data['email'] as String? ?? '').toLowerCase();
-                        return name.contains(searchTerm) ||
-                            email.contains(searchTerm);
-                      }).toList();
+                final filteredDocs = docs.where((doc) {
+                  final data = doc.data();
+                  final name = (data['name'] as String? ?? '').toLowerCase();
+                  final email = (data['email'] as String? ?? '').toLowerCase();
+                  final section = (data['section'] as String? ?? '');
+
+                  final matchesSearch = searchTerm.isEmpty
+                      ? true
+                      : name.contains(searchTerm) || email.contains(searchTerm);
+
+                  final matchesSection = _selectedSectionFilter == 'all'
+                      ? true
+                      : section == _selectedSectionFilter;
+
+                  return matchesSearch && matchesSection;
+                }).toList();
 
                 if (filteredDocs.isEmpty) {
                   return const Center(
@@ -125,6 +156,7 @@ class _TeacherStudentApprovalScreenState
                     final name = (data['name'] as String?) ?? 'Unknown';
                     final email = (data['email'] as String?) ?? '';
                     final grade = (data['gradeLevel'] as String?) ?? '';
+                    final section = (data['section'] as String?) ?? '';
 
                     return Card(
                       margin:
@@ -170,6 +202,16 @@ class _TeacherStudentApprovalScreenState
                                             height: AppConstants.paddingXS),
                                         Text(
                                           grade,
+                                          style: const TextStyle(
+                                            color: AppColors.textLight,
+                                          ),
+                                        ),
+                                      ],
+                                      if (section.isNotEmpty) ...[
+                                        const SizedBox(
+                                            height: AppConstants.paddingXS),
+                                        Text(
+                                          section,
                                           style: const TextStyle(
                                             color: AppColors.textLight,
                                           ),

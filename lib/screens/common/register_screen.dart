@@ -25,6 +25,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _obscureConfirmPassword = true;
   bool _isLoading = false;
   String? _selectedGrade;
+  String? _selectedSection;
 
   Color get _roleColor {
     switch (widget.role) {
@@ -83,9 +84,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
         }
 
         String? gradeLevel;
+        String? section;
 
         if (widget.role == 'student') {
           gradeLevel = _selectedGrade ?? 'Grade 9';
+          section = _selectedSection;
         }
 
         final userModel = UserModel(
@@ -94,6 +97,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           email: email,
           role: widget.role,
           gradeLevel: gradeLevel,
+          section: section,
           subject:
               null, // Teachers no longer select subject during registration
           createdAt: DateTime.now(),
@@ -220,7 +224,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
                     decoration: const InputDecoration(
-                      labelText: 'Email',
+                      labelText: 'ICCT Email',
                       prefixIcon: Icon(Icons.email_outlined),
                     ),
                     validator: (value) {
@@ -256,6 +260,30 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       validator: (value) {
                         if (value == null) {
                           return 'Please select your grade level';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: AppConstants.paddingL),
+
+                    DropdownButtonFormField<String>(
+                      value: _selectedSection,
+                      decoration: const InputDecoration(
+                        labelText: 'Section',
+                        prefixIcon: Icon(Icons.groups_outlined),
+                      ),
+                      items: AppConstants.studentSections.map((section) {
+                        return DropdownMenuItem(
+                          value: section,
+                          child: Text(section),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        setState(() => _selectedSection = value);
+                      },
+                      validator: (value) {
+                        if (value == null) {
+                          return 'Please select your section';
                         }
                         return null;
                       },

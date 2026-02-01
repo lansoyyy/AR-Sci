@@ -10,7 +10,7 @@ class LessonDetailScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     // Get lesson arguments passed from navigation
     final args = ModalRoute.of(context)?.settings.arguments;
-    Map<String, dynamic>? lessonData;
+    Map<String, dynamic> lessonData;
 
     if (args is Map<String, dynamic>) {
       lessonData = args;
@@ -25,7 +25,7 @@ class LessonDetailScreen extends StatelessWidget {
       lessonData = AppConstants.allLessons.first;
     }
 
-    final lesson = lessonData ?? AppConstants.allLessons.first;
+    final lesson = lessonData;
     final contentText =
         lesson['content'] is String ? (lesson['content'] as String).trim() : '';
     final Color subjectColor = _getSubjectColor(

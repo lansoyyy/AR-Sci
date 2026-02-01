@@ -92,7 +92,7 @@ class _AdminCreateLessonScreenState extends State<AdminCreateLessonScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Create Lesson'),
+        title: const Text('Create Learning Materials'),
         backgroundColor: AppColors.adminPrimary,
       ),
       body: SingleChildScrollView(
@@ -199,7 +199,7 @@ class _AdminCreateLessonScreenState extends State<AdminCreateLessonScreen> {
               ),
               const SizedBox(height: AppConstants.paddingXL),
               CustomButton(
-                text: 'Save Lesson',
+                text: 'Save Learning Materials',
                 onPressed: _isSaving ? null : _saveLesson,
                 isLoading: _isSaving,
                 fullWidth: true,

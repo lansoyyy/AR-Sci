@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../utils/colors.dart';
 import '../../utils/constants.dart';
+import '../../utils/ai_assessment_service.dart';
 import '../../widgets/custom_button.dart';
 
 class AdminCreateQuizScreen extends StatefulWidget {
@@ -26,6 +27,153 @@ class _AdminCreateQuizScreenState extends State<AdminCreateQuizScreen> {
   bool _isPublished = true;
   bool _isSaving = false;
 
+  bool _isGenerating = false;
+  String? _generationError;
+  List<Map<String, dynamic>> _generatedQuestions = <Map<String, dynamic>>[];
+  List<Map<String, dynamic>> _cachedLessons = <Map<String, dynamic>>[];
+
+  String _fallbackLessonMaterial(Map<String, dynamic> lesson) {
+    final description = (lesson['description'] ?? '').toString().trim();
+    final arItems = (lesson['arItems'] as List?)
+            ?.map((e) => e.toString())
+            .where((e) => e.trim().isNotEmpty)
+            .toList() ??
+        const <String>[];
+
+    final buffer = StringBuffer();
+    if (description.isNotEmpty) {
+      buffer.writeln(description);
+    }
+    if (arItems.isNotEmpty) {
+      buffer.writeln('\nAR Items:');
+      for (final item in arItems) {
+        buffer.writeln('- $item');
+      }
+    }
+    return buffer.toString().trim();
+  }
+
+  List<Map<String, dynamic>> _normalizeQuestions(
+    List<Map<String, dynamic>> input,
+  ) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+
+    return input.asMap().entries.map((entry) {
+      final index = entry.key;
+      final q = entry.value;
+
+      final questionText = (q['question'] ?? '').toString().trim();
+      final rawType = (q['type'] ?? 'multipleChoice').toString().trim();
+
+      var type = rawType;
+      if (type != 'multipleChoice' && type != 'trueFalse' && type != 'fillInBlank') {
+        type = 'multipleChoice';
+      }
+
+      var options = (q['options'] as List?)
+              ?.map((e) => e.toString())
+              .where((e) => e.trim().isNotEmpty)
+              .toList() ??
+          <String>[];
+
+      var correctAnswer = (q['correctAnswer'] ?? '').toString().trim();
+
+      final points = q['points'] is int
+          ? q['points'] as int
+          : int.tryParse((q['points'] ?? '').toString()) ?? 1;
+
+      if (type == 'trueFalse') {
+        options = <String>['True', 'False'];
+        correctAnswer = correctAnswer == 'False' ? 'False' : 'True';
+      } else if (type == 'fillInBlank') {
+        options = <String>[];
+      } else {
+        if (options.length < 4) {
+          final padded = <String>[...options];
+          while (padded.length < 4) {
+            padded.add('Option ${padded.length + 1}');
+          }
+          options = padded;
+        }
+        if (options.length > 4) {
+          options = options.take(4).toList();
+        }
+        if (correctAnswer.isEmpty || !options.contains(correctAnswer)) {
+          correctAnswer = options.isNotEmpty ? options.first : '';
+        }
+      }
+
+      return <String, dynamic>{
+        'id': 'q_${now}_$index',
+        'question': questionText.isEmpty ? 'Question ${index + 1}' : questionText,
+        'type': type,
+        'options': options,
+        'correctAnswer': correctAnswer,
+        'points': points,
+      };
+    }).toList();
+  }
+
+  Future<void> _generateWithAi() async {
+    if (_isGenerating) return;
+
+    final lesson = _cachedLessons.firstWhere(
+      (l) => (l['id'] ?? '').toString() == _selectedLessonId,
+      orElse: () => <String, dynamic>{},
+    );
+
+    final lessonTitle = (lesson['title'] ?? '').toString().trim();
+    final lessonContent = (lesson['content'] ?? '').toString().trim();
+    final lessonMaterial =
+        lessonContent.isNotEmpty ? lessonContent : _fallbackLessonMaterial(lesson);
+
+    if (lessonTitle.isEmpty || lessonMaterial.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No lesson material found for AI generation.'),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isGenerating = true;
+      _generationError = null;
+    });
+
+    try {
+      final generated = await AiAssessmentService.generateQuestions(
+        lessonTitle: lessonTitle,
+        lessonMaterial: lessonMaterial,
+        gradeLevel: _selectedGradeLevel,
+        subject: _selectedSubject,
+        questionCount: 10,
+      );
+
+      final normalized = _normalizeQuestions(generated);
+
+      if (!mounted) return;
+      setState(() {
+        _generatedQuestions = normalized;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Generated ${normalized.length} questions.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _generationError = e.toString();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('AI generation failed. $e')),
+      );
+    } finally {
+      if (!mounted) return;
+      setState(() => _isGenerating = false);
+    }
+  }
+
   List<Map<String, dynamic>> _mergeLessons(
     List<Map<String, dynamic>> firebaseLessons,
   ) {
@@ -45,6 +193,15 @@ class _AdminCreateQuizScreenState extends State<AdminCreateQuizScreen> {
   Future<void> _saveQuiz() async {
     if (!_formKey.currentState!.validate()) return;
 
+    if (_isPublished && _generatedQuestions.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please generate questions before publishing.'),
+        ),
+      );
+      return;
+    }
+
     setState(() => _isSaving = true);
 
     try {
@@ -62,7 +219,7 @@ class _AdminCreateQuizScreenState extends State<AdminCreateQuizScreen> {
         'lessonId': _selectedLessonId,
         'subject': _selectedSubject,
         'gradeLevel': _selectedGradeLevel,
-        'questions': <Map<String, dynamic>>[],
+        'questions': _generatedQuestions,
         'duration': duration,
         'createdAt': DateTime.now().toIso8601String(),
         'isPublished': _isPublished,
@@ -75,7 +232,7 @@ class _AdminCreateQuizScreenState extends State<AdminCreateQuizScreen> {
       setState(() => _isSaving = false);
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Quiz created successfully.')),
+        const SnackBar(content: Text('Assessment created successfully.')),
       );
 
       Navigator.pop(context);
@@ -106,7 +263,7 @@ class _AdminCreateQuizScreenState extends State<AdminCreateQuizScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Create Quiz'),
+        title: const Text('Create Assessment'),
         backgroundColor: AppColors.adminPrimary,
       ),
       body: SingleChildScrollView(
@@ -119,12 +276,12 @@ class _AdminCreateQuizScreenState extends State<AdminCreateQuizScreen> {
               TextFormField(
                 controller: _titleController,
                 decoration: const InputDecoration(
-                  labelText: 'Quiz Title',
+                  labelText: 'Assessment Title',
                   prefixIcon: Icon(Icons.quiz_outlined),
                 ),
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
-                    return 'Please enter a quiz title';
+                    return 'Please enter an assessment title';
                   }
                   return null;
                 },
@@ -159,6 +316,7 @@ class _AdminCreateQuizScreenState extends State<AdminCreateQuizScreen> {
                       .toList();
 
                   final lessons = _mergeLessons(firebaseLessons);
+                  _cachedLessons = lessons;
 
                   if (_selectedLessonId.isEmpty && lessons.isNotEmpty) {
                     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -272,6 +430,39 @@ class _AdminCreateQuizScreenState extends State<AdminCreateQuizScreen> {
               ),
               const SizedBox(height: AppConstants.paddingL),
               Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(AppConstants.paddingM),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      CustomButton(
+                        text: 'Generate Questions with AI',
+                        onPressed: _isGenerating ? null : _generateWithAi,
+                        isLoading: _isGenerating,
+                        fullWidth: true,
+                        backgroundColor: AppColors.adminPrimary,
+                        icon: Icons.auto_awesome_outlined,
+                      ),
+                      const SizedBox(height: AppConstants.paddingS),
+                      Text(
+                        _generatedQuestions.isEmpty
+                            ? 'No questions generated yet.'
+                            : '${_generatedQuestions.length} questions generated.',
+                        style: const TextStyle(color: AppColors.textSecondary),
+                      ),
+                      if (_generationError != null) ...[
+                        const SizedBox(height: AppConstants.paddingS),
+                        Text(
+                          _generationError!,
+                          style: const TextStyle(color: AppColors.error),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppConstants.paddingL),
+              Card(
                 child: SwitchListTile(
                   value: _isPublished,
                   onChanged: (value) => setState(() => _isPublished = value),
@@ -282,7 +473,7 @@ class _AdminCreateQuizScreenState extends State<AdminCreateQuizScreen> {
               ),
               const SizedBox(height: AppConstants.paddingXL),
               CustomButton(
-                text: 'Save Quiz',
+                text: 'Save Assessment',
                 onPressed: _isSaving ? null : _saveQuiz,
                 isLoading: _isSaving,
                 fullWidth: true,

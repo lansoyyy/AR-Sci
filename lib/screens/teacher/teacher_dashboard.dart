@@ -406,8 +406,8 @@ class _DashboardHome extends StatelessWidget {
             const SizedBox(height: AppConstants.paddingM),
 
             FeatureCard(
-              title: 'Create New Lesson',
-              description: 'Add a new lesson with content and materials',
+              title: 'Create Learning Materials',
+              description: 'Add new learning materials with content',
               icon: Icons.add_box_outlined,
               iconColor: AppColors.teacherPrimary,
               onTap: () {
@@ -416,8 +416,8 @@ class _DashboardHome extends StatelessWidget {
             ),
 
             FeatureCard(
-              title: 'Create Quiz',
-              description: 'Design a new quiz for your students',
+              title: 'Create Assessment',
+              description: 'Create an assessment for your students',
               icon: Icons.quiz_outlined,
               iconColor: AppColors.studentPrimary,
               onTap: () {

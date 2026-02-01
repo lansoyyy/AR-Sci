@@ -319,6 +319,28 @@ class _DashboardHome extends StatelessWidget {
             //   },
             // ),
 
+            StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: FirebaseFirestore.instance
+                  .collection('users')
+                  .where('verified', isEqualTo: false)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                final pending = snapshot.data?.docs.length ?? 0;
+                final suffix = pending == 0
+                    ? 'No pending accounts'
+                    : '$pending pending accounts';
+                return FeatureCard(
+                  title: 'Verify Accounts',
+                  description: suffix,
+                  icon: Icons.verified_user_outlined,
+                  iconColor: AppColors.adminPrimary,
+                  onTap: () {
+                    Navigator.pushNamed(context, '/admin-verify-accounts');
+                  },
+                );
+              },
+            ),
+
             // FeatureCard(
             //   title: 'Content Review',
             //   description: 'Review and approve pending content',
@@ -328,8 +350,8 @@ class _DashboardHome extends StatelessWidget {
             // ),
 
             FeatureCard(
-              title: 'Create Lesson',
-              description: 'Create a new lesson',
+              title: 'Create Learning Materials',
+              description: 'Add new learning materials with content',
               icon: Icons.add_box_outlined,
               iconColor: AppColors.studentPrimary,
               onTap: () {
@@ -338,8 +360,8 @@ class _DashboardHome extends StatelessWidget {
             ),
 
             FeatureCard(
-              title: 'Create Quiz',
-              description: 'Create a new quiz',
+              title: 'Create Assessment',
+              description: 'Create an assessment for your students',
               icon: Icons.quiz_outlined,
               iconColor: AppColors.warning,
               onTap: () {
@@ -1458,105 +1480,6 @@ class _ContentStatCard extends StatelessWidget {
                 fontSize: AppConstants.fontS,
                 color: AppColors.warning,
               ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ContentReviewCard extends StatelessWidget {
-  final String title;
-  final String type;
-  final String author;
-  final String subject;
-
-  const _ContentReviewCard({
-    required this.title,
-    required this.type,
-    required this.author,
-    required this.subject,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: AppConstants.paddingM),
-      child: Padding(
-        padding: const EdgeInsets.all(AppConstants.paddingM),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppConstants.paddingM,
-                    vertical: AppConstants.paddingS,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.warning.withOpacity(0.1),
-                    borderRadius:
-                        BorderRadius.circular(AppConstants.radiusRound),
-                  ),
-                  child: Text(
-                    type,
-                    style: const TextStyle(
-                      fontSize: AppConstants.fontS,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.warning,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: AppConstants.paddingS),
-                Text(
-                  subject,
-                  style: const TextStyle(
-                    fontSize: AppConstants.fontS,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppConstants.paddingM),
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: AppConstants.fontL,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: AppConstants.paddingS),
-            Text(
-              'By $author',
-              style: const TextStyle(
-                fontSize: AppConstants.fontM,
-                color: AppColors.textSecondary,
-              ),
-            ),
-            const SizedBox(height: AppConstants.paddingM),
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () {},
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.success,
-                    ),
-                    icon: const Icon(Icons.check, size: 18),
-                    label: const Text('Approve'),
-                  ),
-                ),
-                const SizedBox(width: AppConstants.paddingS),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () {},
-                    icon: const Icon(Icons.close, size: 18),
-                    label: const Text('Reject'),
-                  ),
-                ),
-              ],
             ),
           ],
         ),

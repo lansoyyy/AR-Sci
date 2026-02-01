@@ -5,6 +5,7 @@ class UserModel {
   final String role; // student, teacher, admin
   final String? photoUrl;
   final String? gradeLevel; // For students
+  final String? section; // For students
   final String? subject; // For teachers
   final DateTime createdAt;
 
@@ -15,6 +16,7 @@ class UserModel {
     required this.role,
     this.photoUrl,
     this.gradeLevel,
+    this.section,
     this.subject,
     required this.createdAt,
   });
@@ -27,6 +29,7 @@ class UserModel {
       role: json['role'] ?? '',
       photoUrl: json['photoUrl'],
       gradeLevel: json['gradeLevel'],
+      section: json['section'],
       subject: json['subject'],
       createdAt: DateTime.parse(json['createdAt'] ?? DateTime.now().toIso8601String()),
     );
@@ -40,6 +43,7 @@ class UserModel {
       'role': role,
       'photoUrl': photoUrl,
       'gradeLevel': gradeLevel,
+      'section': section,
       'subject': subject,
       'createdAt': createdAt.toIso8601String(),
     };
