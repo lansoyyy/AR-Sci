@@ -1,5 +1,8 @@
 import 'dart:convert';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 class AiAssessmentService {
@@ -7,6 +10,78 @@ class AiAssessmentService {
       'https://api.together.xyz/v1/chat/completions';
 
   static const String _model = 'meta-llama/Llama-3.3-70B-Instruct-Turbo';
+
+  // Rate limiting: maximum AI requests per user per day
+  static const int _maxDailyRequests = 20;
+
+  /// Check if user is authorized to use AI generation (teachers and admins only)
+  static Future<bool> _isAuthorizedUser() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return false;
+
+    try {
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      if (!userDoc.exists) return false;
+
+      final role = userDoc.data()?['role'] as String?;
+      return role == 'teacher' || role == 'admin';
+    } catch (e) {
+      debugPrint('Error checking user authorization: $e');
+      return false;
+    }
+  }
+
+  /// Check if user has exceeded daily AI request limit
+  static Future<bool> _hasExceededDailyLimit(String userId) async {
+    final today = DateTime.now();
+    final startOfDay = DateTime(today.year, today.month, today.day);
+    final endOfDay = startOfDay.add(const Duration(days: 1));
+
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('ai_usage_logs')
+          .where('userId', isEqualTo: userId)
+          .where('timestamp', isGreaterThanOrEqualTo: startOfDay.toIso8601String())
+          .where('timestamp', isLessThan: endOfDay.toIso8601String())
+          .count()
+          .get();
+
+      return (snapshot.count ?? 0) >= _maxDailyRequests;
+    } catch (e) {
+      debugPrint('Error checking daily limit: $e');
+      return false;
+    }
+  }
+
+  /// Log AI generation usage for rate limiting and audit purposes
+  static Future<void> _logUsage({
+    required String userId,
+    required String lessonTitle,
+    required String gradeLevel,
+    required String subject,
+    required int questionCount,
+    required bool success,
+    String? errorMessage,
+  }) async {
+    try {
+      await FirebaseFirestore.instance.collection('ai_usage_logs').add({
+        'userId': userId,
+        'lessonTitle': lessonTitle,
+        'gradeLevel': gradeLevel,
+        'subject': subject,
+        'questionCount': questionCount,
+        'success': success,
+        'errorMessage': errorMessage,
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      debugPrint('Error logging AI usage: $e');
+    }
+  }
 
   static String _extractJson(String input) {
     final firstBrace = input.indexOf('[');
@@ -29,6 +104,25 @@ class AiAssessmentService {
     required String subject,
     int questionCount = 10,
   }) async {
+    // Check authorization - only teachers and admins can use AI generation
+    final isAuthorized = await _isAuthorizedUser();
+    if (!isAuthorized) {
+      throw Exception(
+          'Unauthorized: Only teachers and admins can generate AI questions.');
+    }
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      throw Exception('User not authenticated.');
+    }
+
+    // Check rate limiting
+    final hasExceededLimit = await _hasExceededDailyLimit(user.uid);
+    if (hasExceededLimit) {
+      throw Exception(
+          'Daily AI generation limit exceeded ($_maxDailyRequests requests per day). Please try again tomorrow.');
+    }
+
     final apiKey = const String.fromEnvironment(
       'TOGETHER_API_KEY',
       defaultValue: '',
@@ -78,27 +172,59 @@ class AiAssessmentService {
       }),
     );
 
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception(
-        'AI request failed (${response.statusCode}): ${response.body}',
+    List<Map<String, dynamic>>? result;
+    String? errorMessage;
+
+    try {
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw Exception(
+          'AI request failed (${response.statusCode}): ${response.body}',
+        );
+      }
+
+      final decoded = jsonDecode(response.body);
+      final content = ((decoded['choices'] as List?)?.isNotEmpty == true)
+          ? (decoded['choices'][0]['message']?['content'] as String? ?? '')
+          : '';
+
+      final jsonStr = _extractJson(content);
+      final parsed = jsonDecode(jsonStr);
+
+      if (parsed is! List) {
+        throw const FormatException('AI response is not a JSON array.');
+      }
+
+      result = parsed
+          .whereType<Map>()
+          .map((m) => Map<String, dynamic>.from(m))
+          .toList();
+
+      // Log successful usage
+      await _logUsage(
+        userId: user.uid,
+        lessonTitle: lessonTitle,
+        gradeLevel: gradeLevel,
+        subject: subject,
+        questionCount: questionCount,
+        success: true,
       );
+
+      return result;
+    } catch (e) {
+      errorMessage = e.toString();
+
+      // Log failed usage
+      await _logUsage(
+        userId: user.uid,
+        lessonTitle: lessonTitle,
+        gradeLevel: gradeLevel,
+        subject: subject,
+        questionCount: questionCount,
+        success: false,
+        errorMessage: errorMessage,
+      );
+
+      rethrow;
     }
-
-    final decoded = jsonDecode(response.body);
-    final content = ((decoded['choices'] as List?)?.isNotEmpty == true)
-        ? (decoded['choices'][0]['message']?['content'] as String? ?? '')
-        : '';
-
-    final jsonStr = _extractJson(content);
-    final parsed = jsonDecode(jsonStr);
-
-    if (parsed is! List) {
-      throw const FormatException('AI response is not a JSON array.');
-    }
-
-    return parsed
-        .whereType<Map>()
-        .map((m) => Map<String, dynamic>.from(m))
-        .toList();
   }
 }

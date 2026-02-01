@@ -27,6 +27,11 @@ class _AdminCreateLessonScreenState extends State<AdminCreateLessonScreen> {
   bool _isPublished = true;
   bool _isSaving = false;
 
+  // Assignment and Scheduling fields
+  List<String> _selectedAssignedSections = [];
+  DateTime? _availableFrom;
+  DateTime? _availableTo;
+
   Future<void> _saveLesson() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -50,8 +55,12 @@ class _AdminCreateLessonScreenState extends State<AdminCreateLessonScreen> {
         'imageUrls': <String>[],
         'videoUrls': <String>[],
         'arItems': <String>[],
-        'createdAt': DateTime.now().toIso8601String(),
+        'createdAt': FieldValue.serverTimestamp(),
         'isPublished': _isPublished,
+        // Assignment and Scheduling fields
+        'assignedSections': _selectedAssignedSections,
+        'availableFrom': _availableFrom?.toIso8601String(),
+        'availableTo': _availableTo?.toIso8601String(),
         if (currentUser != null) 'createdBy': currentUser.uid,
       };
 
@@ -186,6 +195,117 @@ class _AdminCreateLessonScreenState extends State<AdminCreateLessonScreen> {
                   prefixIcon: Icon(Icons.description_outlined),
                 ),
                 maxLines: 8,
+              ),
+              const SizedBox(height: AppConstants.paddingL),
+              
+              // Assignment and Scheduling section
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(AppConstants.paddingM),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Assign to Sections',
+                        style: TextStyle(
+                          fontSize: AppConstants.fontL,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: AppConstants.paddingS),
+                      Wrap(
+                        spacing: AppConstants.paddingS,
+                        runSpacing: AppConstants.paddingS,
+                        children: AppConstants.studentSections.map((section) {
+                          final isSelected = _selectedAssignedSections.contains(section);
+                          return FilterChip(
+                            label: Text(section),
+                            selected: isSelected,
+                            onSelected: (selected) {
+                              setState(() {
+                                if (selected) {
+                                  _selectedAssignedSections.add(section);
+                                } else {
+                                  _selectedAssignedSections.remove(section);
+                                }
+                              });
+                            },
+                            selectedColor: AppColors.adminPrimary,
+                            checkmarkColor: AppColors.textWhite,
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: AppConstants.paddingL),
+                      const Divider(),
+                      const SizedBox(height: AppConstants.paddingM),
+                      const Text(
+                        'Scheduling',
+                        style: TextStyle(
+                          fontSize: AppConstants.fontL,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: AppConstants.paddingS),
+                      InkWell(
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: _availableFrom ?? DateTime.now(),
+                            firstDate: DateTime.now(),
+                            lastDate: DateTime(2100),
+                          );
+                          if (picked != null) {
+                            setState(() => _availableFrom = picked);
+                          }
+                        },
+                        child: InputDecorator(
+                          decoration: InputDecoration(
+                            labelText: 'Available From',
+                            prefixIcon: const Icon(Icons.calendar_today_outlined),
+                            suffixIcon: const Icon(Icons.arrow_drop_down),
+                            border: OutlineInputBorder(
+                              borderSide: BorderSide(color: AppColors.textLight),
+                            ),
+                          ),
+                          child: Text(
+                            _availableFrom == null
+                                ? 'Select start date'
+                                : '${_availableFrom!.year}-${_availableFrom!.month.toString().padLeft(2, '0')}-${_availableFrom!.day.toString().padLeft(2, '0')}',
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: AppConstants.paddingM),
+                      InkWell(
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: _availableTo ?? DateTime.now().add(const Duration(days: 7)),
+                            firstDate: _availableFrom ?? DateTime.now(),
+                            lastDate: DateTime(2100),
+                          );
+                          if (picked != null) {
+                            setState(() => _availableTo = picked);
+                          }
+                        },
+                        child: InputDecorator(
+                          decoration: InputDecoration(
+                            labelText: 'Available To',
+                            prefixIcon: const Icon(Icons.event_outlined),
+                            suffixIcon: const Icon(Icons.arrow_drop_down),
+                            border: OutlineInputBorder(
+                              borderSide: BorderSide(color: AppColors.textLight),
+                            ),
+                          ),
+                          child: Text(
+                            _availableTo == null
+                                ? 'Select end date'
+                                : '${_availableTo!.year}-${_availableTo!.month.toString().padLeft(2, '0')}-${_availableTo!.day.toString().padLeft(2, '0')}',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
               const SizedBox(height: AppConstants.paddingL),
               Card(

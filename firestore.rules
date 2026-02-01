@@ -1,0 +1,300 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper function to get user data
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    // Helper function to check if user has specific role
+    function hasRole(role) {
+      return isAuthenticated() && getUserData().role == role;
+    }
+
+    // Helper function to check if user is admin
+    function isAdmin() {
+      return hasRole('admin');
+    }
+
+    // Helper function to check if user is teacher
+    function isTeacher() {
+      return hasRole('teacher');
+    }
+
+    // Helper function to check if user is student
+    function isStudent() {
+      return hasRole('student');
+    }
+
+    // Helper function to check if user is verified
+    function isVerified() {
+      return isAuthenticated() && getUserData().verified == true;
+    }
+
+    // Helper function to check if user is the owner of a document
+    function isOwner(userIdField) {
+      return isAuthenticated() && resource.data[userIdField] == request.auth.uid;
+    }
+
+    // Helper function to check if user is the creator of content
+    function isCreator() {
+      return isAuthenticated() && resource.data.createdBy == request.auth.uid;
+    }
+
+    // Helper function to check if student is in teacher's section
+    function isStudentInTeacherSection(studentData) {
+      let teacherSections = getUserData().sectionsHandled;
+      let studentGrade = studentData.gradeLevel;
+      let studentSection = studentData.section;
+      return teacherSections != null && 
+             (teacherSections.hasAny([studentGrade]) || 
+              teacherSections.hasAny([studentSection]));
+    }
+
+    // ============================================
+    // USERS COLLECTION
+    // ============================================
+    match /users/{userId} {
+      // Read: Users can read their own data
+      // Admins can read all users
+      // Teachers can read students in their sections
+      allow read: if isAuthenticated() && 
+                     (request.auth.uid == userId || 
+                      isAdmin() ||
+                      (isTeacher() && isStudentInTeacherSection(resource.data)));
+      
+      // Create: Only during registration (handled by client-side auth)
+      // Note: Actual user creation is handled by Firebase Auth
+      allow create: if false;
+      
+      // Update: Users can update their own data (except role, verified, deleted fields)
+      // Admins can update any user
+      allow update: if isAuthenticated() &&
+                      ((request.auth.uid == userId && 
+                        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'verified', 'deleted', 'deletedAt', 'deletedBy'])) ||
+                       isAdmin());
+      
+      // Delete: Only admins can delete (soft delete)
+      allow delete: if isAdmin();
+    }
+
+    // ============================================
+    // LESSONS COLLECTION
+    // ============================================
+    match /lessons/{lessonId} {
+      // Read: Authenticated users can read published lessons
+      // Teachers can read their own lessons (including drafts)
+      // Admins can read all lessons
+      allow read: if isAuthenticated() &&
+                     (resource.data.isPublished == true ||
+                      isCreator() ||
+                      isAdmin());
+      
+      // Create: Teachers and admins can create lessons
+      allow create: if (isTeacher() || isAdmin()) &&
+                      request.resource.data.createdBy == request.auth.uid;
+      
+      // Update: Only creator or admin can update
+      allow update: if isAuthenticated() &&
+                      (isCreator() || isAdmin());
+      
+      // Delete: Only creator or admin can delete
+      allow delete: if isAuthenticated() &&
+                      (isCreator() || isAdmin());
+    }
+
+    // ============================================
+    // QUIZZES COLLECTION
+    // ============================================
+    match /quizzes/{quizId} {
+      // Read: Authenticated users can read published quizzes
+      // Teachers can read their own quizzes (including drafts)
+      // Admins can read all quizzes
+      allow read: if isAuthenticated() &&
+                     (resource.data.isPublished == true ||
+                      isCreator() ||
+                      isAdmin());
+      
+      // Create: Teachers and admins can create quizzes
+      allow create: if (isTeacher() || isAdmin()) &&
+                      request.resource.data.createdBy == request.auth.uid;
+      
+      // Update: Only creator or admin can update
+      allow update: if isAuthenticated() &&
+                      (isCreator() || isAdmin());
+      
+      // Delete: Only creator or admin can delete
+      allow delete: if isAuthenticated() &&
+                      (isCreator() || isAdmin());
+    }
+
+    // ============================================
+    // QUIZ_RESULTS COLLECTION
+    // ============================================
+    match /quiz_results/{resultId} {
+      // Read: Students can read their own results
+      // Teachers can read results of students in their sections
+      // Admins can read all results
+      allow read: if isAuthenticated() &&
+                     (isOwner('studentId') ||
+                      isAdmin() ||
+                      (isTeacher() && resource.data.studentId in get(/databases/$(database)/documents/users/$(resource.data.studentId)).data));
+      
+      // Create: Students can create their own quiz results
+      allow create: if isStudent() &&
+                      request.resource.data.studentId == request.auth.uid;
+      
+      // Update: Only the student who owns the result can update
+      allow update: if isOwner('studentId');
+      
+      // Delete: Only admins can delete quiz results
+      allow delete: if isAdmin();
+    }
+
+    // ============================================
+    // LESSON_PROGRESS COLLECTION
+    // ============================================
+    match /lesson_progress/{progressId} {
+      // Read: Students can read their own progress
+      // Teachers can read progress of students in their sections
+      // Admins can read all progress
+      allow read: if isAuthenticated() &&
+                     (isOwner('userId') ||
+                      isAdmin() ||
+                      (isTeacher() && resource.data.userId in get(/databases/$(database)/documents/users/$(resource.data.userId)).data));
+      
+      // Create: Students can create their own progress
+      allow create: if isStudent() &&
+                      request.resource.data.userId == request.auth.uid;
+      
+      // Update: Students can update their own progress
+      allow update: if isOwner('userId');
+      
+      // Delete: Only admins can delete progress records
+      allow delete: if isAdmin();
+    }
+
+    // ============================================
+    // BOOKMARKS COLLECTION
+    // ============================================
+    match /bookmarks/{bookmarkId} {
+      // Read: Users can read their own bookmarks
+      // Admins can read all bookmarks
+      allow read: if isAuthenticated() &&
+                     (isOwner('userId') || isAdmin());
+      
+      // Create: Students can create their own bookmarks
+      allow create: if isStudent() &&
+                      request.resource.data.userId == request.auth.uid;
+      
+      // Update: Users can update their own bookmarks
+      allow update: if isOwner('userId');
+      
+      // Delete: Users can delete their own bookmarks
+      // Admins can delete any bookmark
+      allow delete: if isAuthenticated() &&
+                      (isOwner('userId') || isAdmin());
+    }
+
+    // ============================================
+    // NOTIFICATIONS COLLECTION
+    // ============================================
+    match /notifications/{notificationId} {
+      // Read: Users can read their own notifications
+      // Admins can read all notifications
+      allow read: if isAuthenticated() &&
+                     (isOwner('userId') || isAdmin());
+      
+      // Create: Only admins/teachers can create notifications
+      // (typically done via Cloud Functions or server-side)
+      allow create: if (isTeacher() || isAdmin());
+      
+      // Update: Users can update their own notifications (mark as read)
+      // Admins can update any notification
+      allow update: if isAuthenticated() &&
+                      (isOwner('userId') || isAdmin());
+      
+      // Delete: Users can delete their own notifications
+      // Admins can delete any notification
+      allow delete: if isAuthenticated() &&
+                      (isOwner('userId') || isAdmin());
+    }
+
+    // ============================================
+    // APP_CONFIG COLLECTION
+    // ============================================
+    match /app_config/{configId} {
+      // Read: Authenticated users can read app config
+      allow read: if isAuthenticated();
+      
+      // Create: Only admins can create app config
+      allow create: if isAdmin();
+      
+      // Update: Only admins can update app config
+      allow update: if isAdmin();
+      
+      // Delete: Only admins can delete app config
+      allow delete: if isAdmin();
+    }
+
+    // ============================================
+    // REJECTION_LOGS COLLECTION
+    // ============================================
+    match /rejection_logs/{logId} {
+      // Read: Only admins can read rejection logs
+      allow read: if isAdmin();
+      
+      // Create: Admins and teachers can create rejection logs
+      allow create: if (isTeacher() || isAdmin());
+      
+      // Update: Only admins can update rejection logs
+      allow update: if isAdmin();
+      
+      // Delete: Only admins can delete rejection logs
+      allow delete: if isAdmin();
+    }
+
+    // ============================================
+    // DELETION_LOGS COLLECTION
+    // ============================================
+    match /deletion_logs/{logId} {
+      // Read: Only admins can read deletion logs
+      allow read: if isAdmin();
+      
+      // Create: Only admins can create deletion logs
+      allow create: if isAdmin();
+      
+      // Update: Only admins can update deletion logs
+      allow update: if isAdmin();
+      
+      // Delete: Only admins can delete deletion logs
+      allow delete: if isAdmin();
+    }
+
+    // ============================================
+    // AI_USAGE_LOGS COLLECTION
+    // ============================================
+    match /ai_usage_logs/{logId} {
+      // Read: Users can read their own AI usage logs
+      // Admins can read all AI usage logs
+      allow read: if isAuthenticated() &&
+                     (isOwner('userId') || isAdmin());
+      
+      // Create: Teachers and admins can create AI usage logs
+      allow create: if (isTeacher() || isAdmin()) &&
+                      request.resource.data.userId == request.auth.uid;
+      
+      // Update: Only admins can update AI usage logs
+      allow update: if isAdmin();
+      
+      // Delete: Only admins can delete AI usage logs
+      allow delete: if isAdmin();
+    }
+  }
+}

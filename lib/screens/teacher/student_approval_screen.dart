@@ -1,9 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../models/user_model.dart';
 import '../../utils/colors.dart';
 import '../../utils/constants.dart';
+import '../../utils/notification_service.dart';
 
 class TeacherStudentApprovalScreen extends StatefulWidget {
   const TeacherStudentApprovalScreen({super.key});
@@ -17,12 +20,73 @@ class _TeacherStudentApprovalScreenState
     extends State<TeacherStudentApprovalScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _selectedSectionFilter = 'all';
+  UserModel? _currentUser;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      final data = userDoc.data();
+      if (data == null) {
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      setState(() {
+        _currentUser = UserModel.fromJson(data);
+        _isLoading = false;
+      });
+    } catch (e) {
+      debugPrint('Error loading user data: $e');
+      setState(() => _isLoading = false);
+    }
+  }
+
+  List<String>? get _teacherSections => _currentUser?.sectionsHandled;
 
   Query<Map<String, dynamic>> _query() {
+    // Teachers can only approve students in their sections
+    // Since Firestore doesn't support OR queries, we query all and filter in memory
     return FirebaseFirestore.instance
         .collection('users')
         .where('role', isEqualTo: 'student')
         .where('verified', isEqualTo: false);
+  }
+
+  bool _isStudentInTeacherScope(Map<String, dynamic> studentData) {
+    // If teacher has no sections specified, they can approve all students
+    if (_teacherSections == null || _teacherSections!.isEmpty) {
+      return true;
+    }
+
+    // Check if student's grade level or section matches any of teacher's sections
+    final studentGrade = studentData['gradeLevel'] as String?;
+    final studentSection = studentData['section'] as String?;
+
+    if (studentGrade != null && _teacherSections!.contains(studentGrade)) {
+      return true;
+    }
+    if (studentSection != null && _teacherSections!.contains(studentSection)) {
+      return true;
+    }
+
+    return false;
   }
 
   Future<void> _approveUser({
@@ -34,9 +98,15 @@ class _TeacherStudentApprovalScreenState
 
       await FirebaseFirestore.instance.collection('users').doc(userId).update({
         'verified': true,
-        'verifiedAt': DateTime.now().toIso8601String(),
+        'verifiedAt': FieldValue.serverTimestamp(),
         if (currentUser != null) 'verifiedBy': currentUser.uid,
       });
+
+      // Notify student of approval
+      await NotificationService.notifyStudentApproved(
+        studentId: userId,
+        studentName: name,
+      );
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -50,6 +120,115 @@ class _TeacherStudentApprovalScreenState
     }
   }
 
+  Future<void> _rejectUser({
+    required String userId,
+    required String name,
+    required String reason,
+  }) async {
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+
+      // Create rejection audit log
+      await FirebaseFirestore.instance.collection('rejection_logs').add({
+        'userId': userId,
+        'userName': name,
+        'rejectedBy': currentUser?.uid,
+        'rejectedAt': FieldValue.serverTimestamp(),
+        'reason': reason,
+        'rejectedByRole': 'teacher',
+      });
+
+      // Mark user as rejected in Firestore
+      await FirebaseFirestore.instance.collection('users').doc(userId).update({
+        'verified': false,
+        'rejected': true,
+        'rejectedAt': FieldValue.serverTimestamp(),
+        'rejectionReason': reason,
+        if (currentUser != null) 'rejectedBy': currentUser.uid,
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Rejected $name. Account marked for deletion.'),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to reject student: $e')),
+      );
+    }
+  }
+
+  Future<void> _showRejectDialog({
+    required String userId,
+    required String name,
+  }) async {
+    final reasonController = TextEditingController();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Reject $name?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'This will reject the student account. '
+              'Please provide a reason for rejection.',
+            ),
+            const SizedBox(height: AppConstants.paddingM),
+            TextField(
+              controller: reasonController,
+              decoration: const InputDecoration(
+                labelText: 'Rejection Reason',
+                hintText: 'e.g., Invalid information, wrong section, etc.',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 3,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final reason = reasonController.text.trim();
+              if (reason.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Please provide a reason')),
+                );
+                return;
+              }
+              Navigator.pop(context, true);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: AppColors.textWhite,
+            ),
+            child: const Text('Reject'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _rejectUser(
+        userId: userId,
+        name: name,
+        reason: reasonController.text.trim(),
+      );
+    }
+
+    reasonController.dispose();
+  }
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -59,6 +238,16 @@ class _TeacherStudentApprovalScreenState
   @override
   Widget build(BuildContext context) {
     final searchTerm = _searchController.text.trim().toLowerCase();
+
+    if (_isLoading) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Approve Students'),
+          backgroundColor: AppColors.teacherPrimary,
+        ),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -112,7 +301,11 @@ class _TeacherStudentApprovalScreenState
                 }
 
                 final docs = snapshot.data?.docs ?? [];
-                final filteredDocs = docs.where((doc) {
+                final scopeFilteredDocs = docs.where((doc) {
+                  return _isStudentInTeacherScope(doc.data());
+                }).toList();
+
+                final filteredDocs = scopeFilteredDocs.where((doc) {
                   final data = doc.data();
                   final name = (data['name'] as String? ?? '').toLowerCase();
                   final email = (data['email'] as String? ?? '').toLowerCase();
@@ -220,17 +413,37 @@ class _TeacherStudentApprovalScreenState
                                     ],
                                   ),
                                 ),
-                                ElevatedButton.icon(
-                                  onPressed: () => _approveUser(
-                                    userId: doc.id,
-                                    name: name,
-                                  ),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.success,
-                                    foregroundColor: AppColors.textWhite,
-                                  ),
-                                  icon: const Icon(Icons.check, size: 18),
-                                  label: const Text('Approve'),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    ElevatedButton.icon(
+                                      onPressed: () => _approveUser(
+                                        userId: doc.id,
+                                        name: name,
+                                      ),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: AppColors.success,
+                                        foregroundColor: AppColors.textWhite,
+                                      ),
+                                      icon: const Icon(Icons.check, size: 18),
+                                      label: const Text('Approve'),
+                                    ),
+                                    const SizedBox(width: AppConstants.paddingS),
+                                    OutlinedButton.icon(
+                                      onPressed: () => _showRejectDialog(
+                                        userId: doc.id,
+                                        name: name,
+                                      ),
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: AppColors.error,
+                                        side: const BorderSide(
+                                          color: AppColors.error,
+                                        ),
+                                      ),
+                                      icon: const Icon(Icons.close, size: 18),
+                                      label: const Text('Reject'),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),

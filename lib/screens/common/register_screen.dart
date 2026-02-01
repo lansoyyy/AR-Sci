@@ -26,6 +26,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _isLoading = false;
   String? _selectedGrade;
   String? _selectedSection;
+  String? _selectedSubject;
+  List<String> _selectedSectionsHandled = [];
 
   Color get _roleColor {
     switch (widget.role) {
@@ -85,10 +87,33 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
         String? gradeLevel;
         String? section;
+        String? subject;
+        List<String>? subjects;
+        List<String>? sectionsHandled;
 
         if (widget.role == 'student') {
           gradeLevel = _selectedGrade ?? 'Grade 9';
           section = _selectedSection;
+        } else if (widget.role == 'teacher') {
+          // Teachers must select at least one subject
+          if (_selectedSubject == null) {
+            if (!mounted) return;
+            setState(() => _isLoading = false);
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Please select a subject'),
+                backgroundColor: AppColors.error,
+              ),
+            );
+            return;
+          }
+          subject = _selectedSubject;
+          subjects = _selectedSubject != null ? [_selectedSubject!] : null;
+          
+          // Teachers can optionally select sections they handle
+          if (_selectedSectionsHandled.isNotEmpty) {
+            sectionsHandled = _selectedSectionsHandled;
+          }
         }
 
         final userModel = UserModel(
@@ -98,13 +123,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
           role: widget.role,
           gradeLevel: gradeLevel,
           section: section,
-          subject:
-              null, // Teachers no longer select subject during registration
+          subject: subject,
+          subjects: subjects,
+          sectionsHandled: sectionsHandled,
           createdAt: DateTime.now(),
         );
 
         await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
           ...userModel.toJson(),
+          'createdAt': FieldValue.serverTimestamp(), // Use server timestamp
           'verified': false, // All new accounts require verification
         });
 
@@ -291,7 +318,70 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     const SizedBox(height: AppConstants.paddingL),
                   ],
 
-                  // Subject selection removed for teachers - general registration
+                  // Teacher-specific fields
+                  if (widget.role == 'teacher') ...[
+                    DropdownButtonFormField<String>(
+                      value: _selectedSubject,
+                      decoration: const InputDecoration(
+                        labelText: 'Subject',
+                        prefixIcon: Icon(Icons.book_outlined),
+                      ),
+                      items: AppConstants.subjects.map((subject) {
+                        return DropdownMenuItem(
+                          value: subject,
+                          child: Text(subject),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        setState(() => _selectedSubject = value);
+                      },
+                      validator: (value) {
+                        if (value == null) {
+                          return 'Please select a subject';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: AppConstants.paddingL),
+
+                    // Sections handled (optional for teachers)
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Sections Handled (Optional)',
+                          style: TextStyle(
+                            fontSize: AppConstants.fontM,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: AppConstants.paddingS),
+                        Wrap(
+                          spacing: AppConstants.paddingS,
+                          runSpacing: AppConstants.paddingS,
+                          children: AppConstants.studentSections.map((section) {
+                            final isSelected = _selectedSectionsHandled.contains(section);
+                            return FilterChip(
+                              label: Text(section),
+                              selected: isSelected,
+                              onSelected: (selected) {
+                                setState(() {
+                                  if (selected) {
+                                    _selectedSectionsHandled.add(section);
+                                  } else {
+                                    _selectedSectionsHandled.remove(section);
+                                  }
+                                });
+                              },
+                              selectedColor: _roleColor.withOpacity(0.2),
+                              checkmarkColor: _roleColor,
+                            );
+                          }).toList(),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppConstants.paddingL),
+                  ],
 
                   // Password Field
                   TextFormField(

@@ -55,27 +55,7 @@ class _LoginScreenState extends State<LoginScreen> {
       final password = _passwordController.text.trim();
 
       try {
-        // Hardcoded admin credentials
-        if (widget.role == 'admin') {
-          if (email == 'admin@arsci.com' && password == 'admin123') {
-            if (!mounted) return;
-            setState(() => _isLoading = false);
-            Navigator.pushReplacementNamed(context, '/admin-dashboard');
-            return;
-          } else {
-            if (!mounted) return;
-            setState(() => _isLoading = false);
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Invalid admin credentials'),
-                backgroundColor: AppColors.error,
-              ),
-            );
-            return;
-          }
-        }
-
-        // Firebase Auth for students and teachers
+        // Firebase Auth for all roles (students, teachers, and admins)
         final credential =
             await FirebaseAuth.instance.signInWithEmailAndPassword(
           email: email,
@@ -111,7 +91,22 @@ class _LoginScreenState extends State<LoginScreen> {
         if (!mounted) return;
         setState(() => _isLoading = false);
 
-        if (!isVerified) {
+        // Verify that the logged-in user's role matches the selected role
+        if (role != widget.role) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'This account is registered as a $role, not ${widget.role}.',
+              ),
+              backgroundColor: AppColors.error,
+            ),
+          );
+          await FirebaseAuth.instance.signOut();
+          return;
+        }
+
+        // Admins bypass verification check
+        if (role != 'admin' && !isVerified) {
           Navigator.pushReplacementNamed(
             context,
             '/pending-verification',
@@ -126,6 +121,9 @@ class _LoginScreenState extends State<LoginScreen> {
             break;
           case 'teacher':
             Navigator.pushReplacementNamed(context, '/teacher-dashboard');
+            break;
+          case 'admin':
+            Navigator.pushReplacementNamed(context, '/admin-dashboard');
             break;
           default:
             Navigator.pushReplacementNamed(context, '/student-dashboard');

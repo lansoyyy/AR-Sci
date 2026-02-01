@@ -40,14 +40,14 @@ class _ARViewScreenState extends State<ARViewScreen> {
         _arItems = List<String>.from(args['arItems'] ?? []);
       });
     } else {
-      // Find lesson by ID or use default
-      final lesson = AppConstants.allLessons.firstWhere(
-        (lesson) => lesson['id'] == widget.lessonId,
-        orElse: () => AppConstants.allLessons.first,
-      );
+      // Lesson data should be passed via navigation arguments
+      // If not provided, show empty state
       setState(() {
-        _lessonData = lesson;
-        _arItems = List<String>.from(lesson['arItems'] ?? []);
+        _lessonData = {
+          'title': widget.lessonTitle,
+          'arItems': <String>[],
+        };
+        _arItems = <String>[];
       });
     }
   }

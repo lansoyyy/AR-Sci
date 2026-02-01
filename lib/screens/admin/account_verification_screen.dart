@@ -1,9 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../utils/colors.dart';
 import '../../utils/constants.dart';
+import '../../utils/notification_service.dart';
 
 class AccountVerificationScreen extends StatefulWidget {
   const AccountVerificationScreen({super.key});
@@ -31,9 +33,15 @@ class _AccountVerificationScreenState extends State<AccountVerificationScreen> {
 
       await FirebaseFirestore.instance.collection('users').doc(userId).update({
         'verified': true,
-        'verifiedAt': DateTime.now().toIso8601String(),
+        'verifiedAt': FieldValue.serverTimestamp(),
         if (adminUser != null) 'verifiedBy': adminUser.uid,
       });
+
+      // Notify student of approval
+      await NotificationService.notifyStudentApproved(
+        studentId: userId,
+        studentName: name,
+      );
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -45,6 +53,114 @@ class _AccountVerificationScreenState extends State<AccountVerificationScreen> {
         const SnackBar(content: Text('Failed to approve user.')),
       );
     }
+  }
+
+  Future<void> _rejectUser({
+    required String userId,
+    required String name,
+    required String reason,
+  }) async {
+    try {
+      final adminUser = FirebaseAuth.instance.currentUser;
+
+      // Create rejection audit log
+      await FirebaseFirestore.instance.collection('rejection_logs').add({
+        'userId': userId,
+        'userName': name,
+        'rejectedBy': adminUser?.uid,
+        'rejectedAt': FieldValue.serverTimestamp(),
+        'reason': reason,
+      });
+
+      // Mark user as rejected in Firestore
+      await FirebaseFirestore.instance.collection('users').doc(userId).update({
+        'verified': false,
+        'rejected': true,
+        'rejectedAt': FieldValue.serverTimestamp(),
+        'rejectionReason': reason,
+        if (adminUser != null) 'rejectedBy': adminUser.uid,
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Rejected $name. Account marked for deletion.'),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to reject user: $e')),
+      );
+    }
+  }
+
+  Future<void> _showRejectDialog({
+    required String userId,
+    required String name,
+  }) async {
+    final reasonController = TextEditingController();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Reject $name?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'This will reject the account and permanently delete it. '
+              'Please provide a reason for rejection.',
+            ),
+            const SizedBox(height: AppConstants.paddingM),
+            TextField(
+              controller: reasonController,
+              decoration: const InputDecoration(
+                labelText: 'Rejection Reason',
+                hintText: 'e.g., Invalid information, duplicate account, etc.',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 3,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final reason = reasonController.text.trim();
+              if (reason.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Please provide a reason')),
+                );
+                return;
+              }
+              Navigator.pop(context, true);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: AppColors.textWhite,
+            ),
+            child: const Text('Reject'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _rejectUser(
+        userId: userId,
+        name: name,
+        reason: reasonController.text.trim(),
+      );
+    }
+
+    reasonController.dispose();
   }
 
   @override
@@ -238,15 +354,16 @@ class _AccountVerificationScreenState extends State<AccountVerificationScreen> {
                                 const SizedBox(width: AppConstants.paddingS),
                                 Expanded(
                                   child: OutlinedButton.icon(
-                                    onPressed: () {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        const SnackBar(
-                                          content: Text(
-                                              'Reject is not implemented (UI only).'),
-                                        ),
-                                      );
-                                    },
+                                    onPressed: () => _showRejectDialog(
+                                      userId: doc.id,
+                                      name: name,
+                                    ),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: AppColors.error,
+                                      side: const BorderSide(
+                                        color: AppColors.error,
+                                      ),
+                                    ),
                                     icon: const Icon(Icons.close, size: 18),
                                     label: const Text('Reject'),
                                   ),

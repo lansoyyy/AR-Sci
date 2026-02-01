@@ -27,6 +27,11 @@ class _AdminCreateQuizScreenState extends State<AdminCreateQuizScreen> {
   bool _isPublished = true;
   bool _isSaving = false;
 
+  // Assignment and Scheduling
+  final List<String> _selectedAssignedSections = <String>[];
+  DateTime? _availableFrom;
+  DateTime? _availableTo;
+
   bool _isGenerating = false;
   String? _generationError;
   List<Map<String, dynamic>> _generatedQuestions = <Map<String, dynamic>>[];
@@ -178,16 +183,10 @@ class _AdminCreateQuizScreenState extends State<AdminCreateQuizScreen> {
     List<Map<String, dynamic>> firebaseLessons,
   ) {
     final seenIds = <String>{};
-    return <Map<String, dynamic>>[
-      ...firebaseLessons.where((l) {
-        final id = (l['id'] ?? '').toString();
-        return id.isNotEmpty && seenIds.add(id);
-      }),
-      ...AppConstants.allLessons.where((l) {
-        final id = (l['id'] ?? '').toString();
-        return id.isNotEmpty && seenIds.add(id);
-      }),
-    ];
+    return firebaseLessons.where((l) {
+      final id = (l['id'] ?? '').toString();
+      return id.isNotEmpty && seenIds.add(id);
+    }).toList();
   }
 
   Future<void> _saveQuiz() async {
@@ -221,9 +220,15 @@ class _AdminCreateQuizScreenState extends State<AdminCreateQuizScreen> {
         'gradeLevel': _selectedGradeLevel,
         'questions': _generatedQuestions,
         'duration': duration,
-        'createdAt': DateTime.now().toIso8601String(),
+        'createdAt': FieldValue.serverTimestamp(),
         'isPublished': _isPublished,
         if (currentUser != null) 'createdBy': currentUser.uid,
+        // Assignment and Scheduling
+        if (_selectedAssignedSections.isNotEmpty)
+          'assignedSections': _selectedAssignedSections,
+        if (_availableFrom != null)
+          'availableFrom': _availableFrom!.toIso8601String(),
+        if (_availableTo != null) 'availableTo': _availableTo!.toIso8601String(),
       };
 
       await docRef.set(payload);
@@ -232,7 +237,7 @@ class _AdminCreateQuizScreenState extends State<AdminCreateQuizScreen> {
       setState(() => _isSaving = false);
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Assessment created successfully.')),
+        const SnackBar(content: Text('Quiz created successfully.')),
       );
 
       Navigator.pop(context);
@@ -263,7 +268,7 @@ class _AdminCreateQuizScreenState extends State<AdminCreateQuizScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Create Assessment'),
+        title: const Text('Create Quiz'),
         backgroundColor: AppColors.adminPrimary,
       ),
       body: SingleChildScrollView(
@@ -276,12 +281,12 @@ class _AdminCreateQuizScreenState extends State<AdminCreateQuizScreen> {
               TextFormField(
                 controller: _titleController,
                 decoration: const InputDecoration(
-                  labelText: 'Assessment Title',
+                  labelText: 'Quiz Title',
                   prefixIcon: Icon(Icons.quiz_outlined),
                 ),
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
-                    return 'Please enter an assessment title';
+                    return 'Please enter a quiz title';
                   }
                   return null;
                 },
@@ -429,6 +434,108 @@ class _AdminCreateQuizScreenState extends State<AdminCreateQuizScreen> {
                 },
               ),
               const SizedBox(height: AppConstants.paddingL),
+              // Assignment and Scheduling Section
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(AppConstants.paddingM),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Assign to Sections',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: AppConstants.paddingS),
+                      Wrap(
+                        spacing: AppConstants.paddingS,
+                        runSpacing: AppConstants.paddingS,
+                        children: AppConstants.studentSections.map((section) {
+                          final isSelected =
+                              _selectedAssignedSections.contains(section);
+                          return FilterChip(
+                            label: Text(section),
+                            selected: isSelected,
+                            onSelected: (selected) {
+                              setState(() {
+                                if (selected) {
+                                  _selectedAssignedSections.add(section);
+                                } else {
+                                  _selectedAssignedSections.remove(section);
+                                }
+                              });
+                            },
+                            selectedColor: AppColors.adminPrimary.withOpacity(0.3),
+                            checkmarkColor: AppColors.adminPrimary,
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: AppConstants.paddingM),
+                      const Divider(),
+                      const SizedBox(height: AppConstants.paddingM),
+                      const Text(
+                        'Availability Schedule',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: AppConstants.paddingS),
+                      InkWell(
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: _availableFrom ?? DateTime.now(),
+                            firstDate: DateTime.now(),
+                            lastDate: DateTime(2100),
+                          );
+                          if (picked != null) {
+                            setState(() => _availableFrom = picked);
+                          }
+                        },
+                        child: InputDecorator(
+                          decoration: const InputDecoration(
+                            labelText: 'Available From',
+                            prefixIcon: Icon(Icons.calendar_today_outlined),
+                            border: OutlineInputBorder(),
+                          ),
+                          child: Text(_availableFrom == null
+                              ? 'Select start date'
+                              : '${_availableFrom!.year}-${_availableFrom!.month.toString().padLeft(2, '0')}-${_availableFrom!.day.toString().padLeft(2, '0')}'),
+                        ),
+                      ),
+                      const SizedBox(height: AppConstants.paddingM),
+                      InkWell(
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate:
+                                _availableTo ?? (_availableFrom ?? DateTime.now()),
+                            firstDate: _availableFrom ?? DateTime.now(),
+                            lastDate: DateTime(2100),
+                          );
+                          if (picked != null) {
+                            setState(() => _availableTo = picked);
+                          }
+                        },
+                        child: InputDecorator(
+                          decoration: const InputDecoration(
+                            labelText: 'Available To',
+                            prefixIcon: Icon(Icons.event_outlined),
+                            border: OutlineInputBorder(),
+                          ),
+                          child: Text(_availableTo == null
+                              ? 'Select end date (optional)'
+                              : '${_availableTo!.year}-${_availableTo!.month.toString().padLeft(2, '0')}-${_availableTo!.day.toString().padLeft(2, '0')}'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppConstants.paddingL),
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(AppConstants.paddingM),
@@ -473,7 +580,7 @@ class _AdminCreateQuizScreenState extends State<AdminCreateQuizScreen> {
               ),
               const SizedBox(height: AppConstants.paddingXL),
               CustomButton(
-                text: 'Save Assessment',
+                text: 'Save Quiz',
                 onPressed: _isSaving ? null : _saveQuiz,
                 isLoading: _isSaving,
                 fullWidth: true,

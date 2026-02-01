@@ -1,9 +1,11 @@
 import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 
+import '../../models/user_model.dart';
 import '../../utils/colors.dart';
 import '../../utils/constants.dart';
 import '../../widgets/custom_button.dart';
@@ -22,6 +24,66 @@ class _TeacherScoreReportsScreenState extends State<TeacherScoreReportsScreen> {
   String? _selectedStudentName;
   String? _selectedStudentEmail;
   bool _isGenerating = false;
+  UserModel? _currentUser;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      final data = userDoc.data();
+      if (data == null) {
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      setState(() {
+        _currentUser = UserModel.fromJson(data);
+        _isLoading = false;
+      });
+    } catch (e) {
+      debugPrint('Error loading user data: $e');
+      setState(() => _isLoading = false);
+    }
+  }
+
+  String? get _teacherId => FirebaseAuth.instance.currentUser?.uid;
+  List<String>? get _teacherSections => _currentUser?.sectionsHandled;
+
+  bool _isStudentInTeacherScope(Map<String, dynamic> studentData) {
+    // If teacher has no sections specified, they can see all students
+    if (_teacherSections == null || _teacherSections!.isEmpty) {
+      return true;
+    }
+
+    // Check if student's grade level or section matches any of teacher's sections
+    final studentGrade = studentData['gradeLevel'] as String?;
+    final studentSection = studentData['section'] as String?;
+
+    if (studentGrade != null && _teacherSections!.contains(studentGrade)) {
+      return true;
+    }
+    if (studentSection != null && _teacherSections!.contains(studentSection)) {
+      return true;
+    }
+
+    return false;
+  }
 
   Stream<QuerySnapshot<Map<String, dynamic>>> _studentsStream() {
     return FirebaseFirestore.instance
@@ -31,6 +93,7 @@ class _TeacherScoreReportsScreenState extends State<TeacherScoreReportsScreen> {
   }
 
   Stream<QuerySnapshot<Map<String, dynamic>>> _resultsStream(String studentId) {
+    // Get teacher's quiz IDs first, then filter results by those quiz IDs
     return FirebaseFirestore.instance
         .collection('quiz_results')
         .where('studentId', isEqualTo: studentId)
@@ -55,12 +118,26 @@ class _TeacherScoreReportsScreenState extends State<TeacherScoreReportsScreen> {
       final studentEmail =
           (studentData['email'] as String?) ?? (_selectedStudentEmail ?? '');
 
+      // Get teacher's quiz IDs to filter results in PDF
+      final quizzesSnapshot = await FirebaseFirestore.instance
+          .collection('quizzes')
+          .where('createdBy', isEqualTo: _teacherId)
+          .get();
+
+      final teacherQuizIds = quizzesSnapshot.docs
+          .map((d) => d.data()['id'] as String? ?? d.id)
+          .toSet();
+
       final resultsSnapshot = await FirebaseFirestore.instance
           .collection('quiz_results')
           .where('studentId', isEqualTo: studentId)
           .get();
 
       final entries = resultsSnapshot.docs
+          .where((d) {
+            final quizId = (d.data()['quizId'] as String?) ?? '';
+            return teacherQuizIds.contains(quizId);
+          })
           .map((d) => StudentScoreEntry.fromFirestore(d.id, d.data()))
           .toList()
         ..sort((a, b) => b.completedAt.compareTo(a.completedAt));
@@ -103,6 +180,16 @@ class _TeacherScoreReportsScreenState extends State<TeacherScoreReportsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Score Reports'),
+          backgroundColor: AppColors.teacherPrimary,
+        ),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Score Reports'),
@@ -142,15 +229,20 @@ class _TeacherScoreReportsScreenState extends State<TeacherScoreReportsScreen> {
 
                             final docs = snapshot.data?.docs ?? [];
 
-                            if (docs.isEmpty) {
+                            // Filter students by teacher's sections
+                            final scopeFilteredDocs = docs.where((doc) {
+                              return _isStudentInTeacherScope(doc.data());
+                            }).toList();
+
+                            if (scopeFilteredDocs.isEmpty) {
                               return const Text(
-                                'No students found.',
+                                'No students found in your sections.',
                                 style:
                                     TextStyle(color: AppColors.textSecondary),
                               );
                             }
 
-                            final items = docs.map((doc) {
+                            final items = scopeFilteredDocs.map((doc) {
                               final data = doc.data();
                               final name =
                                   (data['name'] as String?) ?? 'Student';
@@ -172,7 +264,7 @@ class _TeacherScoreReportsScreenState extends State<TeacherScoreReportsScreen> {
                               onChanged: (value) {
                                 if (value == null) return;
                                 final selectedDoc =
-                                    docs.firstWhere((d) => d.id == value);
+                                    scopeFilteredDocs.firstWhere((d) => d.id == value);
                                 final data = selectedDoc.data();
                                 setState(() {
                                   _selectedStudentId = value;
@@ -211,81 +303,104 @@ class _TeacherScoreReportsScreenState extends State<TeacherScoreReportsScreen> {
                                   child: CircularProgressIndicator());
                             }
 
-                            final docs = snapshot.data?.docs ?? [];
-                            final entries = docs
-                                .map((d) => StudentScoreEntry.fromFirestore(
-                                    d.id, d.data()))
-                                .toList()
-                              ..sort((a, b) =>
-                                  b.completedAt.compareTo(a.completedAt));
+                            // Get teacher's quiz IDs to filter results
+                            return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                              stream: FirebaseFirestore.instance
+                                  .collection('quizzes')
+                                  .where('createdBy', isEqualTo: _teacherId)
+                                  .snapshots(),
+                              builder: (context, quizzesSnapshot) {
+                                if (quizzesSnapshot.connectionState ==
+                                    ConnectionState.waiting) {
+                                  return const Center(
+                                      child: CircularProgressIndicator());
+                                }
 
-                            if (entries.isEmpty) {
-                              return const Center(
-                                child: Text(
-                                  'No quiz results for this student yet.',
-                                  style: TextStyle(
-                                    fontSize: AppConstants.fontL,
-                                    color: AppColors.textSecondary,
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
-                              );
-                            }
+                                final teacherQuizIds = quizzesSnapshot.data?.docs
+                                    .map((d) => d.data()['id'] as String? ?? d.id)
+                                    .toSet() ?? <String>{};
 
-                            return ListView.builder(
-                              itemCount: entries.length,
-                              itemBuilder: (context, index) {
-                                final e = entries[index];
-                                final pct = e.percentage;
-                                final color = pct >= 80
-                                    ? AppColors.success
-                                    : pct >= 60
-                                        ? AppColors.warning
-                                        : AppColors.error;
+                                final docs = snapshot.data?.docs ?? [];
+                                final entries = docs
+                                    .where((d) {
+                                      final quizId = (d.data()['quizId'] as String?) ?? '';
+                                      return teacherQuizIds.contains(quizId);
+                                    })
+                                    .map((d) => StudentScoreEntry.fromFirestore(
+                                        d.id, d.data()))
+                                    .toList()
+                                  ..sort((a, b) =>
+                                      b.completedAt.compareTo(a.completedAt));
 
-                                return Card(
-                                  margin: const EdgeInsets.only(
-                                      bottom: AppConstants.paddingS),
-                                  child: ListTile(
-                                    leading: Container(
-                                      width: 44,
-                                      height: 44,
-                                      decoration: BoxDecoration(
-                                        color: color.withOpacity(0.12),
-                                        borderRadius: BorderRadius.circular(
-                                            AppConstants.radiusM),
-                                      ),
-                                      child: Icon(
-                                        Icons.quiz_outlined,
-                                        color: color,
-                                      ),
-                                    ),
-                                    title: Text(
-                                      e.quizTitle.isEmpty
-                                          ? e.quizId
-                                          : e.quizTitle,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    subtitle: Text(
-                                      'Score: ${e.score}/${e.totalPoints} (${pct.toStringAsFixed(0)}%)',
-                                    ),
-                                    trailing: Text(
-                                      _formatDate(e.completedAt),
-                                      style: const TextStyle(
-                                        fontSize: AppConstants.fontS,
+                                if (entries.isEmpty) {
+                                  return const Center(
+                                    child: Text(
+                                      'No quiz results for this student yet.',
+                                      style: TextStyle(
+                                        fontSize: AppConstants.fontL,
                                         color: AppColors.textSecondary,
                                       ),
+                                      textAlign: TextAlign.center,
                                     ),
-                                  ),
+                                  );
+                                }
+
+                                return ListView.builder(
+                                  itemCount: entries.length,
+                                  itemBuilder: (context, index) {
+                                    final e = entries[index];
+                                    final pct = e.percentage;
+                                    final color = pct >= 80
+                                        ? AppColors.success
+                                        : pct >= 60
+                                            ? AppColors.warning
+                                            : AppColors.error;
+
+                                    return Card(
+                                      margin: const EdgeInsets.only(
+                                          bottom: AppConstants.paddingS),
+                                      child: ListTile(
+                                        leading: Container(
+                                          width: 44,
+                                          height: 44,
+                                          decoration: BoxDecoration(
+                                            color: color.withOpacity(0.12),
+                                            borderRadius: BorderRadius.circular(
+                                                AppConstants.radiusM),
+                                          ),
+                                          child: Icon(
+                                            Icons.quiz_outlined,
+                                            color: color,
+                                          ),
+                                        ),
+                                        title: Text(
+                                          e.quizTitle.isEmpty
+                                              ? e.quizId
+                                              : e.quizTitle,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        subtitle: Text(
+                                          'Score: ${e.score}/${e.totalPoints} (${pct.toStringAsFixed(0)}%)',
+                                        ),
+                                        trailing: Text(
+                                          _formatDate(e.completedAt),
+                                          style: const TextStyle(
+                                            fontSize: AppConstants.fontS,
+                                            color: AppColors.textSecondary,
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  },
                                 );
                               },
                             );
                           },
                         ),
-                ),
-                const SizedBox(height: AppConstants.paddingM),
-                CustomButton(
+                  ),
+                  const SizedBox(height: AppConstants.paddingM),
+                  CustomButton(
                   text: 'Preview & Share PDF',
                   onPressed: (_selectedStudentId == null || _isGenerating)
                       ? null

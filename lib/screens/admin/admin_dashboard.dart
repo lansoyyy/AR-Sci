@@ -100,9 +100,14 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 }
 
-class _DashboardHome extends StatelessWidget {
+class _DashboardHome extends StatefulWidget {
   const _DashboardHome();
 
+  @override
+  State<_DashboardHome> createState() => _DashboardHomeState();
+}
+
+class _DashboardHomeState extends State<_DashboardHome> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -187,28 +192,45 @@ class _DashboardHome extends StatelessWidget {
 
             const SizedBox(height: AppConstants.paddingL),
 
-            // System Stats
+            // System Stats - Real-time from Firestore
             Padding(
               padding:
                   const EdgeInsets.symmetric(horizontal: AppConstants.paddingM),
               child: Row(
                 children: [
                   Expanded(
-                    child: StatCard(
-                      title: 'Total Users',
-                      value: '1,245',
-                      icon: Icons.people_outline,
-                      color: AppColors.adminPrimary,
+                    child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                      stream: FirebaseFirestore.instance
+                          .collection('users')
+                          .snapshots(),
+                      builder: (context, snapshot) {
+                        final totalUsers = snapshot.data?.docs.length ?? 0;
+                        return StatCard(
+                          title: 'Total Users',
+                          value: totalUsers.toString(),
+                          icon: Icons.people_outline,
+                          color: AppColors.adminPrimary,
+                        );
+                      },
                     ),
                   ),
                   const SizedBox(width: AppConstants.paddingM),
                   Expanded(
-                    child: StatCard(
-                      title: 'Active',
-                      value: '892',
-                      icon: Icons.check_circle_outline,
-                      color: AppColors.success,
-                      subtitle: 'Online',
+                    child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                      stream: FirebaseFirestore.instance
+                          .collection('users')
+                          .where('verified', isEqualTo: true)
+                          .snapshots(),
+                      builder: (context, snapshot) {
+                        final activeUsers = snapshot.data?.docs.length ?? 0;
+                        return StatCard(
+                          title: 'Active',
+                          value: activeUsers.toString(),
+                          icon: Icons.check_circle_outline,
+                          color: AppColors.success,
+                          subtitle: 'Verified',
+                        );
+                      },
                     ),
                   ),
                 ],
@@ -223,22 +245,40 @@ class _DashboardHome extends StatelessWidget {
               child: Row(
                 children: [
                   Expanded(
-                    child: StatCard(
-                      title: 'Lessons',
-                      value: '156',
-                      icon: Icons.book_outlined,
-                      color: AppColors.studentPrimary,
-                      subtitle: 'Published',
+                    child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                      stream: FirebaseFirestore.instance
+                          .collection('lessons')
+                          .where('isPublished', isEqualTo: true)
+                          .snapshots(),
+                      builder: (context, snapshot) {
+                        final lessons = snapshot.data?.docs.length ?? 0;
+                        return StatCard(
+                          title: 'Lessons',
+                          value: lessons.toString(),
+                          icon: Icons.book_outlined,
+                          color: AppColors.studentPrimary,
+                          subtitle: 'Published',
+                        );
+                      },
                     ),
                   ),
                   const SizedBox(width: AppConstants.paddingM),
                   Expanded(
-                    child: StatCard(
-                      title: 'Quizzes',
-                      value: '89',
-                      icon: Icons.quiz_outlined,
-                      color: AppColors.warning,
-                      subtitle: 'Active',
+                    child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                      stream: FirebaseFirestore.instance
+                          .collection('quizzes')
+                          .where('isPublished', isEqualTo: true)
+                          .snapshots(),
+                      builder: (context, snapshot) {
+                        final quizzes = snapshot.data?.docs.length ?? 0;
+                        return StatCard(
+                          title: 'Quizzes',
+                          value: quizzes.toString(),
+                          icon: Icons.quiz_outlined,
+                          color: AppColors.warning,
+                          subtitle: 'Active',
+                        );
+                      },
                     ),
                   ),
                 ],
@@ -247,10 +287,10 @@ class _DashboardHome extends StatelessWidget {
 
             const SizedBox(height: AppConstants.paddingXL),
 
-            // User Distribution
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: AppConstants.paddingM),
-              child: Text(
+            // User Distribution - Real-time from Firestore
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingM),
+              child: const Text(
                 'User Distribution',
                 style: TextStyle(
                   fontSize: AppConstants.fontXL,
@@ -266,29 +306,58 @@ class _DashboardHome extends StatelessWidget {
                   const EdgeInsets.symmetric(horizontal: AppConstants.paddingM),
               child: Padding(
                 padding: const EdgeInsets.all(AppConstants.paddingL),
-                child: Column(
-                  children: [
-                    _UserDistributionRow(
-                      role: 'Students',
-                      count: 1050,
-                      total: 1245,
-                      color: AppColors.studentPrimary,
-                    ),
-                    const SizedBox(height: AppConstants.paddingM),
-                    _UserDistributionRow(
-                      role: 'Teachers',
-                      count: 185,
-                      total: 1245,
-                      color: AppColors.teacherPrimary,
-                    ),
-                    const SizedBox(height: AppConstants.paddingM),
-                    _UserDistributionRow(
-                      role: 'Admins',
-                      count: 10,
-                      total: 1245,
-                      color: AppColors.adminPrimary,
-                    ),
-                  ],
+                child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                  stream: FirebaseFirestore.instance
+                      .collection('users')
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    final docs = snapshot.data?.docs ?? [];
+                    final totalUsers = docs.length;
+                    
+                    int studentCount = 0;
+                    int teacherCount = 0;
+                    int adminCount = 0;
+                    
+                    for (final doc in docs) {
+                      final role = doc.data()['role'] as String? ?? '';
+                      switch (role) {
+                        case 'student':
+                          studentCount++;
+                          break;
+                        case 'teacher':
+                          teacherCount++;
+                          break;
+                        case 'admin':
+                          adminCount++;
+                          break;
+                      }
+                    }
+                    
+                    return Column(
+                      children: [
+                        _UserDistributionRow(
+                          role: 'Students',
+                          count: studentCount,
+                          total: totalUsers,
+                          color: AppColors.studentPrimary,
+                        ),
+                        const SizedBox(height: AppConstants.paddingM),
+                        _UserDistributionRow(
+                          role: 'Teachers',
+                          count: teacherCount,
+                          total: totalUsers,
+                          color: AppColors.teacherPrimary,
+                        ),
+                        const SizedBox(height: AppConstants.paddingM),
+                        _UserDistributionRow(
+                          role: 'Admins',
+                          count: adminCount,
+                          total: totalUsers,
+                          color: AppColors.adminPrimary,
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ),
             ),
@@ -308,16 +377,6 @@ class _DashboardHome extends StatelessWidget {
               ),
             ),
             const SizedBox(height: AppConstants.paddingM),
-
-            // FeatureCard(
-            //   title: 'Manage Users',
-            //   description: 'Add, edit, or remove user accounts',
-            //   icon: Icons.people_outline,
-            //   iconColor: AppColors.adminPrimary,
-            //   onTap: () {
-            //     Navigator.pushNamed(context, '/admin-verify-accounts');
-            //   },
-            // ),
 
             StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
               stream: FirebaseFirestore.instance
@@ -341,14 +400,6 @@ class _DashboardHome extends StatelessWidget {
               },
             ),
 
-            // FeatureCard(
-            //   title: 'Content Review',
-            //   description: 'Review and approve pending content',
-            //   icon: Icons.rate_review_outlined,
-            //   iconColor: AppColors.warning,
-            //   onTap: () {},
-            // ),
-
             FeatureCard(
               title: 'Create Learning Materials',
               description: 'Add new learning materials with content',
@@ -360,30 +411,14 @@ class _DashboardHome extends StatelessWidget {
             ),
 
             FeatureCard(
-              title: 'Create Assessment',
-              description: 'Create an assessment for your students',
+              title: 'Create Quiz',
+              description: 'Create a quiz for your students',
               icon: Icons.quiz_outlined,
               iconColor: AppColors.warning,
               onTap: () {
                 Navigator.pushNamed(context, '/admin-create-quiz');
               },
             ),
-
-            // FeatureCard(
-            //   title: 'System Reports',
-            //   description: 'View detailed analytics and reports',
-            //   icon: Icons.analytics_outlined,
-            //   iconColor: AppColors.info,
-            //   onTap: () {},
-            // ),
-
-            // FeatureCard(
-            //   title: 'Announcements',
-            //   description: 'Send notifications to all users',
-            //   icon: Icons.campaign_outlined,
-            //   iconColor: AppColors.error,
-            //   onTap: () {},
-            // ),
 
             const SizedBox(height: AppConstants.paddingL),
           ],
@@ -419,14 +454,79 @@ class _UserManagementState extends State<_UserManagement> {
   }
 
   Future<void> _deleteUser(String userId, String email) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete User?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Are you sure you want to delete $email?'),
+            const SizedBox(height: AppConstants.paddingM),
+            const Text(
+              'This will mark the user as deleted in Firestore. '
+              'Firebase Auth user deletion requires Firebase Admin SDK (server-side). '
+              'Related data (quiz results, progress) will be kept.',
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: AppColors.textWhite,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
     try {
-      // Delete from Firestore
-      await FirebaseFirestore.instance.collection('users').doc(userId).delete();
+      final currentUser = FirebaseAuth.instance.currentUser;
+
+      // Get user data before deletion for logging
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .get();
+      
+      final userData = userDoc.data();
+      final userName = userData?['name'] as String? ?? '';
+      final userRole = userData?['role'] as String? ?? '';
+
+      // Create deletion log for audit purposes
+      await FirebaseFirestore.instance.collection('deletion_logs').add({
+        'userId': userId,
+        'userName': userName,
+        'userEmail': email,
+        'userRole': userRole,
+        'deletedBy': currentUser?.uid,
+        'deletedAt': FieldValue.serverTimestamp(),
+        'deletedByRole': 'admin',
+      });
+
+      // Mark user as deleted in Firestore (soft delete)
+      // Note: Firebase Auth user deletion requires Firebase Admin SDK (server-side)
+      await FirebaseFirestore.instance.collection('users').doc(userId).update({
+        'deleted': true,
+        'deletedAt': FieldValue.serverTimestamp(),
+        'deletedBy': currentUser?.uid,
+      });
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('User deleted successfully'),
+          content: Text('User marked as deleted successfully'),
           backgroundColor: AppColors.success,
         ),
       );
@@ -520,7 +620,7 @@ class _UserManagementState extends State<_UserManagement> {
                 }
 
                 if (snapshot.hasError) {
-                  print(snapshot.error);
+                  debugPrint(snapshot.error.toString());
                   return Center(
                     child: Text(
                       'Error loading users: ${snapshot.error}',
@@ -1170,15 +1270,129 @@ class _ContentManagement extends StatelessWidget {
   }
 }
 
-class _SettingsPage extends StatelessWidget {
+class _SettingsPage extends StatefulWidget {
   const _SettingsPage();
 
   @override
+  State<_SettingsPage> createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends State<_SettingsPage> {
+  final _academicYearController = TextEditingController();
+  bool _isLoading = true;
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
+
+  Future<void> _loadSettings() async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('app_config')
+          .doc('current')
+          .get();
+
+      if (doc.exists) {
+        final data = doc.data();
+        final academicYear = data?['academicYear'] as String? ?? '2025-2026';
+        _academicYearController.text = academicYear;
+      } else {
+        // Create default config if it doesn't exist
+        await FirebaseFirestore.instance
+            .collection('app_config')
+            .doc('current')
+            .set({
+              'academicYear': '2025-2026',
+              'updatedAt': FieldValue.serverTimestamp(),
+            });
+        _academicYearController.text = '2025-2026';
+      }
+
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+    } catch (e) {
+      debugPrint('Error loading settings: $e');
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _saveSettings() async {
+    setState(() => _isSaving = true);
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('app_config')
+          .doc('current')
+          .update({
+            'academicYear': _academicYearController.text.trim(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+
+      if (!mounted) return;
+      setState(() => _isSaving = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Settings saved successfully'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isSaving = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to save settings: $e'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _academicYearController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('System Settings'),
+          backgroundColor: AppColors.adminPrimary,
+        ),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('System Settings'),
         backgroundColor: AppColors.adminPrimary,
+        actions: [
+          if (_isSaving)
+            const Padding(
+              padding: EdgeInsets.all(AppConstants.paddingM),
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
+          else
+            IconButton(
+              icon: const Icon(Icons.save_outlined),
+              onPressed: _saveSettings,
+              tooltip: 'Save Settings',
+            ),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(AppConstants.paddingM),
@@ -1191,45 +1405,39 @@ class _SettingsPage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: AppConstants.paddingM),
-          _SettingsTile(
-            icon: Icons.school_outlined,
-            title: 'Academic Year',
-            subtitle: '2025-2026',
-            onTap: () {},
-          ),
-          _SettingsTile(
-            icon: Icons.notifications_outlined,
-            title: 'Notification Settings',
-            onTap: () {},
-          ),
-          _SettingsTile(
-            icon: Icons.security_outlined,
-            title: 'Security & Privacy',
-            onTap: () {},
-          ),
-          const SizedBox(height: AppConstants.paddingXL),
-          const Text(
-            'System Management',
-            style: TextStyle(
-              fontSize: AppConstants.fontL,
-              fontWeight: FontWeight.w600,
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(AppConstants.paddingM),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Academic Year',
+                    style: TextStyle(
+                      fontSize: AppConstants.fontM,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: AppConstants.paddingS),
+                  TextField(
+                    controller: _academicYearController,
+                    decoration: const InputDecoration(
+                      hintText: 'e.g., 2025-2026',
+                      prefixIcon: Icon(Icons.school_outlined),
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: AppConstants.paddingS),
+                  Text(
+                    'This academic year will be displayed throughout the app.',
+                    style: TextStyle(
+                      fontSize: AppConstants.fontS,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: AppConstants.paddingM),
-          _SettingsTile(
-            icon: Icons.backup_outlined,
-            title: 'Backup & Restore',
-            onTap: () {},
-          ),
-          _SettingsTile(
-            icon: Icons.analytics_outlined,
-            title: 'System Analytics',
-            onTap: () {},
-          ),
-          _SettingsTile(
-            icon: Icons.bug_report_outlined,
-            title: 'Error Logs',
-            onTap: () {},
           ),
         ],
       ),

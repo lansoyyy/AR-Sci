@@ -88,9 +88,9 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
   Widget build(BuildContext context) {
     final updatedScreens = <Widget>[
       _DashboardHome(currentUser: _currentUser, isLoading: _isLoading),
-      const _LessonsManagement(),
-      const _QuizzesManagement(),
-      const _StudentsPage(),
+      _LessonsManagement(currentUser: _currentUser),
+      _QuizzesManagement(currentUser: _currentUser),
+      _StudentsPage(currentUser: _currentUser),
     ];
 
     return PopScope(
@@ -151,9 +151,15 @@ class _DashboardHome extends StatelessWidget {
     final teacherName = (currentUser?.name.trim().isNotEmpty ?? false)
         ? currentUser!.name.trim()
         : 'Teacher';
-    final teacherSubject = (currentUser?.subject?.trim().isNotEmpty ?? false)
-        ? currentUser!.subject!.trim()
-        : 'Teacher';
+    
+    // Display subjects if available, otherwise show 'Teacher'
+    String teacherSubject = 'Teacher';
+    if (currentUser?.subjects != null && currentUser!.subjects!.isNotEmpty) {
+      teacherSubject = currentUser!.subjects!.join(', ');
+    } else if (currentUser?.subject?.trim().isNotEmpty ?? false) {
+      // Fallback to legacy single subject field
+      teacherSubject = currentUser!.subject!.trim();
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -416,24 +422,14 @@ class _DashboardHome extends StatelessWidget {
             ),
 
             FeatureCard(
-              title: 'Create Assessment',
-              description: 'Create an assessment for your students',
+              title: 'Create Quiz',
+              description: 'Create a quiz for your students',
               icon: Icons.quiz_outlined,
               iconColor: AppColors.studentPrimary,
               onTap: () {
                 Navigator.pushNamed(context, '/admin-create-quiz');
               },
             ),
-
-            // FeatureCard(
-            //   title: 'View Reports',
-            //   description: 'Check student performance and analytics',
-            //   icon: Icons.analytics_outlined,
-            //   iconColor: AppColors.warning,
-            //   onTap: () {
-            //     Navigator.pushNamed(context, '/teacher-score-reports');
-            //   },
-            // ),
 
             // StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
             //   stream: FirebaseFirestore.instance
@@ -486,43 +482,77 @@ class _DashboardHome extends StatelessWidget {
                   );
                 }
 
-                final docs = snapshot.data?.docs ?? [];
-                final activities = docs.map((d) {
-                  final data = d.data();
-                  final quizTitle = (data['quizTitle'] as String?) ?? '';
-                  final quizId = (data['quizId'] as String?) ?? d.id;
-                  final completedAt = _parseFirestoreDate(data['completedAt']);
-                  return {
-                    'title': 'Quiz Submitted',
-                    'subtitle': quizTitle.isNotEmpty
-                        ? 'A student completed $quizTitle'
-                        : 'A student completed quiz $quizId',
-                    'time': _timeAgo(completedAt),
-                    'icon': Icons.assignment_turned_in_outlined,
-                    'color': AppColors.success,
-                    'dt': completedAt,
-                  };
-                }).toList()
-                  ..sort((a, b) {
-                    final ad = a['dt'] as DateTime;
-                    final bd = b['dt'] as DateTime;
-                    return bd.compareTo(ad);
-                  });
-
-                if (activities.isEmpty) {
+                final teacherId = FirebaseAuth.instance.currentUser?.uid;
+                if (teacherId == null) {
                   return const SizedBox.shrink();
                 }
 
-                return Column(
-                  children: activities.take(3).map((a) {
-                    return _ActivityCard(
-                      title: a['title'] as String,
-                      subtitle: a['subtitle'] as String,
-                      time: a['time'] as String,
-                      icon: a['icon'] as IconData,
-                      color: a['color'] as Color,
+                // Get teacher's quiz IDs first
+                return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                  stream: FirebaseFirestore.instance
+                      .collection('quizzes')
+                      .where('createdBy', isEqualTo: teacherId)
+                      .snapshots(),
+                  builder: (context, quizzesSnapshot) {
+                    if (quizzesSnapshot.connectionState == ConnectionState.waiting) {
+                      return const Padding(
+                        padding: EdgeInsets.all(AppConstants.paddingM),
+                        child: Center(child: CircularProgressIndicator()),
+                      );
+                    }
+
+                    final teacherQuizIds = quizzesSnapshot.data?.docs
+                        .map((d) => d.data()['id'] as String? ?? d.id)
+                        .toSet() ?? <String>{};
+
+                    if (teacherQuizIds.isEmpty) {
+                      return const SizedBox.shrink();
+                    }
+
+                    final docs = snapshot.data?.docs ?? [];
+                    final activities = docs
+                        .where((d) {
+                          final quizId = (d.data()['quizId'] as String?) ?? '';
+                          return teacherQuizIds.contains(quizId);
+                        })
+                        .map((d) {
+                          final data = d.data();
+                          final quizTitle = (data['quizTitle'] as String?) ?? '';
+                          final quizId = (data['quizId'] as String?) ?? d.id;
+                          final completedAt = _parseFirestoreDate(data['completedAt']);
+                          return {
+                            'title': 'Quiz Submitted',
+                            'subtitle': quizTitle.isNotEmpty
+                                ? 'A student completed $quizTitle'
+                                : 'A student completed quiz $quizId',
+                            'time': _timeAgo(completedAt),
+                            'icon': Icons.assignment_turned_in_outlined,
+                            'color': AppColors.success,
+                            'dt': completedAt,
+                          };
+                        }).toList()
+                          ..sort((a, b) {
+                            final ad = a['dt'] as DateTime;
+                            final bd = b['dt'] as DateTime;
+                            return bd.compareTo(ad);
+                          });
+
+                    if (activities.isEmpty) {
+                      return const SizedBox.shrink();
+                    }
+
+                    return Column(
+                      children: activities.take(3).map((a) {
+                        return _ActivityCard(
+                          title: a['title'] as String,
+                          subtitle: a['subtitle'] as String,
+                          time: a['time'] as String,
+                          icon: a['icon'] as IconData,
+                          color: a['color'] as Color,
+                        );
+                      }).toList(),
                     );
-                  }).toList(),
+                  },
                 );
               },
             ),
@@ -531,6 +561,7 @@ class _DashboardHome extends StatelessWidget {
               stream: FirebaseFirestore.instance
                   .collection('lessons')
                   .where('isPublished', isEqualTo: true)
+                  .where('createdBy', isEqualTo: FirebaseAuth.instance.currentUser?.uid)
                   .snapshots(),
               builder: (context, snapshot) {
                 final docs = snapshot.data?.docs ?? [];
@@ -580,13 +611,16 @@ class _DashboardHome extends StatelessWidget {
 }
 
 class _LessonsManagement extends StatefulWidget {
-  const _LessonsManagement();
+  final UserModel? currentUser;
+
+  const _LessonsManagement({this.currentUser});
 
   @override
   State<_LessonsManagement> createState() => _LessonsManagementState();
 }
 
 class _LessonsManagementState extends State<_LessonsManagement> {
+  String? get _teacherId => FirebaseAuth.instance.currentUser?.uid;
   Future<void> _confirmAndDelete({
     required String lessonId,
     required String title,
@@ -724,7 +758,10 @@ class _LessonsManagementState extends State<_LessonsManagement> {
         backgroundColor: AppColors.teacherPrimary,
       ),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance.collection('lessons').snapshots(),
+        stream: FirebaseFirestore.instance
+            .collection('lessons')
+            .where('createdBy', isEqualTo: _teacherId)
+            .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -801,13 +838,16 @@ class _LessonsManagementState extends State<_LessonsManagement> {
 }
 
 class _QuizzesManagement extends StatefulWidget {
-  const _QuizzesManagement();
+  final UserModel? currentUser;
+
+  const _QuizzesManagement({this.currentUser});
 
   @override
   State<_QuizzesManagement> createState() => _QuizzesManagementState();
 }
 
 class _QuizzesManagementState extends State<_QuizzesManagement> {
+  String? get _teacherId => FirebaseAuth.instance.currentUser?.uid;
   Future<void> _showEditDialog({
     required String quizId,
     required Map<String, dynamic> quiz,
@@ -918,7 +958,10 @@ class _QuizzesManagementState extends State<_QuizzesManagement> {
         backgroundColor: AppColors.teacherPrimary,
       ),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance.collection('quizzes').snapshots(),
+        stream: FirebaseFirestore.instance
+            .collection('quizzes')
+            .where('createdBy', isEqualTo: _teacherId)
+            .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -1035,14 +1078,55 @@ class _QuizzesManagementState extends State<_QuizzesManagement> {
 }
 
 class _StudentsPage extends StatefulWidget {
-  const _StudentsPage();
+  final UserModel? currentUser;
+
+  const _StudentsPage({this.currentUser});
 
   @override
   State<_StudentsPage> createState() => _StudentsPageState();
 }
 
 class _StudentsPageState extends State<_StudentsPage> {
+  List<String>? get _teacherSections => widget.currentUser?.sectionsHandled;
   final TextEditingController _searchController = TextEditingController();
+
+  Stream<QuerySnapshot<Map<String, dynamic>>> _buildStudentsStream() {
+    // Build query for students based on teacher's subjects and sections
+    final query = FirebaseFirestore.instance
+        .collection('users')
+        .where('role', isEqualTo: 'student')
+        .where('verified', isEqualTo: true);
+
+    // Filter by grade level if teacher has sectionsHandled
+    if (_teacherSections != null && _teacherSections!.isNotEmpty) {
+      // Filter by sections - need to use where with array-contains for each section
+      // Since Firestore doesn't support OR queries, we'll filter in memory
+      return query.snapshots();
+    }
+
+    // If no sections specified, return all verified students
+    return query.snapshots();
+  }
+
+  bool _isStudentInTeacherScope(Map<String, dynamic> studentData) {
+    // Check if student's grade level is in teacher's sectionsHandled
+    final studentGrade = studentData['gradeLevel'] as String?;
+    final studentSection = studentData['section'] as String?;
+
+    if (_teacherSections != null && _teacherSections!.isNotEmpty) {
+      // Check if student's grade level or section matches any of teacher's sections
+      if (studentGrade != null && _teacherSections!.contains(studentGrade)) {
+        return true;
+      }
+      if (studentSection != null && _teacherSections!.contains(studentSection)) {
+        return true;
+      }
+      return false;
+    }
+
+    // If no sections specified, show all students
+    return true;
+  }
 
   @override
   void dispose() {
@@ -1073,11 +1157,7 @@ class _StudentsPageState extends State<_StudentsPage> {
           ),
           Expanded(
             child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: FirebaseFirestore.instance
-                  .collection('users')
-                  .where('role', isEqualTo: 'student')
-                  .where('verified', isEqualTo: true)
-                  .snapshots(),
+              stream: _buildStudentsStream(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
@@ -1094,9 +1174,13 @@ class _StudentsPageState extends State<_StudentsPage> {
                 }
 
                 final docs = snapshot.data?.docs ?? [];
+                final scopeFilteredDocs = docs.where((doc) {
+                  return _isStudentInTeacherScope(doc.data());
+                }).toList();
+                
                 final filteredDocs = searchTerm.isEmpty
-                    ? docs
-                    : docs.where((doc) {
+                    ? scopeFilteredDocs
+                    : scopeFilteredDocs.where((doc) {
                         final data = doc.data();
                         final name =
                             (data['name'] as String? ?? '').toLowerCase();

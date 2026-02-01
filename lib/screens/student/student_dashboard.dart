@@ -88,8 +88,8 @@ class _StudentDashboardState extends State<StudentDashboard> {
     // Update screens with current user data
     final updatedScreens = <Widget>[
       _DashboardHome(currentUser: _currentUser, isLoading: _isLoading),
-      const _LessonsPage(),
-      const _QuizzesPage(),
+      _LessonsPage(currentUser: _currentUser),
+      _QuizzesPage(currentUser: _currentUser),
       const _ProgressPage(),
     ];
 
@@ -410,6 +410,7 @@ class _DashboardHome extends StatelessWidget {
                       final snapshot = await FirebaseFirestore.instance
                           .collection('lessons')
                           .where('isPublished', isEqualTo: true)
+                          .where('gradeLevel', isEqualTo: currentUser?.gradeLevel)
                           .limit(1)
                           .get();
 
@@ -517,6 +518,7 @@ class _DashboardHome extends StatelessWidget {
               stream: FirebaseFirestore.instance
                   .collection('lessons')
                   .where('isPublished', isEqualTo: true)
+                  .where('gradeLevel', isEqualTo: currentUser?.gradeLevel)
                   .limit(2)
                   .snapshots(),
               builder: (context, snapshot) {
@@ -590,6 +592,7 @@ class _DashboardHome extends StatelessWidget {
               stream: FirebaseFirestore.instance
                   .collection('quizzes')
                   .where('isPublished', isEqualTo: true)
+                  .where('gradeLevel', isEqualTo: currentUser?.gradeLevel)
                   .limit(2)
                   .snapshots(),
               builder: (context, snapshot) {
@@ -651,7 +654,9 @@ class _DashboardHome extends StatelessWidget {
 }
 
 class _LessonsPage extends StatefulWidget {
-  const _LessonsPage();
+  final UserModel? currentUser;
+
+  const _LessonsPage({this.currentUser});
 
   @override
   State<_LessonsPage> createState() => _LessonsPageState();
@@ -659,6 +664,9 @@ class _LessonsPage extends StatefulWidget {
 
 class _LessonsPageState extends State<_LessonsPage> {
   String _selectedFilter = 'All';
+
+  String? get _studentGradeLevel => widget.currentUser?.gradeLevel;
+  String? get _studentSection => widget.currentUser?.section;
 
   List<Map<String, dynamic>> _applyFilter(List<Map<String, dynamic>> all) {
     if (_selectedFilter == 'All') {
@@ -721,6 +729,7 @@ class _LessonsPageState extends State<_LessonsPage> {
               stream: FirebaseFirestore.instance
                   .collection('lessons')
                   .where('isPublished', isEqualTo: true)
+                  .where('gradeLevel', isEqualTo: _studentGradeLevel)
                   .snapshots(),
               builder: (context, snapshot) {
                 final docs = snapshot.data?.docs ?? [];
@@ -778,6 +787,7 @@ class _LessonsPageState extends State<_LessonsPage> {
               stream: FirebaseFirestore.instance
                   .collection('lessons')
                   .where('isPublished', isEqualTo: true)
+                  .where('gradeLevel', isEqualTo: _studentGradeLevel)
                   .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
@@ -842,16 +852,20 @@ class _LessonsPageState extends State<_LessonsPage> {
 }
 
 class _QuizzesPage extends StatelessWidget {
-  const _QuizzesPage();
+  final UserModel? currentUser;
+
+  const _QuizzesPage({this.currentUser});
 
   @override
   Widget build(BuildContext context) {
-    return const _QuizzesPageBody();
+    return _QuizzesPageBody(currentUser: currentUser);
   }
 }
 
 class _QuizzesPageBody extends StatefulWidget {
-  const _QuizzesPageBody();
+  final UserModel? currentUser;
+
+  const _QuizzesPageBody({this.currentUser});
 
   @override
   State<_QuizzesPageBody> createState() => _QuizzesPageBodyState();
@@ -859,6 +873,9 @@ class _QuizzesPageBody extends StatefulWidget {
 
 class _QuizzesPageBodyState extends State<_QuizzesPageBody> {
   String _selectedFilter = 'All';
+
+  String? get _studentGradeLevel => widget.currentUser?.gradeLevel;
+  String? get _studentSection => widget.currentUser?.section;
 
   void _onFilterSelected(String label) {
     setState(() => _selectedFilter = label);
@@ -906,6 +923,7 @@ class _QuizzesPageBodyState extends State<_QuizzesPageBody> {
               stream: FirebaseFirestore.instance
                   .collection('quizzes')
                   .where('isPublished', isEqualTo: true)
+                  .where('gradeLevel', isEqualTo: _studentGradeLevel)
                   .snapshots(),
               builder: (context, snapshot) {
                 final docs = snapshot.data?.docs ?? [];
@@ -950,6 +968,7 @@ class _QuizzesPageBodyState extends State<_QuizzesPageBody> {
               stream: FirebaseFirestore.instance
                   .collection('quizzes')
                   .where('isPublished', isEqualTo: true)
+                  .where('gradeLevel', isEqualTo: _studentGradeLevel)
                   .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {

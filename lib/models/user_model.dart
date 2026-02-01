@@ -6,7 +6,9 @@ class UserModel {
   final String? photoUrl;
   final String? gradeLevel; // For students
   final String? section; // For students
-  final String? subject; // For teachers
+  final String? subject; // For teachers (legacy, single subject)
+  final List<String>? subjects; // For teachers (multiple subjects)
+  final List<String>? sectionsHandled; // For teachers (sections they teach)
   final DateTime createdAt;
 
   UserModel({
@@ -18,6 +20,8 @@ class UserModel {
     this.gradeLevel,
     this.section,
     this.subject,
+    this.subjects,
+    this.sectionsHandled,
     required this.createdAt,
   });
 
@@ -31,6 +35,12 @@ class UserModel {
       gradeLevel: json['gradeLevel'],
       section: json['section'],
       subject: json['subject'],
+      subjects: json['subjects'] != null
+          ? List<String>.from(json['subjects'])
+          : null,
+      sectionsHandled: json['sectionsHandled'] != null
+          ? List<String>.from(json['sectionsHandled'])
+          : null,
       createdAt: DateTime.parse(json['createdAt'] ?? DateTime.now().toIso8601String()),
     );
   }
@@ -45,6 +55,8 @@ class UserModel {
       'gradeLevel': gradeLevel,
       'section': section,
       'subject': subject,
+      'subjects': subjects,
+      'sectionsHandled': sectionsHandled,
       'createdAt': createdAt.toIso8601String(),
     };
   }
