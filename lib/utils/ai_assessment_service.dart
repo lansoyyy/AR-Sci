@@ -30,7 +30,7 @@ class AiAssessmentService {
     int questionCount = 10,
   }) async {
     final apiKey = const String.fromEnvironment(
-      'tgp_v1_onFMvvKE406HiInIX9ZxmQtZB-xk1uTumlxUHlFUxJc',
+      'TOGETHER_API_KEY',
       defaultValue: '',
     );
 
