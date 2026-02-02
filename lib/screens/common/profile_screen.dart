@@ -350,9 +350,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 return;
               }
 
-              if (newPassword.length < 6) {
+              if (newPassword.length < 8) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Password must be at least 6 characters')),
+                  const SnackBar(content: Text('Password must be at least 8 characters')),
+                );
+                return;
+              }
+
+              if (!RegExp(r'(?=.*[A-Za-z])(?=.*\d)').hasMatch(newPassword)) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Password must contain both letters and numbers')),
                 );
                 return;
               }
