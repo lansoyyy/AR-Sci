@@ -151,7 +151,7 @@ class _DashboardHome extends StatelessWidget {
     final teacherName = (currentUser?.name.trim().isNotEmpty ?? false)
         ? currentUser!.name.trim()
         : 'Teacher';
-    
+
     // Display subjects if available, otherwise show 'Teacher'
     String teacherSubject = 'Teacher';
     if (currentUser?.subjects != null && currentUser!.subjects!.isNotEmpty) {
@@ -263,16 +263,40 @@ class _DashboardHome extends StatelessWidget {
                             value: '-',
                             icon: Icons.people_outline,
                             color: AppColors.teacherPrimary,
-                            subtitle: 'Active',
+                            subtitle: 'In Scope',
                           );
                         }
-                        final count = snapshot.data?.docs.length ?? 0;
+                        // Filter students by teacher's sections
+                        final allStudents = snapshot.data?.docs ?? [];
+                        final filteredStudents = allStudents.where((doc) {
+                          final data = doc.data();
+                          final studentGrade = data['gradeLevel'] as String?;
+                          final studentSection = data['section'] as String?;
+                          final teacherSections = currentUser?.sectionsHandled;
+
+                          if (teacherSections == null ||
+                              teacherSections.isEmpty) {
+                            return true; // Show all if no sections specified
+                          }
+
+                          if (studentGrade != null &&
+                              teacherSections.contains(studentGrade)) {
+                            return true;
+                          }
+                          if (studentSection != null &&
+                              teacherSections.contains(studentSection)) {
+                            return true;
+                          }
+
+                          return false;
+                        }).toList();
+
                         return StatCard(
                           title: 'Students',
-                          value: count.toString(),
+                          value: filteredStudents.length.toString(),
                           icon: Icons.people_outline,
                           color: AppColors.teacherPrimary,
-                          subtitle: 'Active',
+                          subtitle: 'In Scope',
                         );
                       },
                     ),
@@ -282,6 +306,8 @@ class _DashboardHome extends StatelessWidget {
                     child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                       stream: FirebaseFirestore.instance
                           .collection('lessons')
+                          .where('createdBy',
+                              isEqualTo: FirebaseAuth.instance.currentUser?.uid)
                           .where('isPublished', isEqualTo: true)
                           .snapshots(),
                       builder: (context, snapshot) {
@@ -319,10 +345,12 @@ class _DashboardHome extends StatelessWidget {
                   Expanded(
                     child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                       stream: FirebaseFirestore.instance
-                          .collection('quiz_results')
+                          .collection('quizzes')
+                          .where('createdBy',
+                              isEqualTo: FirebaseAuth.instance.currentUser?.uid)
                           .snapshots(),
-                      builder: (context, snapshot) {
-                        if (snapshot.hasError) {
+                      builder: (context, quizzesSnapshot) {
+                        if (quizzesSnapshot.hasError) {
                           return const StatCard(
                             title: 'Avg Score',
                             value: '-',
@@ -331,8 +359,8 @@ class _DashboardHome extends StatelessWidget {
                           );
                         }
 
-                        final docs = snapshot.data?.docs ?? [];
-                        if (docs.isEmpty) {
+                        final quizzes = quizzesSnapshot.data?.docs ?? [];
+                        if (quizzes.isEmpty) {
                           return const StatCard(
                             title: 'Avg Score',
                             value: '0%',
@@ -341,24 +369,49 @@ class _DashboardHome extends StatelessWidget {
                           );
                         }
 
-                        final percentages = docs.map((d) {
-                          final data = d.data();
-                          final score =
-                              (data['score'] as num?)?.toDouble() ?? 0.0;
-                          final totalPoints =
-                              (data['totalPoints'] as num?)?.toDouble() ?? 0.0;
-                          if (totalPoints <= 0) return 0.0;
-                          return (score / totalPoints) * 100;
-                        }).toList();
+                        // Get quiz IDs for this teacher
+                        final quizIds = quizzes.map((d) => d.id).toList();
 
-                        final avg = percentages.reduce((a, b) => a + b) /
-                            (percentages.isEmpty ? 1 : percentages.length);
+                        // Now get results for these quizzes
+                        return StreamBuilder<
+                            QuerySnapshot<Map<String, dynamic>>>(
+                          stream: FirebaseFirestore.instance
+                              .collection('quiz_results')
+                              .where('quizId',
+                                  whereIn: quizIds.isEmpty ? [''] : quizIds)
+                              .snapshots(),
+                          builder: (context, resultsSnapshot) {
+                            final docs = resultsSnapshot.data?.docs ?? [];
+                            if (docs.isEmpty) {
+                              return const StatCard(
+                                title: 'Avg Score',
+                                value: '0%',
+                                icon: Icons.trending_up_outlined,
+                                color: AppColors.success,
+                              );
+                            }
 
-                        return StatCard(
-                          title: 'Avg Score',
-                          value: '${avg.toStringAsFixed(0)}%',
-                          icon: Icons.trending_up_outlined,
-                          color: AppColors.success,
+                            final percentages = docs.map((d) {
+                              final data = d.data();
+                              final score =
+                                  (data['score'] as num?)?.toDouble() ?? 0.0;
+                              final totalPoints =
+                                  (data['totalPoints'] as num?)?.toDouble() ??
+                                      0.0;
+                              if (totalPoints <= 0) return 0.0;
+                              return (score / totalPoints) * 100;
+                            }).toList();
+
+                            final avg = percentages.reduce((a, b) => a + b) /
+                                (percentages.isEmpty ? 1 : percentages.length);
+
+                            return StatCard(
+                              title: 'Avg Score',
+                              value: '${avg.toStringAsFixed(0)}%',
+                              icon: Icons.trending_up_outlined,
+                              color: AppColors.success,
+                            );
+                          },
                         );
                       },
                     ),
@@ -368,6 +421,8 @@ class _DashboardHome extends StatelessWidget {
                     child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                       stream: FirebaseFirestore.instance
                           .collection('quizzes')
+                          .where('createdBy',
+                              isEqualTo: FirebaseAuth.instance.currentUser?.uid)
                           .where('isPublished', isEqualTo: true)
                           .snapshots(),
                       builder: (context, snapshot) {
@@ -494,7 +549,8 @@ class _DashboardHome extends StatelessWidget {
                       .where('createdBy', isEqualTo: teacherId)
                       .snapshots(),
                   builder: (context, quizzesSnapshot) {
-                    if (quizzesSnapshot.connectionState == ConnectionState.waiting) {
+                    if (quizzesSnapshot.connectionState ==
+                        ConnectionState.waiting) {
                       return const Padding(
                         padding: EdgeInsets.all(AppConstants.paddingM),
                         child: Center(child: CircularProgressIndicator()),
@@ -502,40 +558,40 @@ class _DashboardHome extends StatelessWidget {
                     }
 
                     final teacherQuizIds = quizzesSnapshot.data?.docs
-                        .map((d) => d.data()['id'] as String? ?? d.id)
-                        .toSet() ?? <String>{};
+                            .map((d) => d.data()['id'] as String? ?? d.id)
+                            .toSet() ??
+                        <String>{};
 
                     if (teacherQuizIds.isEmpty) {
                       return const SizedBox.shrink();
                     }
 
                     final docs = snapshot.data?.docs ?? [];
-                    final activities = docs
-                        .where((d) {
-                          final quizId = (d.data()['quizId'] as String?) ?? '';
-                          return teacherQuizIds.contains(quizId);
-                        })
-                        .map((d) {
-                          final data = d.data();
-                          final quizTitle = (data['quizTitle'] as String?) ?? '';
-                          final quizId = (data['quizId'] as String?) ?? d.id;
-                          final completedAt = _parseFirestoreDate(data['completedAt']);
-                          return {
-                            'title': 'Quiz Submitted',
-                            'subtitle': quizTitle.isNotEmpty
-                                ? 'A student completed $quizTitle'
-                                : 'A student completed quiz $quizId',
-                            'time': _timeAgo(completedAt),
-                            'icon': Icons.assignment_turned_in_outlined,
-                            'color': AppColors.success,
-                            'dt': completedAt,
-                          };
-                        }).toList()
-                          ..sort((a, b) {
-                            final ad = a['dt'] as DateTime;
-                            final bd = b['dt'] as DateTime;
-                            return bd.compareTo(ad);
-                          });
+                    final activities = docs.where((d) {
+                      final quizId = (d.data()['quizId'] as String?) ?? '';
+                      return teacherQuizIds.contains(quizId);
+                    }).map((d) {
+                      final data = d.data();
+                      final quizTitle = (data['quizTitle'] as String?) ?? '';
+                      final quizId = (data['quizId'] as String?) ?? d.id;
+                      final completedAt =
+                          _parseFirestoreDate(data['completedAt']);
+                      return {
+                        'title': 'Quiz Submitted',
+                        'subtitle': quizTitle.isNotEmpty
+                            ? 'A student completed $quizTitle'
+                            : 'A student completed quiz $quizId',
+                        'time': _timeAgo(completedAt),
+                        'icon': Icons.assignment_turned_in_outlined,
+                        'color': AppColors.success,
+                        'dt': completedAt,
+                      };
+                    }).toList()
+                      ..sort((a, b) {
+                        final ad = a['dt'] as DateTime;
+                        final bd = b['dt'] as DateTime;
+                        return bd.compareTo(ad);
+                      });
 
                     if (activities.isEmpty) {
                       return const SizedBox.shrink();
@@ -561,7 +617,8 @@ class _DashboardHome extends StatelessWidget {
               stream: FirebaseFirestore.instance
                   .collection('lessons')
                   .where('isPublished', isEqualTo: true)
-                  .where('createdBy', isEqualTo: FirebaseAuth.instance.currentUser?.uid)
+                  .where('createdBy',
+                      isEqualTo: FirebaseAuth.instance.currentUser?.uid)
                   .snapshots(),
               builder: (context, snapshot) {
                 final docs = snapshot.data?.docs ?? [];
@@ -1118,7 +1175,8 @@ class _StudentsPageState extends State<_StudentsPage> {
       if (studentGrade != null && _teacherSections!.contains(studentGrade)) {
         return true;
       }
-      if (studentSection != null && _teacherSections!.contains(studentSection)) {
+      if (studentSection != null &&
+          _teacherSections!.contains(studentSection)) {
         return true;
       }
       return false;
@@ -1177,7 +1235,7 @@ class _StudentsPageState extends State<_StudentsPage> {
                 final scopeFilteredDocs = docs.where((doc) {
                   return _isStudentInTeacherScope(doc.data());
                 }).toList();
-                
+
                 final filteredDocs = searchTerm.isEmpty
                     ? scopeFilteredDocs
                     : scopeFilteredDocs.where((doc) {
