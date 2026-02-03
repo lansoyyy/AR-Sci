@@ -54,8 +54,6 @@ class AppRoutes {
       studentDashboard: (context) => const StudentDashboard(),
       teacherDashboard: (context) => const TeacherDashboard(),
       adminDashboard: (context) => const AdminDashboard(),
-      lessonDetail: (context) => const LessonDetailScreen(),
-      quizDetail: (context) => const QuizDetailScreen(),
     };
   }
 
@@ -116,14 +114,43 @@ class AppRoutes {
           builder: (context) => const TeacherStudentApprovalScreen(),
         );
 
+      case lessonDetail:
+        final args = settings.arguments;
+        return MaterialPageRoute(
+          builder: (context) {
+            if (args is Map<String, dynamic>) {
+              return LessonDetailScreen(lessonData: args);
+            } else if (args is String) {
+              return LessonDetailScreen(lessonId: args);
+            } else {
+              return const LessonDetailScreen();
+            }
+          },
+        );
+
+      case quizDetail:
+        final args = settings.arguments;
+        return MaterialPageRoute(
+          builder: (context) {
+            if (args is Map<String, dynamic>) {
+              return QuizDetailScreen(quizData: args);
+            } else if (args is String) {
+              return QuizDetailScreen(quizId: args);
+            } else {
+              return const QuizDetailScreen();
+            }
+          },
+        );
+
       case arView:
         final args = settings.arguments as Map<String, dynamic>? ?? {};
         return MaterialPageRoute(
           builder: (context) => ARViewScreen(
             lessonId: args['id'] ?? args['lessonId'] ?? '',
             lessonTitle: args['title'] ?? args['lessonTitle'] ?? 'AR View',
+            arItems: List<String>.from(args['arItems'] ?? []),
+            color: args['color'] as String?,
           ),
-          settings: RouteSettings(arguments: args),
         );
 
       default:

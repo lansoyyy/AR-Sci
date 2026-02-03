@@ -5,11 +5,15 @@ import '../../utils/constants.dart';
 class ARViewScreen extends StatefulWidget {
   final String lessonId;
   final String lessonTitle;
+  final List<String> arItems;
+  final String? color;
 
   const ARViewScreen({
     super.key,
     required this.lessonId,
     required this.lessonTitle,
+    this.arItems = const [],
+    this.color,
   });
 
   @override
@@ -21,35 +25,10 @@ class _ARViewScreenState extends State<ARViewScreen> {
   bool _isPlaying = false;
   bool _labelsVisible = true;
   String _selectedLanguage = 'English';
-  Map<String, dynamic>? _lessonData;
-  List<String>? _arItems;
 
   @override
   void initState() {
     super.initState();
-    _loadLessonData();
-  }
-
-  void _loadLessonData() {
-    // Get lesson arguments passed from navigation
-    final args =
-        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-    if (args != null) {
-      setState(() {
-        _lessonData = args;
-        _arItems = List<String>.from(args['arItems'] ?? []);
-      });
-    } else {
-      // Lesson data should be passed via navigation arguments
-      // If not provided, show empty state
-      setState(() {
-        _lessonData = {
-          'title': widget.lessonTitle,
-          'arItems': <String>[],
-        };
-        _arItems = <String>[];
-      });
-    }
   }
 
   @override
@@ -57,8 +36,8 @@ class _ARViewScreenState extends State<ARViewScreen> {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: Text(_lessonData?['title'] ?? widget.lessonTitle),
-        backgroundColor: _getSubjectColor(_lessonData?['color']),
+        title: Text(widget.lessonTitle),
+        backgroundColor: _getSubjectColor(widget.color),
         actions: [
           IconButton(
             icon: const Icon(Icons.info_outline),
@@ -418,7 +397,7 @@ class _ARViewScreenState extends State<ARViewScreen> {
   }
 
   String _getARModeDescription() {
-    final lessonId = _lessonData?['id'] as String?;
+    final lessonId = widget.lessonId;
     switch (_selectedARMode) {
       case 'simulation':
         if (lessonId == 'g9_volcanoes') {
@@ -473,7 +452,7 @@ class _ARViewScreenState extends State<ARViewScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('${_lessonData?['title'] ?? 'AR'} Instructions'),
+        title: Text('${widget.lessonTitle} Instructions'),
         content: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -504,7 +483,7 @@ class _ARViewScreenState extends State<ARViewScreen> {
                 text: 'Tap labels for more information',
                 color: _getARModeColor(),
               ),
-              if (_arItems != null && _arItems!.isNotEmpty) ...[
+              if (widget.arItems.isNotEmpty) ...[
                 const SizedBox(height: AppConstants.paddingM),
                 const Text(
                   'Available AR Items:',
@@ -514,7 +493,7 @@ class _ARViewScreenState extends State<ARViewScreen> {
                   ),
                 ),
                 const SizedBox(height: AppConstants.paddingS),
-                ..._arItems!.map((item) => Padding(
+                ...widget.arItems.map((item) => Padding(
                       padding: const EdgeInsets.symmetric(vertical: 2),
                       child: Row(
                         children: [

@@ -7,7 +7,14 @@ import '../../utils/constants.dart';
 import '../../models/quiz_model.dart';
 
 class QuizDetailScreen extends StatefulWidget {
-  const QuizDetailScreen({super.key});
+  final Map<String, dynamic>? quizData;
+  final String? quizId;
+
+  const QuizDetailScreen({
+    super.key,
+    this.quizData,
+    this.quizId,
+  });
 
   @override
   State<QuizDetailScreen> createState() => _QuizDetailScreenState();
@@ -24,6 +31,14 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
   Timer? _timer;
   int _score = 0;
   int _totalPoints = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.quizData != null) {
+      _quiz.addAll(widget.quizData!);
+    }
+  }
 
   @override
   void dispose() {
@@ -105,9 +120,10 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
         answers: Map.from(_userAnswers),
         completedAt: DateTime.now(),
         timeTaken: (_quiz['duration'] is int
-                ? _quiz['duration'] as int
-                : int.tryParse((_quiz['duration'] ?? '').toString()) ?? 30) *
-            60 -
+                    ? _quiz['duration'] as int
+                    : int.tryParse((_quiz['duration'] ?? '').toString()) ??
+                        30) *
+                60 -
             _remainingTime,
       );
 
@@ -115,9 +131,9 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
           .collection('quiz_results')
           .doc(result.id)
           .set({
-            ...result.toJson(),
-            'completedAt': FieldValue.serverTimestamp(), // Use server timestamp
-          });
+        ...result.toJson(),
+        'completedAt': FieldValue.serverTimestamp(), // Use server timestamp
+      });
 
       if (!mounted) return;
       setState(() {
@@ -164,10 +180,6 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final args = ModalRoute.of(context)?.settings.arguments;
-    final quiz = args is Map<String, dynamic> ? args : <String, dynamic>{};
-    _quiz.addAll(quiz);
-
     final title = (_quiz['title'] ?? 'Quiz').toString();
     final description = (_quiz['description'] ?? '').toString();
     final subject = (_quiz['subject'] ?? '').toString();
@@ -187,7 +199,8 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
         actions: _isTakingQuiz
             ? [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   decoration: BoxDecoration(
                     color: _remainingTime < 60
                         ? AppColors.error
@@ -196,7 +209,8 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.access_time, size: 18, color: Colors.white),
+                      const Icon(Icons.access_time,
+                          size: 18, color: Colors.white),
                       const SizedBox(width: 4),
                       Text(
                         _formatTime(_remainingTime),
@@ -235,7 +249,7 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
     int duration,
   ) {
     final rawQuestions = _quiz['questions'] as List? ?? const [];
-    
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(AppConstants.paddingL),
       child: Column(
@@ -343,9 +357,8 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
           else
             ...List.generate(rawQuestions.length, (index) {
               final q = rawQuestions[index];
-              final map = q is Map
-                  ? Map<String, dynamic>.from(q)
-                  : <String, dynamic>{};
+              final map =
+                  q is Map ? Map<String, dynamic>.from(q) : <String, dynamic>{};
               final questionText = (map['question'] ?? 'Question').toString();
               return Card(
                 margin: const EdgeInsets.only(bottom: AppConstants.paddingM),
@@ -408,7 +421,8 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
         LinearProgressIndicator(
           value: (_currentQuestionIndex + 1) / rawQuestions.length,
           backgroundColor: AppColors.divider,
-          valueColor: const AlwaysStoppedAnimation<Color>(AppColors.studentPrimary),
+          valueColor:
+              const AlwaysStoppedAnimation<Color>(AppColors.studentPrimary),
         ),
         // Question counter
         Padding(
@@ -466,7 +480,8 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       side: const BorderSide(color: AppColors.studentPrimary),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(AppConstants.radiusM),
+                        borderRadius:
+                            BorderRadius.circular(AppConstants.radiusM),
                       ),
                     ),
                     child: const Text('Previous'),
@@ -529,7 +544,8 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
         );
 
       case 'fillInBlank':
-        final controller = TextEditingController(text: userAnswer?.toString() ?? '');
+        final controller =
+            TextEditingController(text: userAnswer?.toString() ?? '');
         return TextField(
           controller: controller,
           onChanged: (value) => _selectAnswer(questionId, value.trim()),
@@ -575,7 +591,8 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
         decoration: BoxDecoration(
           color: isSelected ? AppColors.studentPrimary.withOpacity(0.1) : null,
           border: Border.all(
-            color: isSelected ? AppColors.studentPrimary : AppColors.borderLight,
+            color:
+                isSelected ? AppColors.studentPrimary : AppColors.borderLight,
             width: isSelected ? 2 : 1,
           ),
           borderRadius: BorderRadius.circular(AppConstants.radiusM),
@@ -588,7 +605,9 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: isSelected ? AppColors.studentPrimary : AppColors.textSecondary,
+                  color: isSelected
+                      ? AppColors.studentPrimary
+                      : AppColors.textSecondary,
                   width: 2,
                 ),
                 color: isSelected ? AppColors.studentPrimary : null,
@@ -631,7 +650,9 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
               height: 150,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: passed ? AppColors.success.withOpacity(0.1) : AppColors.error.withOpacity(0.1),
+                color: passed
+                    ? AppColors.success.withOpacity(0.1)
+                    : AppColors.error.withOpacity(0.1),
               ),
               child: Center(
                 child: Column(

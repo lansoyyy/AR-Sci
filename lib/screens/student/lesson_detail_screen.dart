@@ -6,7 +6,14 @@ import '../../utils/constants.dart';
 import '../../widgets/custom_button.dart';
 
 class LessonDetailScreen extends StatefulWidget {
-  const LessonDetailScreen({super.key});
+  final Map<String, dynamic>? lessonData;
+  final String? lessonId;
+
+  const LessonDetailScreen({
+    super.key,
+    this.lessonData,
+    this.lessonId,
+  });
 
   @override
   State<LessonDetailScreen> createState() => _LessonDetailScreenState();
@@ -33,16 +40,16 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
 
   Future<void> _loadLessonData() async {
     try {
-      final args = ModalRoute.of(context)?.settings.arguments;
       Map<String, dynamic> lessonData;
 
-      if (args is Map<String, dynamic>) {
-        lessonData = args;
-      } else if (args is String) {
+      // Use lessonData if provided directly
+      if (widget.lessonData != null) {
+        lessonData = widget.lessonData!;
+      } else if (widget.lessonId != null) {
         // Fetch lesson from Firestore by ID
         final doc = await FirebaseFirestore.instance
             .collection('lessons')
-            .doc(args)
+            .doc(widget.lessonId)
             .get();
         if (doc.exists) {
           lessonData = doc.data() ?? {};
@@ -255,8 +262,9 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
       );
     }
 
-    final contentText =
-        _lesson['content'] is String ? (_lesson['content'] as String).trim() : '';
+    final contentText = _lesson['content'] is String
+        ? (_lesson['content'] as String).trim()
+        : '';
     final Color subjectColor = _getSubjectColor(
       _lesson['color'] ?? _subjectToColorName(_lesson['subject']),
     );
@@ -500,7 +508,8 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                       Expanded(
                         child: OutlinedButton(
                           onPressed: () {
-                            final newProgress = (_progress + 0.25).clamp(0.0, 1.0);
+                            final newProgress =
+                                (_progress + 0.25).clamp(0.0, 1.0);
                             _saveProgress(newProgress);
                           },
                           style: OutlinedButton.styleFrom(
