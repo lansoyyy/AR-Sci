@@ -1,6 +1,10 @@
+import 'dart:io';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../utils/colors.dart';
 import '../../utils/constants.dart';
@@ -16,6 +20,7 @@ class AdminCreateLessonScreen extends StatefulWidget {
 
 class _AdminCreateLessonScreenState extends State<AdminCreateLessonScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _imagePicker = ImagePicker();
 
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
@@ -32,6 +37,10 @@ class _AdminCreateLessonScreenState extends State<AdminCreateLessonScreen> {
   DateTime? _availableFrom;
   DateTime? _availableTo;
 
+  // Image upload fields
+  final List<XFile> _selectedImages = [];
+  bool _isUploadingImages = false;
+
   Future<void> _saveLesson() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -43,6 +52,9 @@ class _AdminCreateLessonScreenState extends State<AdminCreateLessonScreen> {
       final docRef = FirebaseFirestore.instance.collection('lessons').doc();
       final lessonId = docRef.id;
 
+      // Upload images to Firebase Storage
+      final imageUrls = await _uploadImages(lessonId);
+
       final payload = <String, dynamic>{
         'id': lessonId,
         'title': _titleController.text.trim(),
@@ -52,7 +64,7 @@ class _AdminCreateLessonScreenState extends State<AdminCreateLessonScreen> {
         'quarter': _selectedQuarter,
         'color': _subjectToColorName(_selectedSubject),
         'content': _contentController.text.trim(),
-        'imageUrls': <String>[],
+        'imageUrls': imageUrls,
         'videoUrls': <String>[],
         'arItems': <String>[],
         'createdAt': FieldValue.serverTimestamp(),
@@ -87,6 +99,63 @@ class _AdminCreateLessonScreenState extends State<AdminCreateLessonScreen> {
         SnackBar(content: Text('Failed to create lesson. $message')),
       );
     }
+  }
+
+  Future<List<String>> _uploadImages(String lessonId) async {
+    if (_selectedImages.isEmpty) return [];
+
+    final imageUrls = <String>[];
+    final storageRef =
+        FirebaseStorage.instance.ref().child('lessons/$lessonId');
+
+    for (int i = 0; i < _selectedImages.length; i++) {
+      final image = _selectedImages[i];
+      final fileRef = storageRef
+          .child('image_${DateTime.now().millisecondsSinceEpoch}_$i.jpg');
+
+      try {
+        final file = File(image.path);
+        await fileRef.putFile(
+          file,
+          SettableMetadata(contentType: 'image/jpeg'),
+        );
+        final url = await fileRef.getDownloadURL();
+        imageUrls.add(url);
+      } catch (e) {
+        debugPrint('Failed to upload image $i: $e');
+      }
+    }
+
+    return imageUrls;
+  }
+
+  Future<void> _pickImages() async {
+    try {
+      final List<XFile> images = await _imagePicker.pickMultiImage(
+        imageQuality: 85,
+        maxWidth: 1920,
+        maxHeight: 1080,
+      );
+
+      if (images.isNotEmpty) {
+        setState(() {
+          _selectedImages.addAll(images);
+        });
+      }
+    } catch (e) {
+      debugPrint('Failed to pick images: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to pick images: $e')),
+        );
+      }
+    }
+  }
+
+  void _removeImage(int index) {
+    setState(() {
+      _selectedImages.removeAt(index);
+    });
   }
 
   @override
@@ -197,7 +266,144 @@ class _AdminCreateLessonScreenState extends State<AdminCreateLessonScreen> {
                 maxLines: 8,
               ),
               const SizedBox(height: AppConstants.paddingL),
-              
+
+              // Image Upload Section
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(AppConstants.paddingM),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Lesson Images',
+                            style: TextStyle(
+                              fontSize: AppConstants.fontL,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          if (_selectedImages.isNotEmpty)
+                            Text(
+                              '${_selectedImages.length} selected',
+                              style: TextStyle(
+                                fontSize: AppConstants.fontS,
+                                color: AppColors.textLight,
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: AppConstants.paddingM),
+                      if (_selectedImages.isEmpty)
+                        InkWell(
+                          onTap: _pickImages,
+                          borderRadius:
+                              BorderRadius.circular(AppConstants.radiusM),
+                          child: Container(
+                            height: 150,
+                            decoration: BoxDecoration(
+                              border: Border.all(
+                                color: AppColors.textLight.withOpacity(0.5),
+                                style: BorderStyle.solid,
+                              ),
+                              borderRadius:
+                                  BorderRadius.circular(AppConstants.radiusM),
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.add_photo_alternate_outlined,
+                                  size: 48,
+                                  color: AppColors.textLight.withOpacity(0.7),
+                                ),
+                                const SizedBox(height: AppConstants.paddingS),
+                                Text(
+                                  'Tap to add images',
+                                  style: TextStyle(
+                                    color: AppColors.textLight.withOpacity(0.7),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                      else
+                        Column(
+                          children: [
+                            Wrap(
+                              spacing: AppConstants.paddingS,
+                              runSpacing: AppConstants.paddingS,
+                              children: List.generate(
+                                _selectedImages.length,
+                                (index) => Stack(
+                                  children: [
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(
+                                          AppConstants.radiusM),
+                                      child: Image.file(
+                                        File(_selectedImages[index].path),
+                                        width: 100,
+                                        height: 100,
+                                        fit: BoxFit.cover,
+                                        errorBuilder:
+                                            (context, error, stackTrace) {
+                                          return Container(
+                                            width: 100,
+                                            height: 100,
+                                            color: AppColors.textLight
+                                                .withOpacity(0.2),
+                                            child: const Icon(
+                                              Icons.broken_image,
+                                              color: AppColors.textLight,
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                    Positioned(
+                                      top: 4,
+                                      right: 4,
+                                      child: GestureDetector(
+                                        onTap: () => _removeImage(index),
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            color: Colors.black54,
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: const Icon(
+                                            Icons.close,
+                                            color: AppColors.textWhite,
+                                            size: 20,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: AppConstants.paddingM),
+                            ElevatedButton.icon(
+                              onPressed: _pickImages,
+                              icon: const Icon(
+                                  Icons.add_photo_alternate_outlined),
+                              label: const Text('Add More Images'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor:
+                                    AppColors.adminPrimary.withOpacity(0.8),
+                                foregroundColor: AppColors.textWhite,
+                              ),
+                            ),
+                          ],
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppConstants.paddingL),
+
               // Assignment and Scheduling section
               Card(
                 child: Padding(
@@ -217,7 +423,8 @@ class _AdminCreateLessonScreenState extends State<AdminCreateLessonScreen> {
                         spacing: AppConstants.paddingS,
                         runSpacing: AppConstants.paddingS,
                         children: AppConstants.studentSections.map((section) {
-                          final isSelected = _selectedAssignedSections.contains(section);
+                          final isSelected =
+                              _selectedAssignedSections.contains(section);
                           return FilterChip(
                             label: Text(section),
                             selected: isSelected,
@@ -261,10 +468,12 @@ class _AdminCreateLessonScreenState extends State<AdminCreateLessonScreen> {
                         child: InputDecorator(
                           decoration: InputDecoration(
                             labelText: 'Available From',
-                            prefixIcon: const Icon(Icons.calendar_today_outlined),
+                            prefixIcon:
+                                const Icon(Icons.calendar_today_outlined),
                             suffixIcon: const Icon(Icons.arrow_drop_down),
                             border: OutlineInputBorder(
-                              borderSide: BorderSide(color: AppColors.textLight),
+                              borderSide:
+                                  BorderSide(color: AppColors.textLight),
                             ),
                           ),
                           child: Text(
@@ -279,7 +488,8 @@ class _AdminCreateLessonScreenState extends State<AdminCreateLessonScreen> {
                         onTap: () async {
                           final picked = await showDatePicker(
                             context: context,
-                            initialDate: _availableTo ?? DateTime.now().add(const Duration(days: 7)),
+                            initialDate: _availableTo ??
+                                DateTime.now().add(const Duration(days: 7)),
                             firstDate: _availableFrom ?? DateTime.now(),
                             lastDate: DateTime(2100),
                           );
@@ -293,7 +503,8 @@ class _AdminCreateLessonScreenState extends State<AdminCreateLessonScreen> {
                             prefixIcon: const Icon(Icons.event_outlined),
                             suffixIcon: const Icon(Icons.arrow_drop_down),
                             border: OutlineInputBorder(
-                              borderSide: BorderSide(color: AppColors.textLight),
+                              borderSide:
+                                  BorderSide(color: AppColors.textLight),
                             ),
                           ),
                           child: Text(
