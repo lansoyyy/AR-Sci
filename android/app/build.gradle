@@ -8,6 +8,7 @@ plugins {
 // Add multidex dependency for older Android versions
 dependencies {
     implementation 'androidx.multidex:multidex:2.0.1'
+    implementation 'androidx.core:core-viewtree:1.0.0'
 }
 
 android {
@@ -29,7 +30,7 @@ android {
         applicationId = "com.example.ar_sci"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = 23  // Firebase Auth requires Android 6.0+
+        minSdk = 24  // Firebase Auth requires Android 6.0+
         targetSdk = 34
         versionCode = flutter.versionCode
         versionName = flutter.versionName
