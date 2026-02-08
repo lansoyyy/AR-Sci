@@ -173,9 +173,9 @@ class _PendingVerificationScreenState extends State<PendingVerificationScreen> {
                         const SizedBox(height: AppConstants.paddingM),
                         _StepRow(
                           index: '1',
-                          title: 'Wait for admin approval',
+                          title: 'Wait for approval',
                           description:
-                              'An admin will review your account details.',
+                              'An admin or teacher will review your account details.',
                           color: _roleColor,
                         ),
                         const SizedBox(height: AppConstants.paddingM),

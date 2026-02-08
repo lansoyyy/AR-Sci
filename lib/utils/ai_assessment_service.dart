@@ -124,7 +124,7 @@ class AiAssessmentService {
     }
 
     final apiKey = const String.fromEnvironment(
-      'TOGETHER_API_KEY',
+      'tgp_v1_onFMvvKE406HiInIX9ZxmQtZB-xk1uTumlxUHlFUxJc',
       defaultValue: '',
     );
 
