@@ -509,6 +509,37 @@ class _DashboardHome extends StatelessWidget {
               },
             ),
 
+            FeatureCard(
+              title: 'My Analytics',
+              description: 'View lesson engagement & quiz performance trends',
+              icon: Icons.analytics_outlined,
+              iconColor: AppColors.info,
+              onTap: () {
+                Navigator.pushNamed(context, '/teacher-analytics');
+              },
+            ),
+
+            FeatureCard(
+              title: 'Download Reports',
+              description:
+                  'Export lesson summaries and student progress reports',
+              icon: Icons.picture_as_pdf_outlined,
+              iconColor: AppColors.error,
+              onTap: () {
+                Navigator.pushNamed(context, '/teacher-reports');
+              },
+            ),
+
+            FeatureCard(
+              title: 'Send Announcements',
+              description: 'Communicate with your students',
+              icon: Icons.campaign_outlined,
+              iconColor: AppColors.secondary,
+              onTap: () {
+                Navigator.pushNamed(context, '/teacher-announcements');
+              },
+            ),
+
             const SizedBox(height: AppConstants.paddingXL),
 
             // Recent Activity

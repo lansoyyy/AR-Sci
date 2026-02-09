@@ -47,6 +47,8 @@ class AppColors {
   static const Color biology = Color(0xFFFF3B30); // Red for biology
   static const Color physics = Color(0xFF007AFF); // Blue for physics
   static const Color chemistry = Color(0xFF32D74B); // Green for chemistry
+  static const Color earthScience =
+      Color(0xFF8B4513); // Brown for earth science
 
   // Role-specific Colors - Enhanced science theme
   static const Color studentPrimary = Color(0xFF007AFF); // Bright Blue

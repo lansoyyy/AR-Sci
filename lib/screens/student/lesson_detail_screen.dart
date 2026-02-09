@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+import 'package:intl/intl.dart';
 import '../../utils/colors.dart';
 import '../../utils/constants.dart';
 import '../../widgets/custom_button.dart';
@@ -22,7 +26,106 @@ class LessonDetailScreen extends StatefulWidget {
 class _LessonDetailScreenState extends State<LessonDetailScreen> {
   Map<String, dynamic> _lesson = {};
   bool _isLoading = true;
+  bool _isDownloading = false;
   bool _isBookmarked = false;
+
+  Future<void> _downloadLessonPDF() async {
+    setState(() => _isDownloading = true);
+
+    try {
+      final pdf = pw.Document();
+      final now = DateTime.now();
+      final dateFormat = DateFormat('MMMM dd, yyyy');
+
+      pdf.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4,
+          header: (context) => pw.Container(
+            alignment: pw.Alignment.center,
+            margin: const pw.EdgeInsets.only(bottom: 20),
+            child: pw.Column(
+              children: [
+                pw.Text('AR Fusion',
+                    style: pw.TextStyle(
+                        fontSize: 24, fontWeight: pw.FontWeight.bold)),
+                pw.Text('Lesson Notes', style: pw.TextStyle(fontSize: 18)),
+                pw.Text('Downloaded: ${dateFormat.format(now)}'),
+                pw.Divider(),
+              ],
+            ),
+          ),
+          footer: (context) => pw.Container(
+            alignment: pw.Alignment.centerRight,
+            margin: const pw.EdgeInsets.only(top: 10),
+            child: pw.Text(
+                'AR Fusion - Step into the future of science learning',
+                style: pw.TextStyle(fontSize: 10, color: PdfColors.grey)),
+          ),
+          build: (context) => [
+            pw.Text(
+              _lesson['title'] ?? 'Lesson',
+              style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold),
+            ),
+            pw.SizedBox(height: 10),
+            pw.Row(
+              children: [
+                pw.Text('Subject: ${_lesson['subject'] ?? 'N/A'}'),
+                pw.SizedBox(width: 20),
+                pw.Text(
+                    'Grade: ${_lesson['gradeLevel'] ?? _lesson['grade'] ?? 'N/A'}'),
+              ],
+            ),
+            pw.SizedBox(height: 20),
+            pw.Text(
+              'Description',
+              style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
+            ),
+            pw.SizedBox(height: 10),
+            pw.Text(_lesson['description'] ?? ''),
+            pw.SizedBox(height: 20),
+            if ((_lesson['content'] ?? '').toString().isNotEmpty) ...[
+              pw.Text(
+                'Lesson Content',
+                style:
+                    pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
+              ),
+              pw.SizedBox(height: 10),
+              pw.Text(_lesson['content'].toString()),
+            ],
+            pw.SizedBox(height: 30),
+            pw.Text(
+              'Notes',
+              style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
+            ),
+            pw.SizedBox(height: 10),
+            pw.Container(
+              height: 100,
+              decoration: pw.BoxDecoration(border: pw.Border.all()),
+              padding: const pw.EdgeInsets.all(8),
+              child: pw.Text('Add your notes here...'),
+            ),
+          ],
+        ),
+      );
+
+      await Printing.layoutPdf(
+        onLayout: (PdfPageFormat format) async => pdf.save(),
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('PDF downloaded successfully!')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error downloading PDF: $e')),
+      );
+    } finally {
+      setState(() => _isDownloading = false);
+    }
+  }
+
   double _progress = 0.0;
   final TextEditingController _noteController = TextEditingController();
 
@@ -279,6 +382,18 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
           IconButton(
             icon: Icon(_isBookmarked ? Icons.bookmark : Icons.bookmark_outline),
             onPressed: _toggleBookmark,
+          ),
+          IconButton(
+            icon: _isDownloading
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white),
+                  )
+                : const Icon(Icons.download),
+            onPressed: _isDownloading ? null : _downloadLessonPDF,
+            tooltip: 'Download PDF',
           ),
         ],
       ),

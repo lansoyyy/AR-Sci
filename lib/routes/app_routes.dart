@@ -16,10 +16,16 @@ import '../screens/student/ar_view_screen.dart';
 import '../screens/teacher/teacher_dashboard.dart';
 import '../screens/teacher/student_approval_screen.dart';
 import '../screens/teacher/score_reports_screen.dart';
+import '../screens/teacher/teacher_reports_screen.dart';
+import '../screens/teacher/teacher_announcements_screen.dart';
+import '../screens/teacher/teacher_analytics_screen.dart';
 import '../screens/admin/admin_dashboard.dart';
 import '../screens/admin/admin_create_lesson_screen.dart';
 import '../screens/admin/admin_create_quiz_screen.dart';
 import '../screens/admin/account_verification_screen.dart';
+import '../screens/admin/admin_analytics_screen.dart';
+import '../screens/admin/admin_reports_screen.dart';
+import '../screens/admin/admin_announcements_screen.dart';
 
 class AppRoutes {
   static const String splash = '/';
@@ -43,12 +49,18 @@ class AppRoutes {
   static const String teacherDashboard = '/teacher-dashboard';
   static const String teacherScoreReports = '/teacher-score-reports';
   static const String teacherApproveStudents = '/teacher-approve-students';
+  static const String teacherReports = '/teacher-reports';
+  static const String teacherAnnouncements = '/teacher-announcements';
+  static const String teacherAnalytics = '/teacher-analytics';
 
   // Admin Routes
   static const String adminDashboard = '/admin-dashboard';
   static const String adminVerifyAccounts = '/admin-verify-accounts';
   static const String adminCreateLesson = '/admin-create-lesson';
   static const String adminCreateQuiz = '/admin-create-quiz';
+  static const String adminAnalytics = '/admin-analytics';
+  static const String adminReports = '/admin-reports';
+  static const String adminAnnouncements = '/admin-announcements';
 
   static Map<String, WidgetBuilder> getRoutes() {
     return {
@@ -120,6 +132,21 @@ class AppRoutes {
           builder: (context) => const AdminCreateQuizScreen(),
         );
 
+      case adminAnalytics:
+        return MaterialPageRoute(
+          builder: (context) => const AdminAnalyticsScreen(),
+        );
+
+      case adminReports:
+        return MaterialPageRoute(
+          builder: (context) => const AdminReportsScreen(),
+        );
+
+      case adminAnnouncements:
+        return MaterialPageRoute(
+          builder: (context) => const AdminAnnouncementsScreen(),
+        );
+
       case teacherScoreReports:
         return MaterialPageRoute(
           builder: (context) => const TeacherScoreReportsScreen(),
@@ -128,6 +155,21 @@ class AppRoutes {
       case teacherApproveStudents:
         return MaterialPageRoute(
           builder: (context) => const TeacherStudentApprovalScreen(),
+        );
+
+      case teacherReports:
+        return MaterialPageRoute(
+          builder: (context) => const TeacherReportsScreen(),
+        );
+
+      case teacherAnnouncements:
+        return MaterialPageRoute(
+          builder: (context) => const TeacherAnnouncementsScreen(),
+        );
+
+      case teacherAnalytics:
+        return MaterialPageRoute(
+          builder: (context) => const TeacherAnalyticsScreen(),
         );
 
       case lessonDetail:

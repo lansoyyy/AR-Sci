@@ -289,7 +289,8 @@ class _DashboardHomeState extends State<_DashboardHome> {
 
             // User Distribution - Real-time from Firestore
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingM),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: AppConstants.paddingM),
               child: const Text(
                 'User Distribution',
                 style: TextStyle(
@@ -313,11 +314,11 @@ class _DashboardHomeState extends State<_DashboardHome> {
                   builder: (context, snapshot) {
                     final docs = snapshot.data?.docs ?? [];
                     final totalUsers = docs.length;
-                    
+
                     int studentCount = 0;
                     int teacherCount = 0;
                     int adminCount = 0;
-                    
+
                     for (final doc in docs) {
                       final role = doc.data()['role'] as String? ?? '';
                       switch (role) {
@@ -332,7 +333,7 @@ class _DashboardHomeState extends State<_DashboardHome> {
                           break;
                       }
                     }
-                    
+
                     return Column(
                       children: [
                         _UserDistributionRow(
@@ -420,6 +421,36 @@ class _DashboardHomeState extends State<_DashboardHome> {
               },
             ),
 
+            FeatureCard(
+              title: 'Analytics Dashboard',
+              description: 'View user stats, engagement & performance trends',
+              icon: Icons.analytics_outlined,
+              iconColor: AppColors.info,
+              onTap: () {
+                Navigator.pushNamed(context, '/admin-analytics');
+              },
+            ),
+
+            FeatureCard(
+              title: 'Reports & PDF Export',
+              description: 'Download lesson summaries and system reports',
+              icon: Icons.picture_as_pdf_outlined,
+              iconColor: AppColors.error,
+              onTap: () {
+                Navigator.pushNamed(context, '/admin-reports');
+              },
+            ),
+
+            FeatureCard(
+              title: 'Global Announcements',
+              description: 'Send notifications to all users',
+              icon: Icons.campaign_outlined,
+              iconColor: AppColors.secondary,
+              onTap: () {
+                Navigator.pushNamed(context, '/admin-announcements');
+              },
+            ),
+
             const SizedBox(height: AppConstants.paddingL),
           ],
         ),
@@ -499,7 +530,7 @@ class _UserManagementState extends State<_UserManagement> {
           .collection('users')
           .doc(userId)
           .get();
-      
+
       final userData = userDoc.data();
       final userName = userData?['name'] as String? ?? '';
       final userRole = userData?['role'] as String? ?? '';
@@ -1305,9 +1336,9 @@ class _SettingsPageState extends State<_SettingsPage> {
             .collection('app_config')
             .doc('current')
             .set({
-              'academicYear': '2025-2026',
-              'updatedAt': FieldValue.serverTimestamp(),
-            });
+          'academicYear': '2025-2026',
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
         _academicYearController.text = '2025-2026';
       }
 
@@ -1328,9 +1359,9 @@ class _SettingsPageState extends State<_SettingsPage> {
           .collection('app_config')
           .doc('current')
           .update({
-            'academicYear': _academicYearController.text.trim(),
-            'updatedAt': FieldValue.serverTimestamp(),
-          });
+        'academicYear': _academicYearController.text.trim(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
 
       if (!mounted) return;
       setState(() => _isSaving = false);
