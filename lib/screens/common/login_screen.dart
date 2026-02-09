@@ -54,6 +54,17 @@ class _LoginScreenState extends State<LoginScreen> {
       final email = _emailController.text.trim();
       final password = _passwordController.text.trim();
 
+      // Hardcoded admin account check
+      if (widget.role == 'admin' &&
+          email == 'admin@icct.edu.ph' &&
+          password == 'Admin1234!') {
+        // Simulate admin login without Firebase Auth
+        if (!mounted) return;
+        setState(() => _isLoading = false);
+        Navigator.pushReplacementNamed(context, '/admin-dashboard');
+        return;
+      }
+
       try {
         // Firebase Auth for all roles (students, teachers, and admins)
         final credential =
@@ -281,21 +292,22 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   const SizedBox(height: AppConstants.paddingM),
 
-                  // Forgot Password
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton(
-                      onPressed: () {
-                        Navigator.pushNamed(context, '/forgot-password');
-                      },
-                      child: Text(
-                        'Forgot Password?',
-                        style: TextStyle(color: _roleColor),
-                      ),
-                    ),
-                  ),
+                  // Forgot Password - disabled for admin
+                  // if (widget.role != 'admin')
+                  //   Align(
+                  //     alignment: Alignment.centerRight,
+                  //     child: TextButton(
+                  //       onPressed: () {
+                  //         Navigator.pushNamed(context, '/forgot-password');
+                  //       },
+                  //       child: Text(
+                  //         'Forgot Password?',
+                  //         style: TextStyle(color: _roleColor),
+                  //       ),
+                  //     ),
+                  //   ),
 
-                  const SizedBox(height: AppConstants.paddingL),
+                  // const SizedBox(height: AppConstants.paddingL),
 
                   // Login Button
                   CustomButton(

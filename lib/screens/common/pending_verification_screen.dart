@@ -147,7 +147,7 @@ class _PendingVerificationScreenState extends State<PendingVerificationScreen> {
                 ),
                 const SizedBox(height: AppConstants.paddingM),
                 const Text(
-                  'Your account was created successfully, but an administrator must verify it before you can access the app.',
+                  'Your account was created successfully, but a teacher or administrator must verify it before you can access the app.',
                   style: TextStyle(
                     fontSize: AppConstants.fontL,
                     color: AppColors.textSecondary,
@@ -173,9 +173,9 @@ class _PendingVerificationScreenState extends State<PendingVerificationScreen> {
                         const SizedBox(height: AppConstants.paddingM),
                         _StepRow(
                           index: '1',
-                          title: 'Wait for admin approval',
+                          title: 'Wait for approval',
                           description:
-                              'An admin will review your account details.',
+                              'An admin or teacher will review your account details.',
                           color: _roleColor,
                         ),
                         const SizedBox(height: AppConstants.paddingM),

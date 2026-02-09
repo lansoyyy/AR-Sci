@@ -212,6 +212,42 @@ class _AccountVerificationScreenState extends State<AccountVerificationScreen> {
                   return const Center(child: CircularProgressIndicator());
                 }
 
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(AppConstants.paddingL),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            Icons.error_outline,
+                            size: 48,
+                            color: AppColors.error,
+                          ),
+                          const SizedBox(height: AppConstants.paddingM),
+                          Text(
+                            'Error loading accounts',
+                            style: TextStyle(
+                              fontSize: AppConstants.fontL,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: AppConstants.paddingS),
+                          Text(
+                            '${snapshot.error}',
+                            style: const TextStyle(
+                              fontSize: AppConstants.fontM,
+                              color: AppColors.textSecondary,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
                 final allDocs = snapshot.data?.docs ?? [];
                 final docs = _selectedRoleFilter == 'all'
                     ? allDocs
