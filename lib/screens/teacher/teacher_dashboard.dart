@@ -486,28 +486,28 @@ class _DashboardHome extends StatelessWidget {
               },
             ),
 
-            // StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-            //   stream: FirebaseFirestore.instance
-            //       .collection('users')
-            //       .where('role', isEqualTo: 'student')
-            //       .where('verified', isEqualTo: false)
-            //       .snapshots(),
-            //   builder: (context, snapshot) {
-            //     final pending = snapshot.data?.docs.length ?? 0;
-            //     final suffix = pending == 0
-            //         ? 'No pending registrations'
-            //         : '$pending pending registrations';
-            //     return FeatureCard(
-            //       title: 'Approve Students',
-            //       description: suffix,
-            //       icon: Icons.verified_outlined,
-            //       iconColor: AppColors.success,
-            //       onTap: () {
-            //         Navigator.pushNamed(context, '/teacher-approve-students');
-            //       },
-            //     );
-            //   },
-            // ),
+            StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: FirebaseFirestore.instance
+                  .collection('users')
+                  .where('role', isEqualTo: 'student')
+                  .where('verified', isEqualTo: false)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                final pending = snapshot.data?.docs.length ?? 0;
+                final suffix = pending == 0
+                    ? 'No pending registrations'
+                    : '$pending pending registrations';
+                return FeatureCard(
+                  title: 'Approve Students',
+                  description: suffix,
+                  icon: Icons.verified_outlined,
+                  iconColor: AppColors.success,
+                  onTap: () {
+                    Navigator.pushNamed(context, '/teacher-approve-students');
+                  },
+                );
+              },
+            ),
 
             const SizedBox(height: AppConstants.paddingXL),
 

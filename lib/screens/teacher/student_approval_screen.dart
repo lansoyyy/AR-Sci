@@ -300,6 +300,42 @@ class _TeacherStudentApprovalScreenState
                   return const Center(child: CircularProgressIndicator());
                 }
 
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(AppConstants.paddingL),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            Icons.error_outline,
+                            size: 48,
+                            color: AppColors.error,
+                          ),
+                          const SizedBox(height: AppConstants.paddingM),
+                          Text(
+                            'Error loading students',
+                            style: TextStyle(
+                              fontSize: AppConstants.fontL,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: AppConstants.paddingS),
+                          Text(
+                            '${snapshot.error}',
+                            style: const TextStyle(
+                              fontSize: AppConstants.fontM,
+                              color: AppColors.textSecondary,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
                 final docs = snapshot.data?.docs ?? [];
                 final scopeFilteredDocs = docs.where((doc) {
                   return _isStudentInTeacherScope(doc.data());

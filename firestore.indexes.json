@@ -129,6 +129,16 @@
       "queryScope": "COLLECTION",
       "fields": [
         {
+          "fieldPath": "verified",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
           "fieldPath": "role",
           "order": "ASCENDING"
         },

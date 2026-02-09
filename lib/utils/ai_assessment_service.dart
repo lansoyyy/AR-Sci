@@ -125,7 +125,7 @@ class AiAssessmentService {
 
     final apiKey = const String.fromEnvironment(
       'tgp_v1_onFMvvKE406HiInIX9ZxmQtZB-xk1uTumlxUHlFUxJc',
-      defaultValue: '',
+      defaultValue: 'tgp_v1_onFMvvKE406HiInIX9ZxmQtZB-xk1uTumlxUHlFUxJc',
     );
 
     if (apiKey.trim().isEmpty) {
