@@ -7,6 +7,8 @@ import '../screens/common/profile_screen.dart';
 import '../screens/common/notifications_screen.dart';
 import '../screens/common/forgot_password_screen.dart';
 import '../screens/common/pending_verification_screen.dart';
+import '../screens/common/settings_screen.dart';
+import '../screens/common/help_screen.dart';
 import '../screens/student/student_dashboard.dart';
 import '../screens/student/lesson_detail_screen.dart';
 import '../screens/student/quiz_detail_screen.dart';
@@ -28,6 +30,8 @@ class AppRoutes {
   static const String profile = '/profile';
   static const String notifications = '/notifications';
   static const String pendingVerification = '/pending-verification';
+  static const String appSettings = '/settings';
+  static const String help = '/help';
 
   // Student Routes
   static const String studentDashboard = '/student-dashboard';
@@ -75,6 +79,18 @@ class AppRoutes {
         final role = settings.arguments as String? ?? 'student';
         return MaterialPageRoute(
           builder: (context) => ProfileScreen(role: role),
+        );
+
+      case appSettings:
+        final role = settings.arguments as String? ?? 'student';
+        return MaterialPageRoute(
+          builder: (context) => SettingsScreen(role: role),
+        );
+
+      case help:
+        final role = settings.arguments as String?;
+        return MaterialPageRoute(
+          builder: (context) => HelpScreen(role: role),
         );
 
       case notifications:

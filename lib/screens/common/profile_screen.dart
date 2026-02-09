@@ -126,7 +126,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (currentUser == null) return;
 
       final file = File(pickedFile.path);
-      final fileName = 'profile_${currentUser.uid}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final fileName =
+          'profile_${currentUser.uid}_${DateTime.now().millisecondsSinceEpoch}.jpg';
       final storageRef = FirebaseStorage.instance
           .ref()
           .child('profile_photos')
@@ -200,7 +201,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
         final subjectText = _subjectController.text.trim();
         if (subjectText.isNotEmpty) {
           // Check if it's a comma-separated list or single subject
-          final subjectList = subjectText.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+          final subjectList = subjectText
+              .split(',')
+              .map((s) => s.trim())
+              .where((s) => s.isNotEmpty)
+              .toList();
           if (subjectList.length == 1) {
             // Single subject - store in both subject and subjects
             subject = subjectList.first;
@@ -217,7 +222,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         await currentUser.verifyBeforeUpdateEmail(newEmail);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('A verification email has been sent to your new email address. Please verify it to complete the change.'),
+            content: Text(
+                'A verification email has been sent to your new email address. Please verify it to complete the change.'),
             duration: Duration(seconds: 5),
           ),
         );
@@ -352,14 +358,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
               if (newPassword.length < 8) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Password must be at least 8 characters')),
+                  const SnackBar(
+                      content: Text('Password must be at least 8 characters')),
                 );
                 return;
               }
 
               if (!RegExp(r'(?=.*[A-Za-z])(?=.*\d)').hasMatch(newPassword)) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Password must contain both letters and numbers')),
+                  const SnackBar(
+                      content: Text(
+                          'Password must contain both letters and numbers')),
                 );
                 return;
               }
@@ -391,11 +400,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 if (!mounted) return;
                 Navigator.pop(context, true);
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Password changed successfully')),
+                  const SnackBar(
+                      content: Text('Password changed successfully')),
                 );
               } on FirebaseAuthException catch (e) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(e.message ?? 'Failed to change password')),
+                  SnackBar(
+                      content: Text(e.message ?? 'Failed to change password')),
                 );
               }
             },
@@ -494,7 +505,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             width: 4,
                           ),
                         ),
-                        child: _profilePhotoUrl != null && _profilePhotoUrl!.isNotEmpty
+                        child: _profilePhotoUrl != null &&
+                                _profilePhotoUrl!.isNotEmpty
                             ? ClipOval(
                                 child: Image.network(
                                   _profilePhotoUrl!,
@@ -548,7 +560,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     ),
                                   )
                                 : IconButton(
-                                    icon: Icon(Icons.camera_alt, color: _roleColor),
+                                    icon: Icon(Icons.camera_alt,
+                                        color: _roleColor),
                                     onPressed: _pickAndUploadPhoto,
                                   ),
                           ),
@@ -662,11 +675,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             decoration: const InputDecoration(
                               labelText: 'Subject(s)',
                               prefixIcon: Icon(Icons.book_outlined),
-                              helperText: 'Enter one or more subjects separated by commas',
+                              helperText:
+                                  'Enter one or more subjects separated by commas',
                             ),
                           ),
                           const SizedBox(height: AppConstants.paddingL),
-                          
+
                           // Sections Handled (Optional for teachers)
                           if (_isEditing)
                             Column(
@@ -683,38 +697,48 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 Wrap(
                                   spacing: AppConstants.paddingS,
                                   runSpacing: AppConstants.paddingS,
-                                  children: AppConstants.studentSections.map((section) {
-                                    final isSelected = (_sectionsHandled ?? []).contains(section);
+                                  children: AppConstants.studentSections
+                                      .map((section) {
+                                    final isSelected = (_sectionsHandled ?? [])
+                                        .contains(section);
                                     return FilterChip(
                                       label: Text(section),
                                       selected: isSelected,
-                                      onSelected: _isEditing ? (selected) {
-                                        setState(() {
-                                          if (selected) {
-                                            _sectionsHandled ??= [];
-                                            _sectionsHandled!.add(section);
-                                          } else {
-                                            _sectionsHandled?.remove(section);
-                                          }
-                                        });
-                                      } : null,
-                                      selectedColor: _roleColor.withOpacity(0.2),
+                                      onSelected: _isEditing
+                                          ? (selected) {
+                                              setState(() {
+                                                if (selected) {
+                                                  _sectionsHandled ??= [];
+                                                  _sectionsHandled!
+                                                      .add(section);
+                                                } else {
+                                                  _sectionsHandled
+                                                      ?.remove(section);
+                                                }
+                                              });
+                                            }
+                                          : null,
+                                      selectedColor:
+                                          _roleColor.withOpacity(0.2),
                                       checkmarkColor: _roleColor,
                                     );
                                   }).toList(),
                                 ),
                               ],
                             )
-                          else if (_sectionsHandled != null && _sectionsHandled!.isNotEmpty)
+                          else if (_sectionsHandled != null &&
+                              _sectionsHandled!.isNotEmpty)
                             Padding(
-                              padding: const EdgeInsets.only(top: AppConstants.paddingM),
+                              padding: const EdgeInsets.only(
+                                  top: AppConstants.paddingM),
                               child: Wrap(
                                 spacing: AppConstants.paddingS,
                                 runSpacing: AppConstants.paddingS,
                                 children: _sectionsHandled!.map((section) {
                                   return Chip(
                                     label: Text(section),
-                                    backgroundColor: _roleColor.withOpacity(0.1),
+                                    backgroundColor:
+                                        _roleColor.withOpacity(0.1),
                                   );
                                 }).toList(),
                               ),
@@ -759,6 +783,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       title: 'Language',
                       subtitle: _selectedLanguage ?? 'English',
                       onTap: _showLanguageDialog,
+                    ),
+
+                    _SettingsTile(
+                      icon: Icons.settings_outlined,
+                      title: 'App Settings',
+                      subtitle: 'Theme, notifications, AR',
+                      onTap: () {
+                        Navigator.pushNamed(
+                          context,
+                          '/settings',
+                          arguments: widget.role,
+                        );
+                      },
+                    ),
+
+                    _SettingsTile(
+                      icon: Icons.help_outline,
+                      title: 'Need Help?',
+                      subtitle: 'Get support',
+                      onTap: () {
+                        Navigator.pushNamed(
+                          context,
+                          '/help',
+                          arguments: widget.role,
+                        );
+                      },
                     ),
 
                     const SizedBox(height: AppConstants.paddingXL),

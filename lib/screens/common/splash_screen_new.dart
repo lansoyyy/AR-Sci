@@ -23,17 +23,17 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   void initState() {
     super.initState();
-
+    
     _rotationController = AnimationController(
       duration: const Duration(seconds: 4),
       vsync: this,
     );
-
+    
     _fadeController = AnimationController(
       duration: const Duration(milliseconds: 1500),
       vsync: this,
     );
-
+    
     _scaleController = AnimationController(
       duration: const Duration(milliseconds: 1200),
       vsync: this,
@@ -42,11 +42,11 @@ class _SplashScreenState extends State<SplashScreen>
     _rotationAnimation = Tween<double>(begin: 0.0, end: 2.0).animate(
       CurvedAnimation(parent: _rotationController, curve: Curves.linear),
     );
-
+    
     _scaleAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _scaleController, curve: Curves.elasticOut),
     );
-
+    
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _fadeController, curve: Curves.easeIn),
     );
@@ -56,7 +56,7 @@ class _SplashScreenState extends State<SplashScreen>
     Future.delayed(const Duration(milliseconds: 800), () {
       if (mounted) _fadeController.forward();
     });
-
+    
     _navigateNext();
   }
 
@@ -142,7 +142,6 @@ class _SplashScreenState extends State<SplashScreen>
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // School Logo
                     ScaleTransition(
                       scale: _scaleAnimation,
                       child: Container(
@@ -150,8 +149,7 @@ class _SplashScreenState extends State<SplashScreen>
                         height: 100,
                         decoration: BoxDecoration(
                           color: AppColors.textWhite,
-                          borderRadius:
-                              BorderRadius.circular(AppConstants.radiusL),
+                          borderRadius: BorderRadius.circular(AppConstants.radiusL),
                           boxShadow: [
                             BoxShadow(
                               color: Colors.black.withOpacity(0.2),
@@ -161,8 +159,7 @@ class _SplashScreenState extends State<SplashScreen>
                           ],
                         ),
                         child: ClipRRect(
-                          borderRadius:
-                              BorderRadius.circular(AppConstants.radiusL),
+                          borderRadius: BorderRadius.circular(AppConstants.radiusL),
                           child: Image.asset(
                             'assets/images/school_logo.png',
                             fit: BoxFit.cover,
@@ -178,8 +175,7 @@ class _SplashScreenState extends State<SplashScreen>
                       ),
                     ),
                     const SizedBox(height: AppConstants.paddingXL),
-
-                    // Welcome Message
+                    
                     FadeTransition(
                       opacity: _fadeAnimation,
                       child: Column(
@@ -211,8 +207,7 @@ class _SplashScreenState extends State<SplashScreen>
                             ),
                             decoration: BoxDecoration(
                               color: AppColors.textWhite.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(
-                                  AppConstants.radiusRound),
+                              borderRadius: BorderRadius.circular(AppConstants.radiusRound),
                             ),
                             child: const Text(
                               'Step into the future of science learning',
@@ -229,8 +224,7 @@ class _SplashScreenState extends State<SplashScreen>
                       ),
                     ),
                     const SizedBox(height: AppConstants.paddingXXL),
-
-                    // AR Fusion Logo (Rotating)
+                    
                     RotationTransition(
                       turns: _rotationAnimation,
                       child: Container(
@@ -238,8 +232,7 @@ class _SplashScreenState extends State<SplashScreen>
                         height: 80,
                         decoration: BoxDecoration(
                           color: AppColors.textWhite,
-                          borderRadius:
-                              BorderRadius.circular(AppConstants.radiusRound),
+                          borderRadius: BorderRadius.circular(AppConstants.radiusRound),
                           boxShadow: [
                             BoxShadow(
                               color: Colors.black.withOpacity(0.2),
@@ -249,8 +242,7 @@ class _SplashScreenState extends State<SplashScreen>
                           ],
                         ),
                         child: ClipRRect(
-                          borderRadius:
-                              BorderRadius.circular(AppConstants.radiusRound),
+                          borderRadius: BorderRadius.circular(AppConstants.radiusRound),
                           child: Image.asset(
                             'assets/images/logo.png',
                             fit: BoxFit.cover,
@@ -266,15 +258,13 @@ class _SplashScreenState extends State<SplashScreen>
                       ),
                     ),
                     const SizedBox(height: AppConstants.paddingXXL),
-
-                    // Loading Indicator
+                    
                     FadeTransition(
                       opacity: _fadeAnimation,
                       child: const Column(
                         children: [
                           CircularProgressIndicator(
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                                AppColors.textWhite),
+                            valueColor: AlwaysStoppedAnimation<Color>(AppColors.textWhite),
                           ),
                           SizedBox(height: AppConstants.paddingL),
                           Text(
