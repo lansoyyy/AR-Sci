@@ -55,6 +55,9 @@ class _AdminCreateLessonScreenState extends State<AdminCreateLessonScreen> {
       // Upload images to Firebase Storage
       final imageUrls = await _uploadImages(lessonId);
 
+      // Upload PDF if selected
+      final pdfUrl = await _uploadPdf(lessonId);
+
       final payload = <String, dynamic>{
         'id': lessonId,
         'title': _titleController.text.trim(),
@@ -65,6 +68,7 @@ class _AdminCreateLessonScreenState extends State<AdminCreateLessonScreen> {
         'color': _subjectToColorName(_selectedSubject),
         'content': _contentController.text.trim(),
         'imageUrls': imageUrls,
+        'pdfUrl': pdfUrl,
         'videoUrls': <String>[],
         'arItems': <String>[],
         'createdAt': FieldValue.serverTimestamp(),
@@ -156,6 +160,65 @@ class _AdminCreateLessonScreenState extends State<AdminCreateLessonScreen> {
     setState(() {
       _selectedImages.removeAt(index);
     });
+  }
+
+  // PDF upload fields
+  XFile? _selectedPdf;
+
+  Future<void> _pickPdf() async {
+    try {
+      final XFile? pdf = await _imagePicker.pickMedia(
+        requestFullMetadata: true,
+      );
+
+      if (pdf != null) {
+        final extension = pdf.path.split('.').last.toLowerCase();
+        if (extension != 'pdf') {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Please select a PDF file')),
+          );
+          return;
+        }
+        setState(() {
+          _selectedPdf = pdf;
+        });
+      }
+    } catch (e) {
+      debugPrint('Failed to pick PDF: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to pick PDF: $e')),
+      );
+    }
+  }
+
+  void _removePdf() {
+    setState(() {
+      _selectedPdf = null;
+    });
+  }
+
+  Future<String?> _uploadPdf(String lessonId) async {
+    if (_selectedPdf == null) return null;
+
+    try {
+      final file = File(_selectedPdf!.path);
+      final storageRef = FirebaseStorage.instance
+          .ref()
+          .child('lessons/$lessonId')
+          .child('material.pdf');
+
+      await storageRef.putFile(
+        file,
+        SettableMetadata(contentType: 'application/pdf'),
+      );
+      final url = await storageRef.getDownloadURL();
+      return url;
+    } catch (e) {
+      debugPrint('Failed to upload PDF: $e');
+      return null;
+    }
   }
 
   @override
@@ -394,6 +457,129 @@ class _AdminCreateLessonScreenState extends State<AdminCreateLessonScreen> {
                                 backgroundColor:
                                     AppColors.adminPrimary.withOpacity(0.8),
                                 foregroundColor: AppColors.textWhite,
+                              ),
+                            ),
+                          ],
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppConstants.paddingL),
+
+              // PDF Upload Section
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(AppConstants.paddingM),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Lesson PDF',
+                            style: TextStyle(
+                              fontSize: AppConstants.fontL,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          if (_selectedPdf != null)
+                            Text(
+                              '1 selected',
+                              style: TextStyle(
+                                fontSize: AppConstants.fontS,
+                                color: AppColors.textLight,
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: AppConstants.paddingM),
+                      if (_selectedPdf == null)
+                        InkWell(
+                          onTap: _pickPdf,
+                          borderRadius:
+                              BorderRadius.circular(AppConstants.radiusM),
+                          child: Container(
+                            height: 100,
+                            decoration: BoxDecoration(
+                              border: Border.all(
+                                color: AppColors.textLight.withOpacity(0.5),
+                                style: BorderStyle.solid,
+                              ),
+                              borderRadius:
+                                  BorderRadius.circular(AppConstants.radiusM),
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.upload_file_outlined,
+                                  size: 48,
+                                  color: AppColors.textLight.withOpacity(0.7),
+                                ),
+                                const SizedBox(height: AppConstants.paddingS),
+                                Text(
+                                  'Tap to upload PDF (Lesson 1, Lesson 2, etc.)',
+                                  style: TextStyle(
+                                    color: AppColors.textLight.withOpacity(0.7),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                      else
+                        Column(
+                          children: [
+                            Container(
+                              padding:
+                                  const EdgeInsets.all(AppConstants.paddingM),
+                              decoration: BoxDecoration(
+                                color: AppColors.adminPrimary.withOpacity(0.1),
+                                borderRadius:
+                                    BorderRadius.circular(AppConstants.radiusM),
+                                border: Border.all(
+                                    color: AppColors.adminPrimary
+                                        .withOpacity(0.3)),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.picture_as_pdf,
+                                    color: AppColors.error,
+                                    size: 40,
+                                  ),
+                                  const SizedBox(width: AppConstants.paddingM),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          _selectedPdf!.path.split('/').last,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const Text(
+                                          'PDF selected',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: AppColors.textSecondary,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  IconButton(
+                                    onPressed: _removePdf,
+                                    icon: const Icon(Icons.close,
+                                        color: AppColors.error),
+                                  ),
+                                ],
                               ),
                             ),
                           ],

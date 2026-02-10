@@ -37,6 +37,123 @@ class _AdminCreateQuizScreenState extends State<AdminCreateQuizScreen> {
   List<Map<String, dynamic>> _generatedQuestions = <Map<String, dynamic>>[];
   List<Map<String, dynamic>> _cachedLessons = <Map<String, dynamic>>[];
 
+  // Manual question editing
+  final TextEditingController _questionController = TextEditingController();
+  final TextEditingController _optionAController = TextEditingController();
+  final TextEditingController _optionBController = TextEditingController();
+  final TextEditingController _optionCController = TextEditingController();
+  final TextEditingController _optionDController = TextEditingController();
+  final TextEditingController _correctAnswerController =
+      TextEditingController();
+  String _selectedQuestionType = 'multipleChoice';
+  int? _editingQuestionIndex;
+
+  void _addManualQuestion() {
+    final questionText = _questionController.text.trim();
+    if (questionText.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a question')),
+      );
+      return;
+    }
+
+    String correctAnswer = '';
+    List<String> options = [];
+
+    if (_selectedQuestionType == 'multipleChoice') {
+      options = [
+        _optionAController.text.trim(),
+        _optionBController.text.trim(),
+        _optionCController.text.trim(),
+        _optionDController.text.trim(),
+      ].where((o) => o.isNotEmpty).toList();
+
+      if (options.length < 2) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please enter at least 2 options')),
+        );
+        return;
+      }
+      correctAnswer = _correctAnswerController.text.trim();
+      if (correctAnswer.isEmpty || !options.contains(correctAnswer)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content:
+                  Text('Please enter a valid correct answer from the options')),
+        );
+        return;
+      }
+    } else if (_selectedQuestionType == 'trueFalse') {
+      options = ['True', 'False'];
+      correctAnswer =
+          _correctAnswerController.text.trim() == 'False' ? 'False' : 'True';
+    } else if (_selectedQuestionType == 'fillInBlank') {
+      correctAnswer = _correctAnswerController.text.trim();
+      if (correctAnswer.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please enter the correct answer')),
+        );
+        return;
+      }
+    }
+
+    final newQuestion = {
+      'id':
+          'q_${DateTime.now().millisecondsSinceEpoch}_${_generatedQuestions.length}',
+      'question': questionText,
+      'type': _selectedQuestionType,
+      'options': options,
+      'correctAnswer': correctAnswer,
+      'points': 1,
+    };
+
+    setState(() {
+      if (_editingQuestionIndex != null) {
+        _generatedQuestions[_editingQuestionIndex!] = newQuestion;
+        _editingQuestionIndex = null;
+      } else {
+        _generatedQuestions.add(newQuestion);
+      }
+    });
+
+    _clearQuestionForm();
+  }
+
+  void _clearQuestionForm() {
+    _questionController.clear();
+    _optionAController.clear();
+    _optionBController.clear();
+    _optionCController.clear();
+    _optionDController.clear();
+    _correctAnswerController.clear();
+    _editingQuestionIndex = null;
+  }
+
+  void _editQuestion(int index) {
+    final q = _generatedQuestions[index];
+    setState(() {
+      _editingQuestionIndex = index;
+      _selectedQuestionType = q['type'] ?? 'multipleChoice';
+      _questionController.text = q['question'] ?? '';
+      _correctAnswerController.text = q['correctAnswer'] ?? '';
+
+      final options = (q['options'] as List?)?.cast<String>() ?? [];
+      if (options.length > 0) _optionAController.text = options[0];
+      if (options.length > 1) _optionBController.text = options[1];
+      if (options.length > 2) _optionCController.text = options[2];
+      if (options.length > 3) _optionDController.text = options[3];
+    });
+  }
+
+  void _deleteQuestion(int index) {
+    setState(() {
+      _generatedQuestions.removeAt(index);
+      if (_editingQuestionIndex == index) {
+        _clearQuestionForm();
+      }
+    });
+  }
+
   String _fallbackLessonMaterial(Map<String, dynamic> lesson) {
     final description = (lesson['description'] ?? '').toString().trim();
     final arItems = (lesson['arItems'] as List?)
@@ -71,7 +188,9 @@ class _AdminCreateQuizScreenState extends State<AdminCreateQuizScreen> {
       final rawType = (q['type'] ?? 'multipleChoice').toString().trim();
 
       var type = rawType;
-      if (type != 'multipleChoice' && type != 'trueFalse' && type != 'fillInBlank') {
+      if (type != 'multipleChoice' &&
+          type != 'trueFalse' &&
+          type != 'fillInBlank') {
         type = 'multipleChoice';
       }
 
@@ -110,7 +229,8 @@ class _AdminCreateQuizScreenState extends State<AdminCreateQuizScreen> {
 
       return <String, dynamic>{
         'id': 'q_${now}_$index',
-        'question': questionText.isEmpty ? 'Question ${index + 1}' : questionText,
+        'question':
+            questionText.isEmpty ? 'Question ${index + 1}' : questionText,
         'type': type,
         'options': options,
         'correctAnswer': correctAnswer,
@@ -129,8 +249,9 @@ class _AdminCreateQuizScreenState extends State<AdminCreateQuizScreen> {
 
     final lessonTitle = (lesson['title'] ?? '').toString().trim();
     final lessonContent = (lesson['content'] ?? '').toString().trim();
-    final lessonMaterial =
-        lessonContent.isNotEmpty ? lessonContent : _fallbackLessonMaterial(lesson);
+    final lessonMaterial = lessonContent.isNotEmpty
+        ? lessonContent
+        : _fallbackLessonMaterial(lesson);
 
     if (lessonTitle.isEmpty || lessonMaterial.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -228,7 +349,8 @@ class _AdminCreateQuizScreenState extends State<AdminCreateQuizScreen> {
           'assignedSections': _selectedAssignedSections,
         if (_availableFrom != null)
           'availableFrom': _availableFrom!.toIso8601String(),
-        if (_availableTo != null) 'availableTo': _availableTo!.toIso8601String(),
+        if (_availableTo != null)
+          'availableTo': _availableTo!.toIso8601String(),
       };
 
       await docRef.set(payload);
@@ -261,6 +383,12 @@ class _AdminCreateQuizScreenState extends State<AdminCreateQuizScreen> {
     _titleController.dispose();
     _descriptionController.dispose();
     _durationController.dispose();
+    _questionController.dispose();
+    _optionAController.dispose();
+    _optionBController.dispose();
+    _optionCController.dispose();
+    _optionDController.dispose();
+    _correctAnswerController.dispose();
     super.dispose();
   }
 
@@ -467,7 +595,8 @@ class _AdminCreateQuizScreenState extends State<AdminCreateQuizScreen> {
                                 }
                               });
                             },
-                            selectedColor: AppColors.adminPrimary.withOpacity(0.3),
+                            selectedColor:
+                                AppColors.adminPrimary.withOpacity(0.3),
                             checkmarkColor: AppColors.adminPrimary,
                           );
                         }).toList(),
@@ -511,8 +640,8 @@ class _AdminCreateQuizScreenState extends State<AdminCreateQuizScreen> {
                         onTap: () async {
                           final picked = await showDatePicker(
                             context: context,
-                            initialDate:
-                                _availableTo ?? (_availableFrom ?? DateTime.now()),
+                            initialDate: _availableTo ??
+                                (_availableFrom ?? DateTime.now()),
                             firstDate: _availableFrom ?? DateTime.now(),
                             lastDate: DateTime(2100),
                           );
@@ -568,6 +697,219 @@ class _AdminCreateQuizScreenState extends State<AdminCreateQuizScreen> {
                   ),
                 ),
               ),
+              const SizedBox(height: AppConstants.paddingL),
+              // Manual Question Management Section
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(AppConstants.paddingM),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.edit_note),
+                          const SizedBox(width: 8),
+                          Text(
+                            _editingQuestionIndex != null
+                                ? 'Edit Question'
+                                : 'Add Question Manually',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AppConstants.paddingM),
+                      DropdownButtonFormField<String>(
+                        value: _selectedQuestionType,
+                        decoration: const InputDecoration(
+                          labelText: 'Question Type',
+                          prefixIcon: Icon(Icons.category_outlined),
+                        ),
+                        items: const [
+                          DropdownMenuItem(
+                              value: 'multipleChoice',
+                              child: Text('Multiple Choice')),
+                          DropdownMenuItem(
+                              value: 'trueFalse', child: Text('True/False')),
+                          DropdownMenuItem(
+                              value: 'fillInBlank',
+                              child: Text('Fill in the Blank')),
+                        ],
+                        onChanged: (value) {
+                          if (value != null) {
+                            setState(() => _selectedQuestionType = value);
+                          }
+                        },
+                      ),
+                      const SizedBox(height: AppConstants.paddingM),
+                      TextFormField(
+                        controller: _questionController,
+                        maxLines: 2,
+                        decoration: const InputDecoration(
+                          labelText: 'Question',
+                          hintText: 'Enter your question here',
+                          prefixIcon: Icon(Icons.help_outline),
+                        ),
+                      ),
+                      if (_selectedQuestionType == 'multipleChoice') ...[
+                        const SizedBox(height: AppConstants.paddingM),
+                        TextFormField(
+                          controller: _optionAController,
+                          decoration: const InputDecoration(
+                            labelText: 'Option A',
+                            prefixIcon: Icon(Icons.radio_button_unchecked),
+                          ),
+                        ),
+                        const SizedBox(height: AppConstants.paddingS),
+                        TextFormField(
+                          controller: _optionBController,
+                          decoration: const InputDecoration(
+                            labelText: 'Option B',
+                            prefixIcon: Icon(Icons.radio_button_unchecked),
+                          ),
+                        ),
+                        const SizedBox(height: AppConstants.paddingS),
+                        TextFormField(
+                          controller: _optionCController,
+                          decoration: const InputDecoration(
+                            labelText: 'Option C',
+                            prefixIcon: Icon(Icons.radio_button_unchecked),
+                          ),
+                        ),
+                        const SizedBox(height: AppConstants.paddingS),
+                        TextFormField(
+                          controller: _optionDController,
+                          decoration: const InputDecoration(
+                            labelText: 'Option D',
+                            prefixIcon: Icon(Icons.radio_button_unchecked),
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: AppConstants.paddingM),
+                      if (_selectedQuestionType == 'trueFalse')
+                        DropdownButtonFormField<String>(
+                          value: _correctAnswerController.text.isEmpty
+                              ? 'True'
+                              : _correctAnswerController.text,
+                          decoration: const InputDecoration(
+                            labelText: 'Correct Answer',
+                            prefixIcon: Icon(Icons.check_circle_outline),
+                          ),
+                          items: const [
+                            DropdownMenuItem(
+                                value: 'True', child: Text('True')),
+                            DropdownMenuItem(
+                                value: 'False', child: Text('False')),
+                          ],
+                          onChanged: (value) {
+                            if (value != null) {
+                              _correctAnswerController.text = value;
+                            }
+                          },
+                        )
+                      else
+                        TextFormField(
+                          controller: _correctAnswerController,
+                          decoration: InputDecoration(
+                            labelText: _selectedQuestionType == 'multipleChoice'
+                                ? 'Correct Answer (must match one option)'
+                                : 'Correct Answer',
+                            prefixIcon: const Icon(Icons.check_circle_outline),
+                            hintText: _selectedQuestionType == 'multipleChoice'
+                                ? 'Enter the exact text of the correct option'
+                                : 'Enter the correct answer',
+                          ),
+                        ),
+                      const SizedBox(height: AppConstants.paddingM),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: _addManualQuestion,
+                              icon: Icon(_editingQuestionIndex != null
+                                  ? Icons.save
+                                  : Icons.add),
+                              label: Text(_editingQuestionIndex != null
+                                  ? 'Update Question'
+                                  : 'Add Question'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.adminPrimary,
+                                foregroundColor: Colors.white,
+                              ),
+                            ),
+                          ),
+                          if (_editingQuestionIndex != null) ...[
+                            const SizedBox(width: 8),
+                            TextButton.icon(
+                              onPressed: _clearQuestionForm,
+                              icon: const Icon(Icons.clear),
+                              label: const Text('Cancel'),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              // Questions List
+              if (_generatedQuestions.isNotEmpty) ...[
+                const SizedBox(height: AppConstants.paddingL),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppConstants.paddingM),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Questions (${_generatedQuestions.length})',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: AppConstants.paddingM),
+                        ..._generatedQuestions.asMap().entries.map((entry) {
+                          final index = entry.key;
+                          final q = entry.value;
+                          return ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor: AppColors.adminPrimary,
+                              child: Text('${index + 1}'),
+                            ),
+                            title: Text(
+                              q['question'] ?? '',
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            subtitle: Text(
+                              'Type: ${q['type']} | Answer: ${q['correctAnswer']}',
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.edit,
+                                      color: AppColors.info),
+                                  onPressed: () => _editQuestion(index),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete,
+                                      color: AppColors.error),
+                                  onPressed: () => _deleteQuestion(index),
+                                ),
+                              ],
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: AppConstants.paddingL),
               Card(
                 child: SwitchListTile(

@@ -8,10 +8,12 @@ class TeacherAnnouncementsScreen extends StatefulWidget {
   const TeacherAnnouncementsScreen({super.key});
 
   @override
-  State<TeacherAnnouncementsScreen> createState() => _TeacherAnnouncementsScreenState();
+  State<TeacherAnnouncementsScreen> createState() =>
+      _TeacherAnnouncementsScreenState();
 }
 
-class _TeacherAnnouncementsScreenState extends State<TeacherAnnouncementsScreen> {
+class _TeacherAnnouncementsScreenState
+    extends State<TeacherAnnouncementsScreen> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _messageController = TextEditingController();
@@ -42,9 +44,11 @@ class _TeacherAnnouncementsScreenState extends State<TeacherAnnouncementsScreen>
           .collection('users')
           .doc(currentUser?.uid)
           .get();
-      
+
       final teacherName = teacherDoc.data()?['name'] as String? ?? 'Teacher';
-      final sections = (teacherDoc.data()?['sectionsHandled'] as List<dynamic>?)?.cast<String>() ?? [];
+      final sections = (teacherDoc.data()?['sectionsHandled'] as List<dynamic>?)
+              ?.cast<String>() ??
+          [];
 
       // Create the announcement
       final announcementRef = await FirebaseFirestore.instance
@@ -66,9 +70,9 @@ class _TeacherAnnouncementsScreenState extends State<TeacherAnnouncementsScreen>
           .collection('users')
           .where('role', isEqualTo: 'student')
           .where('verified', isEqualTo: true);
-      
+
       final studentsSnapshot = await studentsQuery.get();
-      
+
       // Filter by sections if needed
       final targetStudents = studentsSnapshot.docs.where((s) {
         if (_targetAudience == 'all') return true;
@@ -78,35 +82,38 @@ class _TeacherAnnouncementsScreenState extends State<TeacherAnnouncementsScreen>
         return sections.contains(grade) || sections.contains(section);
       }).toList();
 
-      // Create notifications
+      // Create notifications in global collection
       final batch = FirebaseFirestore.instance.batch();
-      
+
       for (final student in targetStudents) {
-        final notificationRef = FirebaseFirestore.instance
-            .collection('users')
-            .doc(student.id)
-            .collection('notifications')
-            .doc();
-            
+        final studentData = student.data();
+        final studentRole = studentData['role'] as String? ?? 'student';
+
+        final notificationRef =
+            FirebaseFirestore.instance.collection('notifications').doc();
+
         batch.set(notificationRef, {
+          'userId': student.id,
+          'role': studentRole,
           'title': _titleController.text.trim(),
-          'body': _messageController.text.trim(),
-          'type': 'teacher_announcement',
+          'message': _messageController.text.trim(),
+          'type': 'system',
           'announcementId': announcementRef.id,
           'priority': _selectedPriority,
           'fromTeacher': teacherName,
-          'read': false,
+          'isRead': false,
           'createdAt': FieldValue.serverTimestamp(),
         });
       }
-      
+
       await batch.commit();
 
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Announcement sent to ${targetStudents.length} students'),
+          content:
+              Text('Announcement sent to ${targetStudents.length} students'),
           backgroundColor: AppColors.success,
         ),
       );
@@ -135,7 +142,8 @@ class _TeacherAnnouncementsScreenState extends State<TeacherAnnouncementsScreen>
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Announcement?'),
-        content: const Text('This will remove the announcement and cannot be undone.'),
+        content: const Text(
+            'This will remove the announcement and cannot be undone.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -252,7 +260,6 @@ class _TeacherAnnouncementsScreenState extends State<TeacherAnnouncementsScreen>
                       ),
                     ),
                     const SizedBox(height: AppConstants.paddingL),
-                    
                     TextFormField(
                       controller: _titleController,
                       decoration: const InputDecoration(
@@ -267,9 +274,7 @@ class _TeacherAnnouncementsScreenState extends State<TeacherAnnouncementsScreen>
                         return null;
                       },
                     ),
-                    
                     const SizedBox(height: AppConstants.paddingL),
-                    
                     TextFormField(
                       controller: _messageController,
                       decoration: const InputDecoration(
@@ -285,9 +290,7 @@ class _TeacherAnnouncementsScreenState extends State<TeacherAnnouncementsScreen>
                         return null;
                       },
                     ),
-                    
                     const SizedBox(height: AppConstants.paddingL),
-                    
                     DropdownButtonFormField<String>(
                       value: _selectedPriority,
                       decoration: const InputDecoration(
@@ -314,9 +317,7 @@ class _TeacherAnnouncementsScreenState extends State<TeacherAnnouncementsScreen>
                         setState(() => _selectedPriority = value!);
                       },
                     ),
-                    
                     const SizedBox(height: AppConstants.paddingL),
-                    
                     DropdownButtonFormField<String>(
                       value: _targetAudience,
                       decoration: const InputDecoration(
@@ -337,9 +338,7 @@ class _TeacherAnnouncementsScreenState extends State<TeacherAnnouncementsScreen>
                 ),
               ),
             ),
-            
             const SizedBox(height: AppConstants.paddingL),
-            
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
@@ -367,7 +366,7 @@ class _TeacherAnnouncementsScreenState extends State<TeacherAnnouncementsScreen>
 
   Widget _buildHistoryTab() {
     final teacherId = FirebaseAuth.instance.currentUser?.uid;
-    
+
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: FirebaseFirestore.instance
           .collection('teacher_announcements')
@@ -428,14 +427,16 @@ class _TeacherAnnouncementsScreenState extends State<TeacherAnnouncementsScreen>
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        Icon(Icons.people, size: 14, color: AppColors.textSecondary),
+                        Icon(Icons.people,
+                            size: 14, color: AppColors.textSecondary),
                         const SizedBox(width: 4),
                         Text(
                           data['targetAudience'] as String? ?? 'students',
                           style: const TextStyle(fontSize: 12),
                         ),
                         const SizedBox(width: 12),
-                        Icon(Icons.access_time, size: 14, color: AppColors.textSecondary),
+                        Icon(Icons.access_time,
+                            size: 14, color: AppColors.textSecondary),
                         const SizedBox(width: 4),
                         Text(
                           createdAt != null

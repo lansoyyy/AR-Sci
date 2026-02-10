@@ -8,7 +8,8 @@ class AdminAnnouncementsScreen extends StatefulWidget {
   const AdminAnnouncementsScreen({super.key});
 
   @override
-  State<AdminAnnouncementsScreen> createState() => _AdminAnnouncementsScreenState();
+  State<AdminAnnouncementsScreen> createState() =>
+      _AdminAnnouncementsScreenState();
 }
 
 class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
@@ -44,13 +45,12 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
           .collection('users')
           .doc(currentUser?.uid)
           .get();
-      
+
       final adminName = adminDoc.data()?['name'] as String? ?? 'Administrator';
 
       // Create the announcement
-      final announcementRef = await FirebaseFirestore.instance
-          .collection('announcements')
-          .add({
+      final announcementRef =
+          await FirebaseFirestore.instance.collection('announcements').add({
         'title': _titleController.text.trim(),
         'message': _messageController.text.trim(),
         'priority': _selectedPriority,
@@ -61,43 +61,46 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
         'isActive': true,
       });
 
-      // Create notifications for target users
+      // Create notifications for target users in the global notifications collection
       final batch = FirebaseFirestore.instance.batch();
-      
-      Query<Map<String, dynamic>> usersQuery = 
+
+      Query<Map<String, dynamic>> usersQuery =
           FirebaseFirestore.instance.collection('users');
-      
+
       if (_targetAudience != 'all') {
         usersQuery = usersQuery.where('role', isEqualTo: _targetAudience);
       }
-      
+
       final usersSnapshot = await usersQuery.get();
-      
+
       for (final user in usersSnapshot.docs) {
-        final notificationRef = FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.id)
-            .collection('notifications')
-            .doc();
-            
+        final userData = user.data();
+        final userRole = userData['role'] as String? ?? 'student';
+
+        final notificationRef =
+            FirebaseFirestore.instance.collection('notifications').doc();
+
         batch.set(notificationRef, {
+          'userId': user.id,
+          'role': userRole,
           'title': _titleController.text.trim(),
-          'body': _messageController.text.trim(),
-          'type': 'announcement',
+          'message': _messageController.text.trim(),
+          'type': 'system',
           'announcementId': announcementRef.id,
           'priority': _selectedPriority,
-          'read': false,
+          'isRead': false,
           'createdAt': FieldValue.serverTimestamp(),
         });
       }
-      
+
       await batch.commit();
 
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Announcement sent to ${usersSnapshot.docs.length} users'),
+          content:
+              Text('Announcement sent to ${usersSnapshot.docs.length} users'),
           backgroundColor: AppColors.success,
         ),
       );
@@ -126,7 +129,8 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Announcement?'),
-        content: const Text('This will remove the announcement and cannot be undone.'),
+        content: const Text(
+            'This will remove the announcement and cannot be undone.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -243,7 +247,6 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
                       ),
                     ),
                     const SizedBox(height: AppConstants.paddingL),
-                    
                     TextFormField(
                       controller: _titleController,
                       decoration: const InputDecoration(
@@ -258,9 +261,7 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
                         return null;
                       },
                     ),
-                    
                     const SizedBox(height: AppConstants.paddingL),
-                    
                     TextFormField(
                       controller: _messageController,
                       decoration: const InputDecoration(
@@ -276,9 +277,7 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
                         return null;
                       },
                     ),
-                    
                     const SizedBox(height: AppConstants.paddingL),
-                    
                     DropdownButtonFormField<String>(
                       value: _selectedPriority,
                       decoration: const InputDecoration(
@@ -305,9 +304,7 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
                         setState(() => _selectedPriority = value!);
                       },
                     ),
-                    
                     const SizedBox(height: AppConstants.paddingL),
-                    
                     DropdownButtonFormField<String>(
                       value: _targetAudience,
                       decoration: const InputDecoration(
@@ -328,9 +325,7 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
                 ),
               ),
             ),
-            
             const SizedBox(height: AppConstants.paddingL),
-            
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
@@ -417,14 +412,16 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        Icon(Icons.people, size: 14, color: AppColors.textSecondary),
+                        Icon(Icons.people,
+                            size: 14, color: AppColors.textSecondary),
                         const SizedBox(width: 4),
                         Text(
                           data['targetAudience'] as String? ?? 'all',
                           style: const TextStyle(fontSize: 12),
                         ),
                         const SizedBox(width: 12),
-                        Icon(Icons.access_time, size: 14, color: AppColors.textSecondary),
+                        Icon(Icons.access_time,
+                            size: 14, color: AppColors.textSecondary),
                         const SizedBox(width: 4),
                         Text(
                           createdAt != null

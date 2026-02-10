@@ -283,11 +283,13 @@ class _AccountVerificationScreenState extends State<AccountVerificationScreen> {
                     final name = (data['name'] as String?) ?? 'Unknown';
                     final email = (data['email'] as String?) ?? '';
                     final role = (data['role'] as String?) ?? 'student';
-                    final createdAtStr = data['createdAt'] as String?;
+                    final createdAtValue = data['createdAt'];
 
                     DateTime? createdAt;
-                    if (createdAtStr != null) {
-                      createdAt = DateTime.tryParse(createdAtStr);
+                    if (createdAtValue is Timestamp) {
+                      createdAt = createdAtValue.toDate();
+                    } else if (createdAtValue is String) {
+                      createdAt = DateTime.tryParse(createdAtValue);
                     }
 
                     return Card(

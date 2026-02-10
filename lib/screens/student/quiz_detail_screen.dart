@@ -23,6 +23,7 @@ class QuizDetailScreen extends StatefulWidget {
 class _QuizDetailScreenState extends State<QuizDetailScreen> {
   final Map<String, dynamic> _quiz = {};
   final Map<String, dynamic> _userAnswers = {};
+  final Map<String, TextEditingController> _textControllers = {};
   bool _isTakingQuiz = false;
   bool _isSubmitting = false;
   bool _hasSubmitted = false;
@@ -43,6 +44,9 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
   @override
   void dispose() {
     _timer?.cancel();
+    for (final controller in _textControllers.values) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
@@ -544,8 +548,13 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
         );
 
       case 'fillInBlank':
-        final controller =
-            TextEditingController(text: userAnswer?.toString() ?? '');
+        // Get or create controller for this question
+        if (!_textControllers.containsKey(questionId)) {
+          _textControllers[questionId] = TextEditingController(
+            text: userAnswer?.toString() ?? '',
+          );
+        }
+        final controller = _textControllers[questionId]!;
         return TextField(
           controller: controller,
           onChanged: (value) => _selectAnswer(questionId, value.trim()),
