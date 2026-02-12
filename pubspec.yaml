@@ -49,10 +49,6 @@ dependencies:
   url_launcher: ^6.2.5
   fl_chart: ^0.68.0
 
-dependency_overrides:
-  webview_flutter: 4.5.0
-  webview_flutter_android: 3.16.3
-
 dev_dependencies:
   flutter_test:
     sdk: flutter
