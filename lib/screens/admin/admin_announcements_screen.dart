@@ -29,9 +29,9 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
 
   final List<Map<String, String>> _targets = [
     {'id': 'all', 'name': 'All Users'},
-    {'id': 'students', 'name': 'Students Only'},
-    {'id': 'teachers', 'name': 'Teachers Only'},
-    {'id': 'admins', 'name': 'Admins Only'},
+    {'id': 'student', 'name': 'Students Only'},
+    {'id': 'teacher', 'name': 'Teachers Only'},
+    {'id': 'admin', 'name': 'Admins Only'},
   ];
 
   Future<void> _sendAnnouncement() async {
