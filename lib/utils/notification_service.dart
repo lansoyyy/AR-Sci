@@ -174,11 +174,12 @@ class NotificationService {
       final snapshot = await FirebaseFirestore.instance
           .collection('notifications')
           .where('userId', isEqualTo: userId)
-          .where('isRead', isEqualTo: false)
           .get();
 
       for (final doc in snapshot.docs) {
-        await doc.reference.update({'isRead': true});
+        if (doc.data()['isRead'] == false) {
+          await doc.reference.update({'isRead': true});
+        }
       }
     } catch (e) {
       // Silently fail

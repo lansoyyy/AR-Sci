@@ -50,14 +50,21 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       final snapshot = await FirebaseFirestore.instance
           .collection('notifications')
           .where('userId', isEqualTo: user.uid)
-          .where('role', isEqualTo: widget.role)
-          .orderBy('createdAt', descending: true)
-          .limit(50)
           .get();
 
       if (!mounted) return;
 
-      final notifications = snapshot.docs.map((doc) {
+      final docs = snapshot.docs.toList();
+      docs.sort((a, b) {
+        final aTime = a.data()['createdAt'] as Timestamp?;
+        final bTime = b.data()['createdAt'] as Timestamp?;
+        if (aTime == null && bTime == null) return 0;
+        if (aTime == null) return 1;
+        if (bTime == null) return -1;
+        return bTime.compareTo(aTime);
+      });
+
+      final notifications = docs.take(50).map((doc) {
         final data = doc.data();
         return NotificationItem(
           id: doc.id,
@@ -107,13 +114,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
-      final unreadNotifications = _notifications.where((n) => !n.isRead).toList();
-      for (var notification in unreadNotifications) {
-        await FirebaseFirestore.instance
-            .collection('notifications')
-            .doc(notification.id)
-            .update({'isRead': true});
+      final unreadIds =
+          _notifications.where((n) => !n.isRead).map((n) => n.id).toList();
+      final batch = FirebaseFirestore.instance.batch();
+      for (var id in unreadIds) {
+        batch.update(
+          FirebaseFirestore.instance.collection('notifications').doc(id),
+          {'isRead': true},
+        );
       }
+      await batch.commit();
 
       setState(() {
         for (var i = 0; i < _notifications.length; i++) {
@@ -139,7 +149,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('Clear Notifications'),
-          content: const Text('Are you sure you want to clear all notifications?'),
+          content:
+              const Text('Are you sure you want to clear all notifications?'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -176,7 +187,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   String _formatTimestamp(dynamic timestamp) {
     if (timestamp == null) return 'Just now';
-    
+
     DateTime dateTime;
     if (timestamp is Timestamp) {
       dateTime = timestamp.toDate();
@@ -360,7 +371,9 @@ class _NotificationCard extends StatelessWidget {
     return Card(
       margin: const EdgeInsets.only(bottom: AppConstants.paddingM),
       elevation: notification.isRead ? 0 : AppConstants.elevationS,
-      color: notification.isRead ? AppColors.surfaceLight : AppColors.cardBackground,
+      color: notification.isRead
+          ? AppColors.surfaceLight
+          : AppColors.cardBackground,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppConstants.radiusM),
       ),
@@ -387,7 +400,7 @@ class _NotificationCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: AppConstants.paddingM),
-              
+
               // Content
               Expanded(
                 child: Column(
@@ -400,7 +413,9 @@ class _NotificationCard extends StatelessWidget {
                             notification.title,
                             style: TextStyle(
                               fontSize: AppConstants.fontL,
-                              fontWeight: notification.isRead ? FontWeight.w500 : FontWeight.w600,
+                              fontWeight: notification.isRead
+                                  ? FontWeight.w500
+                                  : FontWeight.w600,
                               color: AppColors.textPrimary,
                             ),
                           ),
