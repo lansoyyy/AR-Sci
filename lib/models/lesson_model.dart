@@ -7,6 +7,7 @@ class LessonModel {
   final String content;
   final List<String> imageUrls;
   final List<String> videoUrls;
+  final String? pdfUrl;
   final String teacherId;
   final DateTime createdAt;
   final DateTime? scheduledDate;
@@ -21,6 +22,7 @@ class LessonModel {
     required this.content,
     this.imageUrls = const [],
     this.videoUrls = const [],
+    this.pdfUrl,
     required this.teacherId,
     required this.createdAt,
     this.scheduledDate,
@@ -37,6 +39,7 @@ class LessonModel {
       content: json['content'] ?? '',
       imageUrls: List<String>.from(json['imageUrls'] ?? []),
       videoUrls: List<String>.from(json['videoUrls'] ?? []),
+      pdfUrl: json['pdfUrl'] as String?,
       teacherId: json['teacherId'] ?? '',
       createdAt: DateTime.parse(json['createdAt'] ?? DateTime.now().toIso8601String()),
       scheduledDate: json['scheduledDate'] != null ? DateTime.parse(json['scheduledDate']) : null,
@@ -54,6 +57,7 @@ class LessonModel {
       'content': content,
       'imageUrls': imageUrls,
       'videoUrls': videoUrls,
+      'pdfUrl': pdfUrl,
       'teacherId': teacherId,
       'createdAt': createdAt.toIso8601String(),
       'scheduledDate': scheduledDate?.toIso8601String(),

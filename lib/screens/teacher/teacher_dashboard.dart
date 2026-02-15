@@ -1288,48 +1288,131 @@ class _StudentsPageState extends State<_StudentsPage> {
                   );
                 }
 
+                // Group students by section
+                final Map<String, List<QueryDocumentSnapshot<Map<String, dynamic>>>> studentsBySection = {};
+                for (final doc in filteredDocs) {
+                  final data = doc.data();
+                  final section = (data['section'] as String?) ?? 'No Section';
+                  if (!studentsBySection.containsKey(section)) {
+                    studentsBySection[section] = [];
+                  }
+                  studentsBySection[section]!.add(doc);
+                }
+
+                // Sort sections alphabetically
+                final sortedSections = studentsBySection.keys.toList()..sort();
+
                 return ListView.builder(
                   padding: const EdgeInsets.all(AppConstants.paddingM),
-                  itemCount: filteredDocs.length,
-                  itemBuilder: (context, index) {
-                    final doc = filteredDocs[index];
-                    final data = doc.data();
-                    final studentId = doc.id;
+                  itemCount: sortedSections.length,
+                  itemBuilder: (context, sectionIndex) {
+                    final section = sortedSections[sectionIndex];
+                    final sectionStudents = studentsBySection[section]!;
 
-                    final name = (data['name'] as String?) ?? 'Student';
-                    final email = (data['email'] as String?) ?? '';
-                    final grade = (data['gradeLevel'] as String?) ?? '';
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Section Header
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: AppConstants.paddingM,
+                            horizontal: AppConstants.paddingS,
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: AppConstants.paddingM,
+                                  vertical: AppConstants.paddingS,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.teacherPrimary.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(AppConstants.radiusRound),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.group,
+                                      size: 20,
+                                      color: AppColors.teacherPrimary,
+                                    ),
+                                    const SizedBox(width: AppConstants.paddingS),
+                                    Text(
+                                      section,
+                                      style: const TextStyle(
+                                        fontSize: AppConstants.fontL,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.teacherPrimary,
+                                      ),
+                                    ),
+                                    const SizedBox(width: AppConstants.paddingS),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: AppConstants.paddingS,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.teacherPrimary,
+                                        borderRadius: BorderRadius.circular(AppConstants.radiusRound),
+                                      ),
+                                      child: Text(
+                                        '${sectionStudents.length}',
+                                        style: const TextStyle(
+                                          fontSize: AppConstants.fontS,
+                                          fontWeight: FontWeight.bold,
+                                          color: AppColors.textWhite,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        // Students in this section
+                        ...sectionStudents.map((doc) {
+                          final data = doc.data();
+                          final studentId = doc.id;
 
-                    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                      stream: FirebaseFirestore.instance
-                          .collection('quiz_results')
-                          .where('studentId', isEqualTo: studentId)
-                          .snapshots(),
-                      builder: (context, resultsSnapshot) {
-                        final resultDocs = resultsSnapshot.data?.docs ?? [];
-                        final attempts = resultDocs.length;
-                        double avg = 0;
-                        if (attempts > 0) {
-                          final totalPct = resultDocs.map((d) {
-                            final r = d.data();
-                            final score =
-                                (r['score'] as num?)?.toDouble() ?? 0.0;
-                            final totalPoints =
-                                (r['totalPoints'] as num?)?.toDouble() ?? 0.0;
-                            if (totalPoints <= 0) return 0.0;
-                            return (score / totalPoints) * 100;
-                          }).reduce((a, b) => a + b);
-                          avg = totalPct / attempts;
-                        }
+                          final name = (data['name'] as String?) ?? 'Student';
+                          final email = (data['email'] as String?) ?? '';
+                          final grade = (data['gradeLevel'] as String?) ?? '';
 
-                        return _StudentCard(
-                          name: name,
-                          email: email,
-                          gradeLevel: grade,
-                          attempts: attempts,
-                          avgScore: avg,
-                        );
-                      },
+                          return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                            stream: FirebaseFirestore.instance
+                                .collection('quiz_results')
+                                .where('studentId', isEqualTo: studentId)
+                                .snapshots(),
+                            builder: (context, resultsSnapshot) {
+                              final resultDocs = resultsSnapshot.data?.docs ?? [];
+                              final attempts = resultDocs.length;
+                              double avg = 0;
+                              if (attempts > 0) {
+                                final totalPct = resultDocs.map((d) {
+                                  final r = d.data();
+                                  final score =
+                                      (r['score'] as num?)?.toDouble() ?? 0.0;
+                                  final totalPoints =
+                                      (r['totalPoints'] as num?)?.toDouble() ?? 0.0;
+                                  if (totalPoints <= 0) return 0.0;
+                                  return (score / totalPoints) * 100;
+                                }).reduce((a, b) => a + b);
+                                avg = totalPct / attempts;
+                              }
+
+                              return _StudentCard(
+                                name: name,
+                                email: email,
+                                gradeLevel: grade,
+                                attempts: attempts,
+                                avgScore: avg,
+                              );
+                            },
+                          );
+                        }).toList(),
+                        const SizedBox(height: AppConstants.paddingM),
+                      ],
                     );
                   },
                 );

@@ -28,6 +28,8 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
   bool _isLoading = true;
   bool _isDownloading = false;
   bool _isBookmarked = false;
+  bool _isDownloadingPdf = false;
+  final _noteController = TextEditingController();
 
   Future<void> _downloadLessonPDF() async {
     setState(() => _isDownloading = true);
@@ -125,10 +127,9 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
       setState(() => _isDownloading = false);
     }
   }
-
+ 
   double _progress = 0.0;
-  final TextEditingController _noteController = TextEditingController();
-
+ 
   @override
   void initState() {
     super.initState();
@@ -273,6 +274,70 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
     }
   }
 
+  Future<void> _downloadTeacherPdf() async {
+    final pdfUrl = _lesson['pdfUrl'] as String?;
+    if (pdfUrl == null || pdfUrl!.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No PDF available for this lesson.')),
+      );
+      return;
+    }
+
+    setState(() => _isDownloadingPdf = true);
+
+    try {
+      // Download PDF from Firebase Storage
+      // Note: For actual file download, you would use url_launcher package
+      // For now, we'll show the PDF URL in a dialog
+      if (!mounted) return;
+      
+      await showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Lesson PDF'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('PDF URL:'),
+              const SizedBox(height: AppConstants.paddingS),
+              SelectableText(
+                pdfUrl!,
+                style: const TextStyle(fontSize: AppConstants.fontM),
+              ),
+              const SizedBox(height: AppConstants.paddingM),
+              const Text(
+                'To download this PDF, you can:',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: AppConstants.paddingS),
+              const Text('1. Copy the URL above'),
+              const Text('2. Open it in your browser'),
+              const Text('3. Download the PDF from there'),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      debugPrint('Error downloading PDF: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isDownloadingPdf = false);
+      }
+    }
+  }
+
   Future<void> _saveProgress(double progress) async {
     try {
       final user = FirebaseAuth.instance.currentUser;
@@ -373,6 +438,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
     );
     final imageUrls = _lesson['imageUrls'] as List? ?? [];
     final videoUrls = _lesson['videoUrls'] as List? ?? [];
+    final pdfUrl = _lesson['pdfUrl'] as String?;
 
     return Scaffold(
       appBar: AppBar(
@@ -579,6 +645,85 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                 ],
               ),
             ),
+
+            // PDF Attachment Section
+            if (pdfUrl != null && pdfUrl!.isNotEmpty) ...[
+              Padding(
+                padding: const EdgeInsets.all(AppConstants.paddingL),
+                child: Card(
+                  elevation: 2,
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppConstants.paddingL),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(AppConstants.paddingM),
+                              decoration: BoxDecoration(
+                                color: AppColors.error.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(AppConstants.radiusRound),
+                              ),
+                              child: const Icon(
+                                Icons.picture_as_pdf,
+                                color: AppColors.error,
+                                size: 32,
+                              ),
+                            ),
+                            const SizedBox(width: AppConstants.paddingM),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Lesson Material (PDF)',
+                                    style: TextStyle(
+                                      fontSize: AppConstants.fontL,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.textPrimary,
+                                    ),
+                                  ),
+                                  const SizedBox(height: AppConstants.paddingXS),
+                                  Text(
+                                    'Download the PDF material provided by your teacher',
+                                    style: TextStyle(
+                                      fontSize: AppConstants.fontM,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: AppConstants.paddingM),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: _isDownloadingPdf ? null : _downloadTeacherPdf,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.error,
+                              foregroundColor: AppColors.textWhite,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            icon: _isDownloadingPdf
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2, color: Colors.white),
+                                  )
+                                : const Icon(Icons.download),
+                            label: const Text('Download PDF'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
 
             // Progress Section
             Padding(

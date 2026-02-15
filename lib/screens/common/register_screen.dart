@@ -26,7 +26,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _isLoading = false;
   String? _selectedGrade;
   String? _selectedSection;
-  String? _selectedSubject;
+  List<String> _selectedSubjects = [];
   List<String> _selectedSectionsHandled = [];
 
   Color get _roleColor {
@@ -96,19 +96,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
           section = _selectedSection;
         } else if (widget.role == 'teacher') {
           // Teachers must select at least one subject
-          if (_selectedSubject == null) {
+          if (_selectedSubjects.isEmpty) {
             if (!mounted) return;
             setState(() => _isLoading = false);
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text('Please select a subject'),
+                content: Text('Please select at least one subject'),
                 backgroundColor: AppColors.error,
               ),
             );
             return;
           }
-          subject = _selectedSubject;
-          subjects = _selectedSubject != null ? [_selectedSubject!] : null;
+          subjects = _selectedSubjects;
           
           // Teachers can optionally select sections they handle
           if (_selectedSectionsHandled.isNotEmpty) {
@@ -320,27 +319,65 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                   // Teacher-specific fields
                   if (widget.role == 'teacher') ...[
-                    DropdownButtonFormField<String>(
-                      value: _selectedSubject,
-                      decoration: const InputDecoration(
-                        labelText: 'Subject',
-                        prefixIcon: Icon(Icons.book_outlined),
-                      ),
-                      items: AppConstants.subjects.map((subject) {
-                        return DropdownMenuItem(
-                          value: subject,
-                          child: Text(subject),
-                        );
-                      }).toList(),
-                      onChanged: (value) {
-                        setState(() => _selectedSubject = value);
-                      },
-                      validator: (value) {
-                        if (value == null) {
-                          return 'Please select a subject';
-                        }
-                        return null;
-                      },
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'Subjects',
+                              style: TextStyle(
+                                fontSize: AppConstants.fontM,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () {
+                                setState(() {
+                                  if (_selectedSubjects.length == AppConstants.subjects.length) {
+                                    _selectedSubjects.clear();
+                                  } else {
+                                    _selectedSubjects = List.from(AppConstants.subjects);
+                                  }
+                                });
+                              },
+                              child: Text(
+                                _selectedSubjects.length == AppConstants.subjects.length
+                                    ? 'Deselect All'
+                                    : 'Select All',
+                                style: TextStyle(
+                                  color: _roleColor,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: AppConstants.paddingS),
+                        Wrap(
+                          spacing: AppConstants.paddingS,
+                          runSpacing: AppConstants.paddingS,
+                          children: AppConstants.subjects.map((subject) {
+                            final isSelected = _selectedSubjects.contains(subject);
+                            return FilterChip(
+                              label: Text(subject),
+                              selected: isSelected,
+                              onSelected: (selected) {
+                                setState(() {
+                                  if (selected) {
+                                    _selectedSubjects.add(subject);
+                                  } else {
+                                    _selectedSubjects.remove(subject);
+                                  }
+                                });
+                              },
+                              selectedColor: _roleColor.withOpacity(0.2),
+                              checkmarkColor: _roleColor,
+                            );
+                          }).toList(),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: AppConstants.paddingL),
 
