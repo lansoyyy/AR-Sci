@@ -114,21 +114,56 @@ class _DashboardHomeState extends State<_DashboardHome> {
       appBar: AppBar(
         title: const Text('Admin Dashboard'),
         backgroundColor: AppColors.adminPrimary,
-        // actions: [
-        //   IconButton(
-        //     icon: const Icon(Icons.notifications_outlined),
-        //     onPressed: () {
-        //       Navigator.pushNamed(context, '/notifications',
-        //           arguments: 'admin');
-        //     },
-        //   ),
-        //   IconButton(
-        //     icon: const Icon(Icons.person_outline),
-        //     onPressed: () {
-        //       Navigator.pushNamed(context, '/profile', arguments: 'admin');
-        //     },
-        //   ),
-        // ],
+        actions: [
+          // IconButton(
+          //   icon: const Icon(Icons.notifications_outlined),
+          //   onPressed: () {
+          //     Navigator.pushNamed(context, '/notifications',
+          //         arguments: 'admin');
+          //   },
+          // ),
+          // IconButton(
+          //   icon: const Icon(Icons.person_outline),
+          //   onPressed: () {
+          //     Navigator.pushNamed(context, '/profile', arguments: 'admin');
+          //   },
+          // ),
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: () async {
+              final confirmed = await showDialog<bool>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('Logout'),
+                  content: const Text('Are you sure you want to logout?'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text('Cancel'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.error,
+                        foregroundColor: AppColors.textWhite,
+                      ),
+                      child: const Text('Logout'),
+                    ),
+                  ],
+                ),
+              );
+              if (confirmed == true) {
+                await FirebaseAuth.instance.signOut();
+                if (!mounted) return;
+                Navigator.pushNamedAndRemoveUntil(
+                  context,
+                  '/role-selection',
+                  (route) => false,
+                );
+              }
+            },
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         child: Column(
