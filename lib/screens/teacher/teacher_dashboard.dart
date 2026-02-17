@@ -647,12 +647,14 @@ class _DashboardHome extends StatelessWidget {
             StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
               stream: FirebaseFirestore.instance
                   .collection('lessons')
-                  .where('isPublished', isEqualTo: true)
                   .where('createdBy',
                       isEqualTo: FirebaseAuth.instance.currentUser?.uid)
                   .snapshots(),
               builder: (context, snapshot) {
-                final docs = snapshot.data?.docs ?? [];
+                final allDocs = snapshot.data?.docs ?? [];
+                final docs = allDocs
+                    .where((d) => d.data()['isPublished'] == true)
+                    .toList();
                 final lessons = docs.map((d) {
                   final data = d.data();
                   final title = (data['title'] as String?) ?? '';
@@ -1289,7 +1291,9 @@ class _StudentsPageState extends State<_StudentsPage> {
                 }
 
                 // Group students by section
-                final Map<String, List<QueryDocumentSnapshot<Map<String, dynamic>>>> studentsBySection = {};
+                final Map<String,
+                        List<QueryDocumentSnapshot<Map<String, dynamic>>>>
+                    studentsBySection = {};
                 for (final doc in filteredDocs) {
                   final data = doc.data();
                   final section = (data['section'] as String?) ?? 'No Section';
@@ -1326,8 +1330,10 @@ class _StudentsPageState extends State<_StudentsPage> {
                                   vertical: AppConstants.paddingS,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: AppColors.teacherPrimary.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(AppConstants.radiusRound),
+                                  color:
+                                      AppColors.teacherPrimary.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(
+                                      AppConstants.radiusRound),
                                 ),
                                 child: Row(
                                   children: [
@@ -1336,7 +1342,8 @@ class _StudentsPageState extends State<_StudentsPage> {
                                       size: 20,
                                       color: AppColors.teacherPrimary,
                                     ),
-                                    const SizedBox(width: AppConstants.paddingS),
+                                    const SizedBox(
+                                        width: AppConstants.paddingS),
                                     Text(
                                       section,
                                       style: const TextStyle(
@@ -1345,7 +1352,8 @@ class _StudentsPageState extends State<_StudentsPage> {
                                         color: AppColors.teacherPrimary,
                                       ),
                                     ),
-                                    const SizedBox(width: AppConstants.paddingS),
+                                    const SizedBox(
+                                        width: AppConstants.paddingS),
                                     Container(
                                       padding: const EdgeInsets.symmetric(
                                         horizontal: AppConstants.paddingS,
@@ -1353,7 +1361,8 @@ class _StudentsPageState extends State<_StudentsPage> {
                                       ),
                                       decoration: BoxDecoration(
                                         color: AppColors.teacherPrimary,
-                                        borderRadius: BorderRadius.circular(AppConstants.radiusRound),
+                                        borderRadius: BorderRadius.circular(
+                                            AppConstants.radiusRound),
                                       ),
                                       child: Text(
                                         '${sectionStudents.length}',
@@ -1379,13 +1388,15 @@ class _StudentsPageState extends State<_StudentsPage> {
                           final email = (data['email'] as String?) ?? '';
                           final grade = (data['gradeLevel'] as String?) ?? '';
 
-                          return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                          return StreamBuilder<
+                              QuerySnapshot<Map<String, dynamic>>>(
                             stream: FirebaseFirestore.instance
                                 .collection('quiz_results')
                                 .where('studentId', isEqualTo: studentId)
                                 .snapshots(),
                             builder: (context, resultsSnapshot) {
-                              final resultDocs = resultsSnapshot.data?.docs ?? [];
+                              final resultDocs =
+                                  resultsSnapshot.data?.docs ?? [];
                               final attempts = resultDocs.length;
                               double avg = 0;
                               if (attempts > 0) {
@@ -1394,7 +1405,8 @@ class _StudentsPageState extends State<_StudentsPage> {
                                   final score =
                                       (r['score'] as num?)?.toDouble() ?? 0.0;
                                   final totalPoints =
-                                      (r['totalPoints'] as num?)?.toDouble() ?? 0.0;
+                                      (r['totalPoints'] as num?)?.toDouble() ??
+                                          0.0;
                                   if (totalPoints <= 0) return 0.0;
                                   return (score / totalPoints) * 100;
                                 }).reduce((a, b) => a + b);

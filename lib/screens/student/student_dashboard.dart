@@ -410,20 +410,25 @@ class _DashboardHome extends StatelessWidget {
                       final snapshot = await FirebaseFirestore.instance
                           .collection('lessons')
                           .where('isPublished', isEqualTo: true)
-                          .where('gradeLevel', isEqualTo: currentUser?.gradeLevel)
-                          .limit(1)
+                          .limit(50)
                           .get();
 
-                      if (snapshot.docs.isEmpty) {
+                      final filteredDocs = snapshot.docs.where((doc) {
+                        final data = doc.data();
+                        return data['gradeLevel'] == currentUser?.gradeLevel;
+                      }).toList();
+
+                      if (filteredDocs.isEmpty) {
                         if (!context.mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                              content: Text('No lessons available.')),
+                              content: Text(
+                                  'No lessons available for your grade level.')),
                         );
                         return;
                       }
 
-                      final firstDoc = snapshot.docs.first;
+                      final firstDoc = filteredDocs.first;
                       final firstLesson = <String, dynamic>{
                         ...firstDoc.data(),
                         'id': firstDoc.data()['id'] ?? firstDoc.id,
@@ -518,8 +523,6 @@ class _DashboardHome extends StatelessWidget {
               stream: FirebaseFirestore.instance
                   .collection('lessons')
                   .where('isPublished', isEqualTo: true)
-                  .where('gradeLevel', isEqualTo: currentUser?.gradeLevel)
-                  .limit(2)
                   .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
@@ -529,8 +532,12 @@ class _DashboardHome extends StatelessWidget {
                   );
                 }
 
-                final firebaseLessons = (snapshot.data?.docs ??
-                        <QueryDocumentSnapshot<Map<String, dynamic>>>[])
+                final allDocs = snapshot.data?.docs ??
+                    <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+                final firebaseLessons = allDocs
+                    .where((d) =>
+                        d.data()['gradeLevel'] == currentUser?.gradeLevel)
+                    .take(2)
                     .map((d) => <String, dynamic>{
                           ...d.data(),
                           'id': d.data()['id'] ?? d.id,
@@ -592,12 +599,15 @@ class _DashboardHome extends StatelessWidget {
               stream: FirebaseFirestore.instance
                   .collection('quizzes')
                   .where('isPublished', isEqualTo: true)
-                  .where('gradeLevel', isEqualTo: currentUser?.gradeLevel)
-                  .limit(2)
                   .snapshots(),
               builder: (context, snapshot) {
-                final docs = snapshot.data?.docs ??
+                final allDocs = snapshot.data?.docs ??
                     <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+                final docs = allDocs
+                    .where((d) =>
+                        d.data()['gradeLevel'] == currentUser?.gradeLevel)
+                    .take(2)
+                    .toList();
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Padding(
                     padding: EdgeInsets.all(AppConstants.paddingM),
@@ -729,10 +739,12 @@ class _LessonsPageState extends State<_LessonsPage> {
               stream: FirebaseFirestore.instance
                   .collection('lessons')
                   .where('isPublished', isEqualTo: true)
-                  .where('gradeLevel', isEqualTo: _studentGradeLevel)
                   .snapshots(),
               builder: (context, snapshot) {
-                final docs = snapshot.data?.docs ?? [];
+                final allDocs = snapshot.data?.docs ?? [];
+                final docs = allDocs
+                    .where((d) => d.data()['gradeLevel'] == _studentGradeLevel)
+                    .toList();
                 final quarters = docs
                     .map((d) => (d.data()['quarter'] ?? '').toString())
                     .where((s) => s.isNotEmpty)
@@ -787,7 +799,6 @@ class _LessonsPageState extends State<_LessonsPage> {
               stream: FirebaseFirestore.instance
                   .collection('lessons')
                   .where('isPublished', isEqualTo: true)
-                  .where('gradeLevel', isEqualTo: _studentGradeLevel)
                   .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
@@ -804,8 +815,12 @@ class _LessonsPageState extends State<_LessonsPage> {
                   );
                 }
 
-                final firebaseLessons = (snapshot.data?.docs ??
-                        <QueryDocumentSnapshot<Map<String, dynamic>>>[])
+                final allDocs = snapshot.data?.docs ??
+                    <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+                final filteredByGrade = allDocs
+                    .where((d) => d.data()['gradeLevel'] == _studentGradeLevel)
+                    .toList();
+                final firebaseLessons = filteredByGrade
                     .map((d) => <String, dynamic>{
                           ...d.data(),
                           'id': d.data()['id'] ?? d.id,
@@ -923,10 +938,12 @@ class _QuizzesPageBodyState extends State<_QuizzesPageBody> {
               stream: FirebaseFirestore.instance
                   .collection('quizzes')
                   .where('isPublished', isEqualTo: true)
-                  .where('gradeLevel', isEqualTo: _studentGradeLevel)
                   .snapshots(),
               builder: (context, snapshot) {
-                final docs = snapshot.data?.docs ?? [];
+                final allDocs = snapshot.data?.docs ?? [];
+                final docs = allDocs
+                    .where((d) => d.data()['gradeLevel'] == _studentGradeLevel)
+                    .toList();
                 final grades = docs
                     .map((d) =>
                         (d.data()['gradeLevel'] ?? d.data()['grade'] ?? '')
@@ -968,7 +985,6 @@ class _QuizzesPageBodyState extends State<_QuizzesPageBody> {
               stream: FirebaseFirestore.instance
                   .collection('quizzes')
                   .where('isPublished', isEqualTo: true)
-                  .where('gradeLevel', isEqualTo: _studentGradeLevel)
                   .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
@@ -985,8 +1001,12 @@ class _QuizzesPageBodyState extends State<_QuizzesPageBody> {
                   );
                 }
 
-                final quizzes = (snapshot.data?.docs ??
-                        <QueryDocumentSnapshot<Map<String, dynamic>>>[])
+                final allDocs = snapshot.data?.docs ??
+                    <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+                final filteredByGrade = allDocs
+                    .where((d) => d.data()['gradeLevel'] == _studentGradeLevel)
+                    .toList();
+                final quizzes = filteredByGrade
                     .map((d) => <String, dynamic>{
                           ...d.data(),
                           'id': d.data()['id'] ?? d.id,

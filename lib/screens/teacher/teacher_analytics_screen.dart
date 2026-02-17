@@ -59,17 +59,14 @@ class _TeacherAnalyticsScreenState extends State<TeacherAnalyticsScreen> {
           children: [
             _buildOverviewSection(),
             const SizedBox(height: AppConstants.paddingXL),
-            
             _buildSectionHeader('Lesson Engagement'),
             const SizedBox(height: AppConstants.paddingM),
             _buildLessonEngagementSection(),
             const SizedBox(height: AppConstants.paddingXL),
-            
             _buildSectionHeader('Quiz Performance'),
             const SizedBox(height: AppConstants.paddingM),
             _buildQuizPerformanceSection(),
             const SizedBox(height: AppConstants.paddingXL),
-            
             _buildSectionHeader('Student Activity'),
             const SizedBox(height: AppConstants.paddingM),
             _buildStudentActivitySection(),
@@ -94,7 +91,7 @@ class _TeacherAnalyticsScreenState extends State<TeacherAnalyticsScreen> {
           builder: (context, quizzesSnapshot) {
             final lessonsCount = lessonsSnapshot.data?.docs.length ?? 0;
             final quizzesCount = quizzesSnapshot.data?.docs.length ?? 0;
-            
+
             return Column(
               children: [
                 Row(
@@ -142,11 +139,12 @@ class _TeacherAnalyticsScreenState extends State<TeacherAnalyticsScreen> {
       stream: FirebaseFirestore.instance
           .collection('lessons')
           .where('createdBy', isEqualTo: _teacherId)
-          .where('isPublished', isEqualTo: true)
           .snapshots(),
       builder: (context, lessonsSnapshot) {
         return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: FirebaseFirestore.instance.collection('lesson_progress').snapshots(),
+          stream: FirebaseFirestore.instance
+              .collection('lesson_progress')
+              .snapshots(),
           builder: (context, progressSnapshot) {
             if (!lessonsSnapshot.hasData) {
               return const Card(
@@ -157,7 +155,10 @@ class _TeacherAnalyticsScreenState extends State<TeacherAnalyticsScreen> {
               );
             }
 
-            final lessons = lessonsSnapshot.data?.docs ?? [];
+            final allLessons = lessonsSnapshot.data?.docs ?? [];
+            final lessons = allLessons
+                .where((d) => d.data()['isPublished'] == true)
+                .toList();
             final progress = progressSnapshot.data?.docs ?? [];
 
             // Calculate views per lesson
@@ -199,9 +200,11 @@ class _TeacherAnalyticsScreenState extends State<TeacherAnalyticsScreen> {
                       child: BarChart(
                         BarChartData(
                           alignment: BarChartAlignment.spaceAround,
-                          maxY: topLessons.isEmpty 
-                              ? 10 
-                              : (lessonViews[topLessons.first['id']] ?? 0).toDouble() * 1.2,
+                          maxY: topLessons.isEmpty
+                              ? 10
+                              : (lessonViews[topLessons.first['id']] ?? 0)
+                                      .toDouble() *
+                                  1.2,
                           barTouchData: BarTouchData(enabled: true),
                           titlesData: FlTitlesData(
                             show: true,
@@ -210,12 +213,14 @@ class _TeacherAnalyticsScreenState extends State<TeacherAnalyticsScreen> {
                                 showTitles: true,
                                 getTitlesWidget: (value, meta) {
                                   if (value.toInt() < topLessons.length) {
-                                    final title = topLessons[value.toInt()]['title'] as String? ?? '';
+                                    final title = topLessons[value.toInt()]
+                                            ['title'] as String? ??
+                                        '';
                                     return Padding(
                                       padding: const EdgeInsets.only(top: 8),
                                       child: Text(
-                                        title.length > 10 
-                                            ? '${title.substring(0, 10)}...' 
+                                        title.length > 10
+                                            ? '${title.substring(0, 10)}...'
                                             : title,
                                         style: const TextStyle(fontSize: 10),
                                       ),
@@ -316,7 +321,7 @@ class _TeacherAnalyticsScreenState extends State<TeacherAnalyticsScreen> {
               .snapshots(),
           builder: (context, resultsSnapshot) {
             final results = resultsSnapshot.data?.docs ?? [];
-            
+
             if (results.isEmpty) {
               return const Card(
                 child: Padding(
@@ -342,12 +347,13 @@ class _TeacherAnalyticsScreenState extends State<TeacherAnalyticsScreen> {
                 };
               }
               quizStats[quizId]!['scores'].add(percentage);
-              quizStats[quizId]!['attempts'] = (quizStats[quizId]!['attempts'] as int) + 1;
+              quizStats[quizId]!['attempts'] =
+                  (quizStats[quizId]!['attempts'] as int) + 1;
             }
 
             // Get quiz titles
             final quizAverages = quizStats.entries.map((entry) {
-              final quizDoc = quizzes.firstWhere((q) => q.id == entry.key, 
+              final quizDoc = quizzes.firstWhere((q) => q.id == entry.key,
                   orElse: () => quizzes.first);
               final scores = entry.value['scores'] as List<double>;
               final avg = scores.reduce((a, b) => a + b) / scores.length;
@@ -358,7 +364,8 @@ class _TeacherAnalyticsScreenState extends State<TeacherAnalyticsScreen> {
                 'attempts': entry.value['attempts'],
               };
             }).toList()
-              ..sort((a, b) => (b['average'] as double).compareTo(a['average'] as double));
+              ..sort((a, b) =>
+                  (b['average'] as double).compareTo(a['average'] as double));
 
             return Card(
               child: Padding(
@@ -431,12 +438,13 @@ class _TeacherAnalyticsScreenState extends State<TeacherAnalyticsScreen> {
                             vertical: 4,
                           ),
                           decoration: BoxDecoration(
-                            color: avg >= 70 
-                                ? AppColors.success 
-                                : avg >= 50 
-                                    ? AppColors.warning 
+                            color: avg >= 70
+                                ? AppColors.success
+                                : avg >= 50
+                                    ? AppColors.warning
                                     : AppColors.error,
-                            borderRadius: BorderRadius.circular(AppConstants.radiusRound),
+                            borderRadius:
+                                BorderRadius.circular(AppConstants.radiusRound),
                           ),
                           child: Text(
                             '${avg.toStringAsFixed(1)}%',
@@ -467,15 +475,17 @@ class _TeacherAnalyticsScreenState extends State<TeacherAnalyticsScreen> {
           .snapshots(),
       builder: (context, snapshot) {
         final results = snapshot.data?.docs ?? [];
-        
+
         // Get unique students who took quizzes recently
-        final studentIds = results.map((r) => r.data()['studentId'] as String?).toSet();
-        
+        final studentIds =
+            results.map((r) => r.data()['studentId'] as String?).toSet();
+
         return Card(
           child: Column(
             children: [
               ListTile(
-                leading: const Icon(Icons.people, color: AppColors.teacherPrimary),
+                leading:
+                    const Icon(Icons.people, color: AppColors.teacherPrimary),
                 title: const Text('Recent Student Activity'),
                 subtitle: Text('${results.length} recent quiz attempts'),
               ),
@@ -487,14 +497,14 @@ class _TeacherAnalyticsScreenState extends State<TeacherAnalyticsScreen> {
                 final total = (data['totalPoints'] as num?)?.toDouble() ?? 1;
                 final percentage = (score / total) * 100;
                 final studentName = data['studentName'] as String? ?? 'Student';
-                
+
                 return ListTile(
                   dense: true,
                   leading: CircleAvatar(
-                    backgroundColor: percentage >= 70 
-                        ? AppColors.success 
-                        : percentage >= 50 
-                            ? AppColors.warning 
+                    backgroundColor: percentage >= 70
+                        ? AppColors.success
+                        : percentage >= 50
+                            ? AppColors.warning
                             : AppColors.error,
                     child: Text(
                       '${percentage.toInt()}%',
