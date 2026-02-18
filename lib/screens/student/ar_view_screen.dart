@@ -311,6 +311,201 @@ class _ARViewScreenState extends State<ARViewScreen> {
       modelAssetPath: 'assets/models/11.glb',
       imageAssetPath: 'assets/images/3d Models AR/pic11.png',
     ),
+    _ARModelItem(
+      title: 'Internal Structure of the Human Heart',
+      description:
+          'This diagram shows the internal structure of the human heart, including an Inquiry Lab activity titled "How the Heart Looks Like." '
+          'Students are instructed to observe and draw the hearts of a pig, chicken, and frog, then identify at least three similarities and two differences among them. '
+          'The labeled diagram shows the major anatomical structures of the heart.',
+      keyComponents: <String>[
+        'Larynx (voice box)',
+        'Trachea (windpipe)',
+        'Primary Bronchi',
+        'Secondary Bronchi',
+        'Tertiary Bronchi',
+        'Bronchiole',
+      ],
+      type: 'Anatomical diagram / Educational illustration',
+      mainFocus: 'Internal anatomy of the human heart',
+      purpose:
+          'To help students understand heart structure and comparative anatomy',
+      subjectArea: 'Biology / Human Anatomy',
+      gradeLevel: 'Grade 7–10',
+      importance:
+          'Supports understanding of cardiovascular system and comparative anatomy studies',
+      modelAssetPath: 'assets/models/12.glb',
+      imageAssetPath: 'assets/images/3d Models AR/pic14.png',
+    ),
+    _ARModelItem(
+      title: 'Anatomy of an Air Sac',
+      description:
+          'The diagram highlights the transition from the airway tubes to the microscopic sacs where oxygen enters the blood. '
+          'It shows the bronchiole as a small branch of the airway that leads into the air sacs, acting as the final "hallway" for air before reaching the exchange site. '
+          'The alveoli are individual, grape-like microscopic bulbs that are the primary sites of gas exchange.',
+      keyComponents: <String>[
+        'Bronchiole',
+        'Alveoli',
+        'Air Sac (Alveolar Sac)',
+        'Arteriole (Red - oxygenated blood)',
+        'Venule (Blue/Purple - deoxygenated blood)',
+      ],
+      type: 'Anatomical diagram / Educational illustration',
+      mainFocus: 'Gas exchange structures in the lungs',
+      purpose:
+          'To show how oxygen and carbon dioxide are exchanged in the lungs',
+      subjectArea: 'Biology / Human Anatomy',
+      gradeLevel: 'Grade 7–10',
+      importance:
+          'Essential for understanding respiratory system and gas exchange process',
+      modelAssetPath: 'assets/models/13.glb',
+      imageAssetPath: 'assets/images/3d Models AR/pic15.png',
+    ),
+    _ARModelItem(
+      title: 'Human Respiratory Tree',
+      description:
+          'The diagram shows the hierarchical branching of the respiratory tract, starting from the larynx (voice box) at the top of the airway '
+          'down through the trachea (windpipe), primary bronchi, secondary bronchi, tertiary bronchi, and finally the bronchioles that lead to the alveoli.',
+      keyComponents: <String>[
+        'Larynx',
+        'Trachea',
+        'Primary Bronchi',
+        'Secondary Bronchi',
+        'Tertiary Bronchi',
+        'Bronchiole',
+      ],
+      type: 'Anatomical diagram / Educational illustration',
+      mainFocus: 'Anatomy of the airway',
+      purpose:
+          'To help students understand the structure of the respiratory system',
+      subjectArea: 'Biology / Human Anatomy',
+      gradeLevel: 'Grade 7–10',
+      importance:
+          'Supports understanding of how air travels through the respiratory system',
+      modelAssetPath: 'assets/models/14.glb',
+      imageAssetPath: 'assets/images/3d Models AR/pic16.png',
+    ),
+    _ARModelItem(
+      title: 'The Structure of Homologous Chromosomes',
+      description:
+          'The diagram labels the critical parts of genetic structures. Homologous chromosomes are a pair of chromosomes (one from each parent) '
+          'that are similar in shape, size, and genetic content. Sister chromatids are the two identical copies of a single chromosome formed during DNA replication.',
+      keyComponents: <String>[
+        'Homologous Chromosomes',
+        'Sister Chromatids',
+        'Centromere',
+        'Kinetochore',
+      ],
+      type: 'Genetic diagram / Educational illustration',
+      mainFocus: 'Chromosome structure and terminology',
+      purpose:
+          'To help students understand chromosome structure and cell division',
+      subjectArea: 'Biology / Genetics',
+      gradeLevel: 'Grade 9–10',
+      importance:
+          'Essential for understanding cell division, inheritance, and genetic variation',
+      modelAssetPath: 'assets/models/15.glb',
+      imageAssetPath: 'assets/images/3d Models AR/pic17.png',
+    ),
+    _ARModelItem(
+      title: 'Linear Molecular Geometry',
+      description:
+          'The image shows a molecule where the atoms are arranged in a straight line. The diagram explicitly shows a 180° angle between the terminal atoms. '
+          'The central atom (grey sphere) is in the middle, while terminal atoms (green spheres) are on the ends. This shape occurs when the central atom has '
+          'two bonding pairs and zero lone pairs of electrons.',
+      keyComponents: <String>[
+        'Bond Angle (180°)',
+        'Central Atom',
+        'Terminal Atoms',
+        'VSEPR Theory',
+      ],
+      type: 'Molecular geometry diagram / Educational illustration',
+      mainFocus: 'Linear molecular shape',
+      purpose:
+          'To help students understand molecular geometry and VSEPR theory',
+      subjectArea: 'Chemistry',
+      gradeLevel: 'Grade 9–10',
+      importance:
+          'Supports understanding of molecular shapes and chemical bonding',
+      modelAssetPath: 'assets/models/16.glb',
+      imageAssetPath: 'assets/images/3d Models AR/pic18.png',
+    ),
+    _ARModelItem(
+      title: 'Boron Trifluoride (BF3)',
+      description:
+          'A classic example of trigonal planar geometry in chemistry. The boron atom is sp² hybridized. While the B-F bonds are polar, '
+          'the symmetrical shape of the molecule causes the dipole moments to cancel out, making BF₃ a nonpolar molecule. '
+          'Boron is "electron-deficient" here, having only six valence electrons instead of the usual eight.',
+      keyComponents: <String>[
+        'Molecular Geometry: Trigonal Planar',
+        'Hybridization: sp²',
+        'Polarity: Nonpolar molecule',
+        'Octet Rule Exception',
+      ],
+      type: 'Molecular structure diagram / Educational illustration',
+      mainFocus: 'Trigonal planar molecular geometry',
+      purpose:
+          'To illustrate molecular geometry, hybridization, and polarity concepts',
+      subjectArea: 'Chemistry',
+      gradeLevel: 'Grade 9–10',
+      importance:
+          'Essential for understanding molecular shapes, polarity, and chemical bonding exceptions',
+      modelAssetPath: 'assets/models/17.glb',
+      imageAssetPath: 'assets/images/3d Models AR/pic19.png',
+    ),
+    _ARModelItem(
+      title: 'Structure and Hazards of an Erupting Volcano',
+      description:
+          'A cross-section diagram of an active volcano, illustrating various geological features and hazards associated with an eruption. '
+          'Shows magma deep beneath the volcano, lava flows on the surface, ash flows, mud flows (lahars), landslides, eruption clouds, '
+          'acid rain, and the effect of prevailing winds.',
+      keyComponents: <String>[
+        'Magma',
+        'Dome',
+        'Lava flow',
+        'Ash flow (pyroclastic flow)',
+        'Mud flow (lahar)',
+        'Landslide',
+        'Eruption cloud',
+        'Acid Rain',
+        'Prevailing wind',
+      ],
+      type: 'Geological diagram / Educational illustration',
+      mainFocus: 'Volcanic structure and eruption hazards',
+      purpose:
+          'To help students understand volcanic hazards and eruption dynamics',
+      subjectArea: 'Earth Science / Geology',
+      gradeLevel: 'Grade 9',
+      importance:
+          'Essential for understanding volcanic hazards and disaster preparedness',
+      modelAssetPath: 'assets/models/18.glb',
+      imageAssetPath: 'assets/images/3d Models AR/pic20.png',
+    ),
+    _ARModelItem(
+      title: 'Indicators of a Warming World',
+      description:
+          'Uses arrows to show how different environmental factors are trending as the Earth\'s temperature rises. '
+          'Shows rising tropospheric temperature, increasing humidity, warming ocean temperatures, rising sea levels, '
+          'increasing ocean heat content, and rising temperatures over land.',
+      keyComponents: <String>[
+        'Tropospheric Temperature',
+        'Humidity',
+        'Temperature Over Oceans',
+        'Sea Surface Temperature',
+        'Sea Level',
+        'Ocean Heat Content',
+        'Temperature Over Land',
+      ],
+      type: 'Environmental diagram / Educational illustration',
+      mainFocus: 'Climate change indicators',
+      purpose:
+          'To illustrate the effects of global warming on various environmental factors',
+      subjectArea: 'Earth Science / Environmental Science',
+      gradeLevel: 'Grade 7–10',
+      importance:
+          'Essential for understanding climate change and its environmental impacts',
+      modelAssetPath: 'assets/models/19.glb',
+      imageAssetPath: 'assets/images/3d Models AR/pic21.png',
+    ),
   ];
 
   @override

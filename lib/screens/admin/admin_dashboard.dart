@@ -1085,10 +1085,15 @@ class _ContentManagement extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final lessonsStream =
-        FirebaseFirestore.instance.collection('lessons').snapshots();
-    final quizzesStream =
-        FirebaseFirestore.instance.collection('quizzes').snapshots();
+    // Use broadcast streams to allow multiple listeners
+    final lessonsStream = FirebaseFirestore.instance
+        .collection('lessons')
+        .snapshots()
+        .asBroadcastStream();
+    final quizzesStream = FirebaseFirestore.instance
+        .collection('quizzes')
+        .snapshots()
+        .asBroadcastStream();
 
     return DefaultTabController(
       length: 2,

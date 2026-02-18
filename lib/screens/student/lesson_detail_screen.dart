@@ -5,9 +5,9 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../utils/colors.dart';
 import '../../utils/constants.dart';
-import '../../widgets/custom_button.dart';
 
 class LessonDetailScreen extends StatefulWidget {
   final Map<String, dynamic>? lessonData;
@@ -127,9 +127,9 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
       setState(() => _isDownloading = false);
     }
   }
- 
+
   double _progress = 0.0;
- 
+
   @override
   void initState() {
     super.initState();
@@ -276,7 +276,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
 
   Future<void> _downloadTeacherPdf() async {
     final pdfUrl = _lesson['pdfUrl'] as String?;
-    if (pdfUrl == null || pdfUrl!.isEmpty) {
+    if (pdfUrl == null || pdfUrl.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('No PDF available for this lesson.')),
@@ -287,49 +287,46 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
     setState(() => _isDownloadingPdf = true);
 
     try {
-      // Download PDF from Firebase Storage
-      // Note: For actual file download, you would use url_launcher package
-      // For now, we'll show the PDF URL in a dialog
-      if (!mounted) return;
-      
-      await showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Lesson PDF'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('PDF URL:'),
-              const SizedBox(height: AppConstants.paddingS),
-              SelectableText(
-                pdfUrl!,
-                style: const TextStyle(fontSize: AppConstants.fontM),
-              ),
-              const SizedBox(height: AppConstants.paddingM),
-              const Text(
-                'To download this PDF, you can:',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: AppConstants.paddingS),
-              const Text('1. Copy the URL above'),
-              const Text('2. Open it in your browser'),
-              const Text('3. Download the PDF from there'),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Close'),
-            ),
-          ],
-        ),
+      // Ensure URL has proper scheme
+      String urlToLaunch = pdfUrl;
+      if (!urlToLaunch.startsWith('http://') &&
+          !urlToLaunch.startsWith('https://')) {
+        urlToLaunch = 'https://$urlToLaunch';
+      }
+
+      final uri = Uri.parse(urlToLaunch);
+      debugPrint('Opening PDF URL: $urlToLaunch');
+
+      // Try to launch with external application mode
+      bool launched = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
       );
+
+      if (!launched) {
+        // Fallback to platform default
+        launched = await launchUrl(
+          uri,
+          mode: LaunchMode.platformDefault,
+        );
+      }
+
+      if (!launched && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not open PDF. Please try again.'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
     } catch (e) {
-      debugPrint('Error downloading PDF: $e');
+      debugPrint('Error opening PDF: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
+        SnackBar(
+          content: Text('Error opening PDF: $e'),
+          backgroundColor: AppColors.error,
+        ),
       );
     } finally {
       if (mounted) {
@@ -647,7 +644,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
             ),
 
             // PDF Attachment Section
-            if (pdfUrl != null && pdfUrl!.isNotEmpty) ...[
+            if (pdfUrl != null && pdfUrl.isNotEmpty) ...[
               Padding(
                 padding: const EdgeInsets.all(AppConstants.paddingL),
                 child: Card(
@@ -660,10 +657,12 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                         Row(
                           children: [
                             Container(
-                              padding: const EdgeInsets.all(AppConstants.paddingM),
+                              padding:
+                                  const EdgeInsets.all(AppConstants.paddingM),
                               decoration: BoxDecoration(
                                 color: AppColors.error.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(AppConstants.radiusRound),
+                                borderRadius: BorderRadius.circular(
+                                    AppConstants.radiusRound),
                               ),
                               child: const Icon(
                                 Icons.picture_as_pdf,
@@ -684,7 +683,8 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                                       color: AppColors.textPrimary,
                                     ),
                                   ),
-                                  const SizedBox(height: AppConstants.paddingXS),
+                                  const SizedBox(
+                                      height: AppConstants.paddingXS),
                                   Text(
                                     'Download the PDF material provided by your teacher',
                                     style: TextStyle(
@@ -701,7 +701,8 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                         SizedBox(
                           width: double.infinity,
                           child: ElevatedButton.icon(
-                            onPressed: _isDownloadingPdf ? null : _downloadTeacherPdf,
+                            onPressed:
+                                _isDownloadingPdf ? null : _downloadTeacherPdf,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.error,
                               foregroundColor: AppColors.textWhite,

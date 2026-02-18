@@ -56,7 +56,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
       // Hardcoded admin account check
       if (widget.role == 'admin' &&
-          email == 'admin@icct.edu.ph' &&
+          email == 'admin@lcct.edu.ph' &&
           password == 'Admin1234!') {
         // Simulate admin login without Firebase Auth
         if (!mounted) return;
