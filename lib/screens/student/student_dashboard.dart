@@ -87,7 +87,11 @@ class _StudentDashboardState extends State<StudentDashboard> {
   Widget build(BuildContext context) {
     // Update screens with current user data
     final updatedScreens = <Widget>[
-      _DashboardHome(currentUser: _currentUser, isLoading: _isLoading),
+      _DashboardHome(
+        currentUser: _currentUser,
+        isLoading: _isLoading,
+        onNavigate: (index) => setState(() => _selectedIndex = index),
+      ),
       _LessonsPage(currentUser: _currentUser),
       _QuizzesPage(currentUser: _currentUser),
       const _ProgressPage(),
@@ -196,10 +200,12 @@ QuizModel _quizModelFromMap(Map<String, dynamic> quiz) {
 class _DashboardHome extends StatelessWidget {
   final UserModel? currentUser;
   final bool isLoading;
+  final Function(int) onNavigate;
 
   const _DashboardHome({
     this.currentUser,
     this.isLoading = false,
+    required this.onNavigate,
   });
 
   @override
@@ -349,6 +355,7 @@ class _DashboardHome extends StatelessWidget {
                                       icon: Icons.book_outlined,
                                       color: AppColors.studentPrimary,
                                       subtitle: 'Available',
+                                      onTap: () => onNavigate(1),
                                     ),
                                   ),
                                   const SizedBox(width: AppConstants.paddingM),
@@ -359,6 +366,7 @@ class _DashboardHome extends StatelessWidget {
                                       icon: Icons.quiz_outlined,
                                       color: AppColors.success,
                                       subtitle: 'Available',
+                                      onTap: () => onNavigate(2),
                                     ),
                                   ),
                                 ],
@@ -372,6 +380,7 @@ class _DashboardHome extends StatelessWidget {
                                       value: '${avg.toStringAsFixed(0)}%',
                                       icon: Icons.star_outline,
                                       color: AppColors.warning,
+                                      onTap: () => onNavigate(3),
                                     ),
                                   ),
                                   const SizedBox(width: AppConstants.paddingM),
@@ -382,6 +391,7 @@ class _DashboardHome extends StatelessWidget {
                                       icon: Icons.assignment_turned_in_outlined,
                                       color: AppColors.error,
                                       subtitle: 'Quizzes',
+                                      onTap: () => onNavigate(2),
                                     ),
                                   ),
                                 ],

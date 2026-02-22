@@ -87,7 +87,11 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
   @override
   Widget build(BuildContext context) {
     final updatedScreens = <Widget>[
-      _DashboardHome(currentUser: _currentUser, isLoading: _isLoading),
+      _DashboardHome(
+        currentUser: _currentUser,
+        isLoading: _isLoading,
+        onNavigate: (index) => setState(() => _selectedIndex = index),
+      ),
       _LessonsManagement(currentUser: _currentUser),
       _QuizzesManagement(currentUser: _currentUser),
       _StudentsPage(currentUser: _currentUser),
@@ -140,10 +144,12 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
 class _DashboardHome extends StatelessWidget {
   final UserModel? currentUser;
   final bool isLoading;
+  final Function(int) onNavigate;
 
   const _DashboardHome({
     this.currentUser,
     this.isLoading = false,
+    required this.onNavigate,
   });
 
   @override
@@ -297,6 +303,7 @@ class _DashboardHome extends StatelessWidget {
                           icon: Icons.people_outline,
                           color: AppColors.teacherPrimary,
                           subtitle: 'In Scope',
+                          onTap: () => onNavigate(3),
                         );
                       },
                     ),
@@ -312,12 +319,13 @@ class _DashboardHome extends StatelessWidget {
                           .snapshots(),
                       builder: (context, snapshot) {
                         if (snapshot.hasError) {
-                          return const StatCard(
+                          return StatCard(
                             title: 'Lessons',
                             value: '-',
                             icon: Icons.book_outlined,
                             color: AppColors.studentPrimary,
                             subtitle: 'Published',
+                            onTap: () => onNavigate(1),
                           );
                         }
                         final count = snapshot.data?.docs.length ?? 0;
@@ -327,6 +335,7 @@ class _DashboardHome extends StatelessWidget {
                           icon: Icons.book_outlined,
                           color: AppColors.studentPrimary,
                           subtitle: 'Published',
+                          onTap: () => onNavigate(1),
                         );
                       },
                     ),
@@ -351,21 +360,23 @@ class _DashboardHome extends StatelessWidget {
                           .snapshots(),
                       builder: (context, quizzesSnapshot) {
                         if (quizzesSnapshot.hasError) {
-                          return const StatCard(
+                          return StatCard(
                             title: 'Avg Score',
                             value: '-',
                             icon: Icons.trending_up_outlined,
                             color: AppColors.success,
+                            onTap: () => onNavigate(2),
                           );
                         }
 
                         final quizzes = quizzesSnapshot.data?.docs ?? [];
                         if (quizzes.isEmpty) {
-                          return const StatCard(
+                          return StatCard(
                             title: 'Avg Score',
                             value: '0%',
                             icon: Icons.trending_up_outlined,
                             color: AppColors.success,
+                            onTap: () => onNavigate(2),
                           );
                         }
 
@@ -383,11 +394,12 @@ class _DashboardHome extends StatelessWidget {
                           builder: (context, resultsSnapshot) {
                             final docs = resultsSnapshot.data?.docs ?? [];
                             if (docs.isEmpty) {
-                              return const StatCard(
+                              return StatCard(
                                 title: 'Avg Score',
                                 value: '0%',
                                 icon: Icons.trending_up_outlined,
                                 color: AppColors.success,
+                                onTap: () => onNavigate(2),
                               );
                             }
 
@@ -410,6 +422,7 @@ class _DashboardHome extends StatelessWidget {
                               value: '${avg.toStringAsFixed(0)}%',
                               icon: Icons.trending_up_outlined,
                               color: AppColors.success,
+                              onTap: () => onNavigate(2),
                             );
                           },
                         );
@@ -427,10 +440,11 @@ class _DashboardHome extends StatelessWidget {
                           .snapshots(),
                       builder: (context, snapshot) {
                         if (snapshot.hasError) {
-                          return const StatCard(
+                          return StatCard(
                             title: 'Quizzes',
                             value: '-',
                             icon: Icons.quiz_outlined,
+                            onTap: () => onNavigate(2),
                             color: AppColors.warning,
                             subtitle: 'Active',
                           );
@@ -442,6 +456,7 @@ class _DashboardHome extends StatelessWidget {
                           icon: Icons.quiz_outlined,
                           color: AppColors.warning,
                           subtitle: 'Active',
+                          onTap: () => onNavigate(2),
                         );
                       },
                     ),

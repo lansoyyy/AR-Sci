@@ -47,12 +47,18 @@ class _AdminDashboardState extends State<AdminDashboard> {
     }
   }
 
-  final List<Widget> _screens = [
-    const _DashboardHome(),
-    const _UserManagement(),
-    const _ContentManagement(),
-    const _SettingsPage(),
-  ];
+  List<Widget> _screens = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _screens = [
+      _DashboardHome(onNavigate: (index) => setState(() => _selectedIndex = index)),
+      const _UserManagement(),
+      const _ContentManagement(),
+      const _SettingsPage(),
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -101,7 +107,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
 }
 
 class _DashboardHome extends StatefulWidget {
-  const _DashboardHome();
+  final Function(int) onNavigate;
+
+  const _DashboardHome({required this.onNavigate});
 
   @override
   State<_DashboardHome> createState() => _DashboardHomeState();
@@ -245,6 +253,7 @@ class _DashboardHomeState extends State<_DashboardHome> {
                           value: totalUsers.toString(),
                           icon: Icons.people_outline,
                           color: AppColors.adminPrimary,
+                          onTap: () => widget.onNavigate(1),
                         );
                       },
                     ),
@@ -264,6 +273,7 @@ class _DashboardHomeState extends State<_DashboardHome> {
                           icon: Icons.check_circle_outline,
                           color: AppColors.success,
                           subtitle: 'Verified',
+                          onTap: () => widget.onNavigate(1),
                         );
                       },
                     ),
@@ -293,6 +303,7 @@ class _DashboardHomeState extends State<_DashboardHome> {
                           icon: Icons.book_outlined,
                           color: AppColors.studentPrimary,
                           subtitle: 'Published',
+                          onTap: () => widget.onNavigate(2),
                         );
                       },
                     ),
@@ -312,6 +323,7 @@ class _DashboardHomeState extends State<_DashboardHome> {
                           icon: Icons.quiz_outlined,
                           color: AppColors.warning,
                           subtitle: 'Active',
+                          onTap: () => widget.onNavigate(2),
                         );
                       },
                     ),

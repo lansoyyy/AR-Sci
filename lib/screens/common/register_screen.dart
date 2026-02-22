@@ -17,7 +17,8 @@ class RegisterScreen extends StatefulWidget {
 
 class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
+  final _firstNameController = TextEditingController();
+  final _lastNameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
@@ -115,9 +116,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
           }
         }
 
+        // Combine first name and last name
+        final firstName = _firstNameController.text.trim();
+        final lastName = _lastNameController.text.trim();
+        final fullName = '$firstName $lastName'.trim();
+
         final userModel = UserModel(
           id: user.uid,
-          name: _nameController.text.trim(),
+          name: fullName,
           email: email,
           role: widget.role,
           gradeLevel: gradeLevel,
@@ -180,7 +186,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   void dispose() {
-    _nameController.dispose();
+    _firstNameController.dispose();
+    _lastNameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
@@ -228,16 +235,33 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                   const SizedBox(height: AppConstants.paddingXL),
 
-                  // Name Field
+                  // First Name Field
                   TextFormField(
-                    controller: _nameController,
+                    controller: _firstNameController,
                     decoration: const InputDecoration(
-                      labelText: 'Full Name',
+                      labelText: 'First Name',
                       prefixIcon: Icon(Icons.person_outline),
                     ),
                     validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please enter your name';
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Please enter your first name';
+                      }
+                      return null;
+                    },
+                  ),
+
+                  const SizedBox(height: AppConstants.paddingL),
+
+                  // Last Name Field
+                  TextFormField(
+                    controller: _lastNameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Last Name',
+                      prefixIcon: Icon(Icons.person_outline),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Please enter your last name';
                       }
                       return null;
                     },
@@ -250,7 +274,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
                     decoration: const InputDecoration(
-                      labelText: 'ICCT Email',
+                      labelText: 'LCCT Email',
                       prefixIcon: Icon(Icons.email_outlined),
                     ),
                     validator: (value) {
