@@ -72,79 +72,146 @@ Future<Uint8List> buildStudentScoreReportPdf({
       margin: const pw.EdgeInsets.all(24),
       build: (context) {
         return [
-          pw.Text(
-            'Student Score Report',
-            style: pw.TextStyle(
-              fontSize: 22,
-              fontWeight: pw.FontWeight.bold,
-            ),
-          ),
-          pw.SizedBox(height: 8),
-          pw.Text('Generated: ${_formatDateTime(generatedAt)}'),
-          pw.SizedBox(height: 16),
+          // Header Section
           pw.Container(
-            padding: const pw.EdgeInsets.all(12),
-            decoration: pw.BoxDecoration(
-              color: PdfColors.grey100,
-              borderRadius: pw.BorderRadius.circular(8),
-              border: pw.Border.all(color: PdfColors.grey300),
+            padding: const pw.EdgeInsets.only(bottom: 16),
+            decoration: const pw.BoxDecoration(
+              border: pw.Border(
+                bottom: pw.BorderSide(color: PdfColors.grey300, width: 2),
+              ),
             ),
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
                 pw.Text(
-                  studentName,
+                  'Student Score Report',
                   style: pw.TextStyle(
-                    fontSize: 16,
+                    fontSize: 24,
                     fontWeight: pw.FontWeight.bold,
+                    color: PdfColors.black,
                   ),
                 ),
-                if (studentEmail.isNotEmpty) ...[
-                  pw.SizedBox(height: 2),
-                  pw.Text(studentEmail),
-                ],
-                pw.SizedBox(height: 8),
-                pw.Row(
-                  children: [
-                    _metricChip('Attempts', entries.length.toString()),
-                    pw.SizedBox(width: 8),
-                    _metricChip('Average', '${avg.toStringAsFixed(1)}%'),
-                  ],
+                pw.SizedBox(height: 4),
+                pw.Text(
+                  'Generated: ${_formatDateTime(generatedAt)}',
+                  style: pw.TextStyle(
+                    fontSize: 11,
+                    color: PdfColors.grey700,
+                  ),
                 ),
               ],
             ),
           ),
-          pw.SizedBox(height: 16),
+          pw.SizedBox(height: 24),
+          
+          // Student Information Section
+          pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text(
+                'Student Information',
+                style: pw.TextStyle(
+                  fontSize: 14,
+                  fontWeight: pw.FontWeight.bold,
+                  color: PdfColors.grey700,
+                ),
+              ),
+              pw.SizedBox(height: 8),
+              pw.Text(
+                studentName,
+                style: pw.TextStyle(
+                  fontSize: 18,
+                  fontWeight: pw.FontWeight.bold,
+                  color: PdfColors.black,
+                ),
+              ),
+              if (studentEmail.isNotEmpty) ...[
+                pw.SizedBox(height: 4),
+                pw.Text(
+                  studentEmail,
+                  style: pw.TextStyle(
+                    fontSize: 12,
+                    color: PdfColors.grey700,
+                  ),
+                ),
+              ],
+              pw.SizedBox(height: 16),
+              
+              // Metrics Section
+              pw.Row(
+                children: [
+                  _metricLabel('Total Attempts'),
+                  pw.SizedBox(width: 12),
+                  _metricValue(entries.length.toString()),
+                  pw.SizedBox(width: 24),
+                  _metricLabel('Average Score'),
+                  pw.SizedBox(width: 12),
+                  _metricValue('${avg.toStringAsFixed(1)}%'),
+                ],
+              ),
+            ],
+          ),
+          pw.SizedBox(height: 24),
           if (entries.isEmpty)
-            pw.Text('No quiz results available.')
+            pw.Text(
+              'No quiz results available.',
+              style: pw.TextStyle(
+                fontSize: 14,
+                color: PdfColors.grey700,
+              ),
+            )
           else
-            pw.Table(
-              border: pw.TableBorder.all(color: PdfColors.grey300),
-              columnWidths: {
-                0: const pw.FlexColumnWidth(4),
-                1: const pw.FlexColumnWidth(2),
-                2: const pw.FlexColumnWidth(2),
-              },
+            pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                pw.TableRow(
-                  decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+                pw.Text(
+                  'Quiz Results',
+                  style: pw.TextStyle(
+                    fontSize: 14,
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColors.grey700,
+                  ),
+                ),
+                pw.SizedBox(height: 12),
+                pw.Table(
+                  border: pw.TableBorder.all(
+                    color: PdfColors.grey300,
+                    width: 1,
+                  ),
+                  columnWidths: {
+                    0: const pw.FlexColumnWidth(4),
+                    1: const pw.FlexColumnWidth(2),
+                    2: const pw.FlexColumnWidth(2),
+                  },
                   children: [
-                    _cellHeader('Quiz'),
-                    _cellHeader('Score'),
-                    _cellHeader('Completed'),
+                    pw.TableRow(
+                      decoration: const pw.BoxDecoration(
+                        color: PdfColors.grey100,
+                      ),
+                      children: [
+                        _cellHeader('Quiz'),
+                        _cellHeader('Score'),
+                        _cellHeader('Completed'),
+                      ],
+                    ),
+                    ...entries.map((e) {
+                      final title = e.quizTitle.isEmpty ? e.quizId : e.quizTitle;
+                      return pw.TableRow(
+                        decoration: pw.BoxDecoration(
+                          color: entries.indexOf(e) % 2 == 0
+                              ? PdfColors.white
+                              : PdfColors.grey50,
+                        ),
+                        children: [
+                          _cellBody(title),
+                          _cellBody(
+                              '${e.score}/${e.totalPoints} (${e.percentage.toStringAsFixed(0)}%)'),
+                          _cellBody(_formatDate(e.completedAt)),
+                        ],
+                      );
+                    }),
                   ],
                 ),
-                ...entries.map((e) {
-                  final title = e.quizTitle.isEmpty ? e.quizId : e.quizTitle;
-                  return pw.TableRow(
-                    children: [
-                      _cellBody(title),
-                      _cellBody(
-                          '${e.score}/${e.totalPoints} (${e.percentage.toStringAsFixed(0)}%)'),
-                      _cellBody(_formatDate(e.completedAt)),
-                    ],
-                  );
-                }),
               ],
             ),
         ];
@@ -155,44 +222,36 @@ Future<Uint8List> buildStudentScoreReportPdf({
   return doc.save();
 }
 
-pw.Widget _metricChip(String label, String value) {
-  return pw.Container(
-    padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-    decoration: pw.BoxDecoration(
-      color: PdfColors.white,
-      borderRadius: pw.BorderRadius.circular(999),
-      border: pw.Border.all(color: PdfColors.grey300),
+pw.Widget _metricLabel(String label) {
+  return pw.Text(
+    '$label: ',
+    style: pw.TextStyle(
+      fontSize: 12,
+      color: PdfColors.grey700,
     ),
-    child: pw.Row(
-      mainAxisSize: pw.MainAxisSize.min,
-      children: [
-        pw.Text(
-          '$label: ',
-          style: pw.TextStyle(
-            fontSize: 10,
-            color: PdfColors.grey700,
-          ),
-        ),
-        pw.Text(
-          value,
-          style: pw.TextStyle(
-            fontSize: 10,
-            fontWeight: pw.FontWeight.bold,
-          ),
-        ),
-      ],
+  );
+}
+
+pw.Widget _metricValue(String value) {
+  return pw.Text(
+    value,
+    style: pw.TextStyle(
+      fontSize: 16,
+      fontWeight: pw.FontWeight.bold,
+      color: PdfColors.black,
     ),
   );
 }
 
 pw.Widget _cellHeader(String text) {
   return pw.Padding(
-    padding: const pw.EdgeInsets.all(8),
+    padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 10),
     child: pw.Text(
       text,
       style: pw.TextStyle(
         fontWeight: pw.FontWeight.bold,
         fontSize: 11,
+        color: PdfColors.black,
       ),
     ),
   );
@@ -200,10 +259,13 @@ pw.Widget _cellHeader(String text) {
 
 pw.Widget _cellBody(String text) {
   return pw.Padding(
-    padding: const pw.EdgeInsets.all(8),
+    padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 10),
     child: pw.Text(
       text,
-      style: const pw.TextStyle(fontSize: 10),
+      style: pw.TextStyle(
+        fontSize: 10,
+        color: PdfColors.black,
+      ),
     ),
   );
 }

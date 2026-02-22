@@ -7,6 +7,7 @@ import '../../models/user_model.dart';
 import '../../utils/colors.dart';
 import '../../utils/constants.dart';
 import '../../utils/notification_service.dart';
+import '../../utils/date_formatter.dart';
 
 class TeacherStudentApprovalScreen extends StatefulWidget {
   const TeacherStudentApprovalScreen({super.key});
@@ -375,8 +376,7 @@ class _TeacherStudentApprovalScreenState
                 }
 
                 return ListView.builder(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: AppConstants.paddingM),
+                  padding: const EdgeInsets.all(AppConstants.paddingM),
                   itemCount: filteredDocs.length,
                   itemBuilder: (context, index) {
                     final doc = filteredDocs[index];
@@ -386,6 +386,14 @@ class _TeacherStudentApprovalScreenState
                     final email = (data['email'] as String?) ?? '';
                     final grade = (data['gradeLevel'] as String?) ?? '';
                     final section = (data['section'] as String?) ?? '';
+                    final createdAtValue = data['createdAt'];
+
+                    DateTime? createdAt;
+                    if (createdAtValue is Timestamp) {
+                      createdAt = createdAtValue.toDate();
+                    } else if (createdAtValue is String) {
+                      createdAt = DateTime.tryParse(createdAtValue);
+                    }
 
                     return Card(
                       margin:
@@ -399,7 +407,7 @@ class _TeacherStudentApprovalScreenState
                               children: [
                                 CircleAvatar(
                                   backgroundColor:
-                                      AppColors.teacherPrimary.withOpacity(0.12),
+                                      AppColors.teacherPrimary.withOpacity(0.15),
                                   child: const Icon(
                                     Icons.school_outlined,
                                     color: AppColors.teacherPrimary,
@@ -426,60 +434,91 @@ class _TeacherStudentApprovalScreenState
                                           color: AppColors.textSecondary,
                                         ),
                                       ),
-                                      if (grade.isNotEmpty) ...[
-                                        const SizedBox(
-                                            height: AppConstants.paddingXS),
-                                        Text(
-                                          grade,
-                                          style: const TextStyle(
-                                            color: AppColors.textLight,
-                                          ),
-                                        ),
-                                      ],
-                                      if (section.isNotEmpty) ...[
-                                        const SizedBox(
-                                            height: AppConstants.paddingXS),
-                                        Text(
-                                          section,
-                                          style: const TextStyle(
-                                            color: AppColors.textLight,
-                                          ),
-                                        ),
-                                      ],
                                     ],
                                   ),
                                 ),
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    ElevatedButton.icon(
-                                      onPressed: () => _approveUser(
-                                        userId: doc.id,
-                                        name: name,
-                                      ),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: AppColors.success,
-                                        foregroundColor: AppColors.textWhite,
-                                      ),
-                                      icon: const Icon(Icons.check, size: 18),
-                                      label: const Text('Approve'),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: AppConstants.paddingM,
+                                    vertical: AppConstants.paddingS,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.warning.withOpacity(0.12),
+                                    borderRadius: BorderRadius.circular(
+                                        AppConstants.radiusRound),
+                                  ),
+                                  child: const Text(
+                                    'PENDING',
+                                    style: TextStyle(
+                                      fontSize: AppConstants.fontS,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.warning,
+                                      letterSpacing: 0.5,
                                     ),
-                                    const SizedBox(width: AppConstants.paddingS),
-                                    OutlinedButton.icon(
-                                      onPressed: () => _showRejectDialog(
-                                        userId: doc.id,
-                                        name: name,
-                                      ),
-                                      style: OutlinedButton.styleFrom(
-                                        foregroundColor: AppColors.error,
-                                        side: const BorderSide(
-                                          color: AppColors.error,
-                                        ),
-                                      ),
-                                      icon: const Icon(Icons.close, size: 18),
-                                      label: const Text('Reject'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: AppConstants.paddingM),
+                            Row(
+                              children: [
+                                _InfoPill(
+                                  icon: Icons.badge_outlined,
+                                  text: 'STUDENT',
+                                ),
+                                const SizedBox(width: AppConstants.paddingS),
+                                if (grade.isNotEmpty)
+                                  _InfoPill(
+                                    icon: Icons.class_outlined,
+                                    text: grade,
+                                  ),
+                                const SizedBox(width: AppConstants.paddingS),
+                                if (section.isNotEmpty)
+                                  _InfoPill(
+                                    icon: Icons.group_outlined,
+                                    text: section,
+                                  ),
+                                const SizedBox(width: AppConstants.paddingS),
+                                if (createdAt != null)
+                                  _InfoPill(
+                                    icon: Icons.schedule,
+                                    text: DateFormatter.formatShortDate(createdAt),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: AppConstants.paddingM),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: ElevatedButton.icon(
+                                    onPressed: () => _approveUser(
+                                      userId: doc.id,
+                                      name: name,
                                     ),
-                                  ],
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: AppColors.success,
+                                      foregroundColor: AppColors.textWhite,
+                                    ),
+                                    icon: const Icon(Icons.check, size: 18),
+                                    label: const Text('Approve'),
+                                  ),
+                                ),
+                                const SizedBox(width: AppConstants.paddingS),
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: () => _showRejectDialog(
+                                      userId: doc.id,
+                                      name: name,
+                                    ),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: AppColors.error,
+                                      side: const BorderSide(
+                                        color: AppColors.error,
+                                      ),
+                                    ),
+                                    icon: const Icon(Icons.close, size: 18),
+                                    label: const Text('Reject'),
+                                  ),
                                 ),
                               ],
                             ),
@@ -490,6 +529,46 @@ class _TeacherStudentApprovalScreenState
                   },
                 );
               },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InfoPill extends StatelessWidget {
+  final IconData icon;
+  final String text;
+
+  const _InfoPill({
+    required this.icon,
+    required this.text,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppConstants.paddingM,
+        vertical: AppConstants.paddingS,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceLight,
+        borderRadius: BorderRadius.circular(AppConstants.radiusRound),
+        border: Border.all(color: AppColors.borderLight),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: AppColors.textSecondary),
+          const SizedBox(width: AppConstants.paddingS),
+          Text(
+            text,
+            style: const TextStyle(
+              fontSize: AppConstants.fontS,
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
