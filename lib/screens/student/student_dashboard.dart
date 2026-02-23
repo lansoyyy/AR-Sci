@@ -545,8 +545,6 @@ class _DashboardHome extends StatelessWidget {
                 final allDocs = snapshot.data?.docs ??
                     <QueryDocumentSnapshot<Map<String, dynamic>>>[];
                 final firebaseLessons = allDocs
-                    .where((d) =>
-                        d.data()['gradeLevel'] == currentUser?.gradeLevel)
                     .take(2)
                     .map((d) => <String, dynamic>{
                           ...d.data(),
@@ -752,16 +750,13 @@ class _LessonsPageState extends State<_LessonsPage> {
                   .snapshots(),
               builder: (context, snapshot) {
                 final allDocs = snapshot.data?.docs ?? [];
-                final docs = allDocs
-                    .where((d) => d.data()['gradeLevel'] == _studentGradeLevel)
-                    .toList();
-                final quarters = docs
+                final quarters = allDocs
                     .map((d) => (d.data()['quarter'] ?? '').toString())
                     .where((s) => s.isNotEmpty)
                     .toSet()
                     .toList()
                   ..sort();
-                final grades = docs
+                final grades = allDocs
                     .map((d) =>
                         (d.data()['gradeLevel'] ?? d.data()['grade'] ?? '')
                             .toString())
@@ -769,7 +764,7 @@ class _LessonsPageState extends State<_LessonsPage> {
                     .toSet()
                     .toList()
                   ..sort();
-                final subjects = docs
+                final subjects = allDocs
                     .map((d) => (d.data()['subject'] ?? '').toString())
                     .where((s) => s.isNotEmpty)
                     .toSet()
@@ -827,10 +822,7 @@ class _LessonsPageState extends State<_LessonsPage> {
 
                 final allDocs = snapshot.data?.docs ??
                     <QueryDocumentSnapshot<Map<String, dynamic>>>[];
-                final filteredByGrade = allDocs
-                    .where((d) => d.data()['gradeLevel'] == _studentGradeLevel)
-                    .toList();
-                final firebaseLessons = filteredByGrade
+                final firebaseLessons = allDocs
                     .map((d) => <String, dynamic>{
                           ...d.data(),
                           'id': d.data()['id'] ?? d.id,
@@ -951,10 +943,7 @@ class _QuizzesPageBodyState extends State<_QuizzesPageBody> {
                   .snapshots(),
               builder: (context, snapshot) {
                 final allDocs = snapshot.data?.docs ?? [];
-                final docs = allDocs
-                    .where((d) => d.data()['gradeLevel'] == _studentGradeLevel)
-                    .toList();
-                final grades = docs
+                final grades = allDocs
                     .map((d) =>
                         (d.data()['gradeLevel'] ?? d.data()['grade'] ?? '')
                             .toString())
@@ -962,7 +951,7 @@ class _QuizzesPageBodyState extends State<_QuizzesPageBody> {
                     .toSet()
                     .toList()
                   ..sort();
-                final subjects = docs
+                final subjects = allDocs
                     .map((d) => (d.data()['subject'] ?? '').toString())
                     .where((s) => s.isNotEmpty)
                     .toSet()
@@ -1013,10 +1002,7 @@ class _QuizzesPageBodyState extends State<_QuizzesPageBody> {
 
                 final allDocs = snapshot.data?.docs ??
                     <QueryDocumentSnapshot<Map<String, dynamic>>>[];
-                final filteredByGrade = allDocs
-                    .where((d) => d.data()['gradeLevel'] == _studentGradeLevel)
-                    .toList();
-                final quizzes = filteredByGrade
+                final quizzes = allDocs
                     .map((d) => <String, dynamic>{
                           ...d.data(),
                           'id': d.data()['id'] ?? d.id,
