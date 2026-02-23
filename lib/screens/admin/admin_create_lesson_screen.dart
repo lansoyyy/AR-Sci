@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
 
 import '../../utils/colors.dart';
 import '../../utils/constants.dart';
@@ -163,26 +164,25 @@ class _AdminCreateLessonScreenState extends State<AdminCreateLessonScreen> {
   }
 
   // PDF upload fields
-  XFile? _selectedPdf;
+  File? _selectedPdf;
+  String? _selectedPdfName;
 
   Future<void> _pickPdf() async {
     try {
-      final XFile? pdf = await _imagePicker.pickMedia(
-        requestFullMetadata: true,
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf'],
+        allowMultiple: false,
       );
 
-      if (pdf != null) {
-        final extension = pdf.path.split('.').last.toLowerCase();
-        if (extension != 'pdf') {
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Please select a PDF file')),
-          );
-          return;
+      if (result != null && result.files.isNotEmpty) {
+        final file = result.files.first;
+        if (file.path != null) {
+          setState(() {
+            _selectedPdf = File(file.path!);
+            _selectedPdfName = file.name;
+          });
         }
-        setState(() {
-          _selectedPdf = pdf;
-        });
       }
     } catch (e) {
       debugPrint('Failed to pick PDF: $e');
@@ -196,6 +196,7 @@ class _AdminCreateLessonScreenState extends State<AdminCreateLessonScreen> {
   void _removePdf() {
     setState(() {
       _selectedPdf = null;
+      _selectedPdfName = null;
     });
   }
 
@@ -203,14 +204,13 @@ class _AdminCreateLessonScreenState extends State<AdminCreateLessonScreen> {
     if (_selectedPdf == null) return null;
 
     try {
-      final file = File(_selectedPdf!.path);
       final storageRef = FirebaseStorage.instance
           .ref()
           .child('lessons/$lessonId')
           .child('material.pdf');
 
       await storageRef.putFile(
-        file,
+        _selectedPdf!,
         SettableMetadata(contentType: 'application/pdf'),
       );
       final url = await storageRef.getDownloadURL();
@@ -557,7 +557,7 @@ class _AdminCreateLessonScreenState extends State<AdminCreateLessonScreen> {
                                           CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          _selectedPdf!.path.split('/').last,
+                                          _selectedPdfName ?? 'PDF selected',
                                           style: const TextStyle(
                                             fontWeight: FontWeight.w600,
                                           ),
