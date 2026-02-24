@@ -6,6 +6,8 @@ import '../screens/common/register_screen.dart';
 import '../screens/common/profile_screen.dart';
 import '../screens/common/notifications_screen.dart';
 import '../screens/common/forgot_password_screen.dart';
+import '../screens/common/otp_forgot_password_screen.dart';
+import '../screens/common/change_password_screen.dart';
 import '../screens/common/pending_verification_screen.dart';
 import '../screens/common/settings_screen.dart';
 import '../screens/common/help_screen.dart';
@@ -26,6 +28,7 @@ import '../screens/admin/account_verification_screen.dart';
 import '../screens/admin/admin_analytics_screen.dart';
 import '../screens/admin/admin_reports_screen.dart';
 import '../screens/admin/admin_announcements_screen.dart';
+import '../screens/admin/subject_management_screen.dart';
 
 class AppRoutes {
   static const String splash = '/';
@@ -33,6 +36,8 @@ class AppRoutes {
   static const String login = '/login';
   static const String register = '/register';
   static const String forgotPassword = '/forgot-password';
+  static const String otpForgotPassword = '/otp-forgot-password';
+  static const String changePassword = '/change-password';
   static const String profile = '/profile';
   static const String notifications = '/notifications';
   static const String pendingVerification = '/pending-verification';
@@ -61,12 +66,15 @@ class AppRoutes {
   static const String adminAnalytics = '/admin-analytics';
   static const String adminReports = '/admin-reports';
   static const String adminAnnouncements = '/admin-announcements';
+  static const String subjectManagement = '/subject-management';
 
   static Map<String, WidgetBuilder> getRoutes() {
     return {
       splash: (context) => const SplashScreen(),
       roleSelection: (context) => const RoleSelectionScreen(),
       forgotPassword: (context) => const ForgotPasswordScreen(),
+      otpForgotPassword: (context) => const OTPForgotPasswordScreen(),
+      changePassword: (context) => const ChangePasswordScreen(),
       studentDashboard: (context) => const StudentDashboard(),
       teacherDashboard: (context) => const TeacherDashboard(),
       adminDashboard: (context) => const AdminDashboard(),
@@ -170,6 +178,11 @@ class AppRoutes {
       case teacherAnalytics:
         return MaterialPageRoute(
           builder: (context) => const TeacherAnalyticsScreen(),
+        );
+
+      case subjectManagement:
+        return MaterialPageRoute(
+          builder: (context) => const SubjectManagementScreen(),
         );
 
       case lessonDetail:

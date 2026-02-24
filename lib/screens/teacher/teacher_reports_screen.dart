@@ -18,22 +18,106 @@ class TeacherReportsScreen extends StatefulWidget {
 class _TeacherReportsScreenState extends State<TeacherReportsScreen> {
   bool _isGenerating = false;
   String _selectedReportType = 'my_lessons';
+
+  // Filter options
+  String _selectedFilterType = 'all'; // all, student, section, quarter
+  String? _selectedStudent;
+  String? _selectedSection;
+  String? _selectedQuarter;
+
+  // Available options
+  List<Map<String, dynamic>> _availableStudents = [];
+  List<String> _availableSections = [];
+  List<String> _availableQuarters = [
+    'Quarter 1',
+    'Quarter 2',
+    'Quarter 3',
+    'Quarter 4'
+  ];
+
   final List<Map<String, String>> _reportTypes = [
     {'id': 'my_lessons', 'name': 'My Lessons Summary', 'icon': 'book'},
     {'id': 'my_quizzes', 'name': 'My Quizzes Report', 'icon': 'quiz'},
-    {'id': 'student_progress', 'name': 'Student Progress Report', 'icon': 'people'},
+    {
+      'id': 'student_progress',
+      'name': 'Student Progress Report',
+      'icon': 'people'
+    },
     {'id': 'class_overview', 'name': 'Class Overview', 'icon': 'dashboard'},
   ];
 
+  final List<Map<String, String>> _filterTypes = [
+    {'id': 'all', 'name': 'All Data'},
+    {'id': 'student', 'name': 'Per Student'},
+    {'id': 'section', 'name': 'Per Section'},
+    {'id': 'quarter', 'name': 'Per Quarter'},
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAvailableOptions();
+  }
+
+  Future<void> _loadAvailableOptions() async {
+    final teacherId = FirebaseAuth.instance.currentUser?.uid;
+    if (teacherId == null) return;
+
+    try {
+      // Get teacher's sections
+      final teacherDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(teacherId)
+          .get();
+      final teacherData = teacherDoc.data();
+      final sectionsHandled =
+          (teacherData?['sectionsHandled'] as List<dynamic>?)?.cast<String>() ??
+              [];
+
+      // Get students
+      final studentsSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .where('role', isEqualTo: 'student')
+          .where('verified', isEqualTo: true)
+          .get();
+
+      final students = studentsSnapshot.docs.map((doc) {
+        final data = doc.data();
+        return {
+          'id': doc.id,
+          'name': data['name'] as String? ?? 'Unknown',
+          'section': data['section'] as String? ?? 'N/A',
+          'gradeLevel': data['gradeLevel'] as String? ?? 'N/A',
+        };
+      }).toList();
+
+      // Get unique sections
+      final sections = students
+          .map((s) => s['section'] as String)
+          .where((s) => s != 'N/A')
+          .toSet()
+          .toList();
+
+      if (mounted) {
+        setState(() {
+          _availableStudents = students;
+          _availableSections = sections.isEmpty ? sectionsHandled : sections;
+        });
+      }
+    } catch (e) {
+      // Error loading options
+    }
+  }
+
   Future<void> _generateAndPrintPDF() async {
     setState(() => _isGenerating = true);
-    
+
     try {
       final pdf = pw.Document();
       final now = DateTime.now();
       final dateFormat = DateFormat('MMMM dd, yyyy');
       final teacherId = FirebaseAuth.instance.currentUser?.uid;
-      
+
       switch (_selectedReportType) {
         case 'my_lessons':
           await _generateMyLessonsReport(pdf, now, dateFormat, teacherId);
@@ -48,7 +132,7 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> {
           await _generateClassOverviewReport(pdf, now, dateFormat, teacherId);
           break;
       }
-      
+
       await Printing.layoutPdf(
         onLayout: (PdfPageFormat format) async => pdf.save(),
       );
@@ -63,24 +147,30 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> {
     }
   }
 
-  Future<void> _generateMyLessonsReport(pw.Document pdf, DateTime now, DateFormat dateFormat, String? teacherId) async {
+  Future<void> _generateMyLessonsReport(pw.Document pdf, DateTime now,
+      DateFormat dateFormat, String? teacherId) async {
     final lessonsSnapshot = await FirebaseFirestore.instance
         .collection('lessons')
         .where('createdBy', isEqualTo: teacherId)
         .get();
     final lessons = lessonsSnapshot.docs;
-    
+
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
-        header: (context) => _buildReportHeader('My Lessons Summary', now, dateFormat),
+        header: (context) =>
+            _buildReportHeader('My Lessons Summary', now, dateFormat),
         footer: (context) => _buildReportFooter(),
         build: (context) => [
-          pw.Text('Lessons Created by You', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+          pw.Text('Lessons Created by You',
+              style:
+                  pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 20),
           pw.Text('Total Lessons: ${lessons.length}'),
           pw.SizedBox(height: 20),
-          pw.Text('Lesson Details', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+          pw.Text('Lesson Details',
+              style:
+                  pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 10),
           ...lessons.map((lesson) {
             final data = lesson.data();
@@ -110,23 +200,40 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> {
     );
   }
 
-  Future<void> _generateMyQuizzesReport(pw.Document pdf, DateTime now, DateFormat dateFormat, String? teacherId) async {
-    final quizzesSnapshot = await FirebaseFirestore.instance
+  Future<void> _generateMyQuizzesReport(pw.Document pdf, DateTime now,
+      DateFormat dateFormat, String? teacherId) async {
+    Query<Map<String, dynamic>> query = FirebaseFirestore.instance
         .collection('quizzes')
-        .where('createdBy', isEqualTo: teacherId)
-        .get();
-    final quizzes = quizzesSnapshot.docs;
-    
+        .where('createdBy', isEqualTo: teacherId);
+
+    // Apply filters
+    if (_selectedFilterType == 'quarter' && _selectedQuarter != null) {
+      query = query.where('quarter', isEqualTo: _selectedQuarter);
+    }
+
+    final quizzesSnapshot = await query.get();
+    var quizzes = quizzesSnapshot.docs;
+
+    // Filter by section if selected
+    if (_selectedFilterType == 'section' && _selectedSection != null) {
+      quizzes = quizzes.where((quiz) {
+        final data = quiz.data();
+        final gradeLevel = data['gradeLevel'] as String?;
+        return gradeLevel == _selectedSection ||
+            data['section'] == _selectedSection;
+      }).toList();
+    }
+
     // Get results for these quizzes
     final quizIds = quizzes.map((q) => q.id).toList();
     Map<String, List<Map<String, dynamic>>> quizResults = {};
-    
+
     if (quizIds.isNotEmpty) {
       final resultsSnapshot = await FirebaseFirestore.instance
           .collection('quiz_results')
           .where('quizId', whereIn: quizIds.take(10).toList())
           .get();
-      
+
       for (final result in resultsSnapshot.docs) {
         final data = result.data();
         final quizId = data['quizId'] as String?;
@@ -135,29 +242,37 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> {
         }
       }
     }
-    
+
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
-        header: (context) => _buildReportHeader('My Quizzes Report', now, dateFormat),
+        header: (context) =>
+            _buildReportHeader('My Quizzes Report', now, dateFormat),
         footer: (context) => _buildReportFooter(),
         build: (context) => [
-          pw.Text('Quizzes Summary', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+          pw.Text('Quizzes Summary',
+              style:
+                  pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 20),
           pw.Text('Total Quizzes: ${quizzes.length}'),
           pw.SizedBox(height: 20),
-          pw.Text('Quiz Performance', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+          pw.Text('Quiz Performance',
+              style:
+                  pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 10),
           ...quizzes.map((quiz) {
             final data = quiz.data();
             final quizId = quiz.id;
             final results = quizResults[quizId] ?? [];
-            final avgScore = results.isEmpty ? 0 : results.map((r) {
-              final score = (r['score'] as num?)?.toDouble() ?? 0;
-              final total = (r['totalPoints'] as num?)?.toDouble() ?? 1;
-              return (score / total) * 100;
-            }).reduce((a, b) => a + b) / results.length;
-            
+            final avgScore = results.isEmpty
+                ? 0
+                : results.map((r) {
+                      final score = (r['score'] as num?)?.toDouble() ?? 0;
+                      final total = (r['totalPoints'] as num?)?.toDouble() ?? 1;
+                      return (score / total) * 100;
+                    }).reduce((a, b) => a + b) /
+                    results.length;
+
             return pw.Container(
               margin: const pw.EdgeInsets.only(bottom: 10),
               padding: const pw.EdgeInsets.all(10),
@@ -178,36 +293,54 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> {
     );
   }
 
-  Future<void> _generateStudentProgressReport(pw.Document pdf, DateTime now, DateFormat dateFormat, String? teacherId) async {
+  Future<void> _generateStudentProgressReport(pw.Document pdf, DateTime now,
+      DateFormat dateFormat, String? teacherId) async {
     // Get teacher's sections
     final teacherDoc = await FirebaseFirestore.instance
         .collection('users')
         .doc(teacherId)
         .get();
     final teacherData = teacherDoc.data();
-    final sections = (teacherData?['sectionsHandled'] as List<dynamic>?)?.cast<String>() ?? [];
-    
+    final sections =
+        (teacherData?['sectionsHandled'] as List<dynamic>?)?.cast<String>() ??
+            [];
+
     // Get students in those sections
     Query<Map<String, dynamic>> studentsQuery = FirebaseFirestore.instance
         .collection('users')
         .where('role', isEqualTo: 'student')
         .where('verified', isEqualTo: true);
-    
+
     final studentsSnapshot = await studentsQuery.get();
-    final students = studentsSnapshot.docs.where((s) {
+    var students = studentsSnapshot.docs.where((s) {
       final grade = s.data()['gradeLevel'] as String?;
       final section = s.data()['section'] as String?;
       if (sections.isEmpty) return true;
       return sections.contains(grade) || sections.contains(section);
     }).toList();
-    
+
+    // Apply filters
+    if (_selectedFilterType == 'student' && _selectedStudent != null) {
+      students = students.where((s) => s.id == _selectedStudent).toList();
+    }
+
+    if (_selectedFilterType == 'section' && _selectedSection != null) {
+      students = students.where((s) {
+        final section = s.data()['section'] as String?;
+        return section == _selectedSection;
+      }).toList();
+    }
+
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
-        header: (context) => _buildReportHeader('Student Progress Report', now, dateFormat),
+        header: (context) =>
+            _buildReportHeader('Student Progress Report', now, dateFormat),
         footer: (context) => _buildReportFooter(),
         build: (context) => [
-          pw.Text('Students in Your Classes', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+          pw.Text('Students in Your Classes',
+              style:
+                  pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 20),
           pw.Text('Total Students: ${students.length}'),
           pw.SizedBox(height: 20),
@@ -227,7 +360,8 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> {
     );
   }
 
-  Future<void> _generateClassOverviewReport(pw.Document pdf, DateTime now, DateFormat dateFormat, String? teacherId) async {
+  Future<void> _generateClassOverviewReport(pw.Document pdf, DateTime now,
+      DateFormat dateFormat, String? teacherId) async {
     final lessonsSnapshot = await FirebaseFirestore.instance
         .collection('lessons')
         .where('createdBy', isEqualTo: teacherId)
@@ -236,14 +370,17 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> {
         .collection('quizzes')
         .where('createdBy', isEqualTo: teacherId)
         .get();
-    
+
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
-        header: (context) => _buildReportHeader('Class Overview', now, dateFormat),
+        header: (context) =>
+            _buildReportHeader('Class Overview', now, dateFormat),
         footer: (context) => _buildReportFooter(),
         build: (context) => [
-          pw.Text('Teaching Summary', style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
+          pw.Text('Teaching Summary',
+              style:
+                  pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 20),
           pw.Text('Generated on: ${dateFormat.format(now)}'),
           pw.SizedBox(height: 30),
@@ -253,21 +390,27 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> {
             ['Quizzes Created', quizzesSnapshot.docs.length.toString()],
           ]),
           pw.SizedBox(height: 30),
-          pw.Text('About This Report', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+          pw.Text('About This Report',
+              style:
+                  pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 10),
-          pw.Text('This overview summarizes your teaching activities in the AR Fusion platform.'),
+          pw.Text(
+              'This overview summarizes your teaching activities in the AR Fusion platform.'),
         ],
       ),
     );
   }
 
-  pw.Widget _buildReportHeader(String title, DateTime now, DateFormat dateFormat) {
+  pw.Widget _buildReportHeader(
+      String title, DateTime now, DateFormat dateFormat) {
     return pw.Container(
       alignment: pw.Alignment.center,
       margin: const pw.EdgeInsets.only(bottom: 20),
       child: pw.Column(
         children: [
-          pw.Text('AR Fusion - Teacher Report', style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold)),
+          pw.Text('AR Fusion - Teacher Report',
+              style:
+                  pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold)),
           pw.Text(title, style: pw.TextStyle(fontSize: 18)),
           pw.Text('Generated: ${dateFormat.format(now)}'),
           pw.Divider(),
@@ -338,9 +481,130 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> {
                 ),
               ),
             ),
-            
             const SizedBox(height: AppConstants.paddingL),
-            
+
+            // Filter Options Card
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(AppConstants.paddingL),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Filter Options',
+                      style: TextStyle(
+                        fontSize: AppConstants.fontL,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: AppConstants.paddingM),
+                    ..._filterTypes.map((type) {
+                      return RadioListTile<String>(
+                        title: Text(type['name']!),
+                        value: type['id']!,
+                        groupValue: _selectedFilterType,
+                        onChanged: (value) {
+                          setState(() {
+                            _selectedFilterType = value!;
+                            _selectedStudent = null;
+                            _selectedSection = null;
+                            _selectedQuarter = null;
+                          });
+                        },
+                      );
+                    }),
+                    const SizedBox(height: AppConstants.paddingM),
+
+                    // Dynamic filter options based on selection
+                    if (_selectedFilterType == 'student' &&
+                        _availableStudents.isNotEmpty)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Select Student:',
+                              style: TextStyle(fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 8),
+                          DropdownButtonFormField<String>(
+                            value: _selectedStudent,
+                            decoration: const InputDecoration(
+                              border: OutlineInputBorder(),
+                              contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 16),
+                            ),
+                            items: _availableStudents.map((student) {
+                              return DropdownMenuItem<String>(
+                                value: student['id'] as String,
+                                child: Text(
+                                    '${student['name']} (${student['section']})'),
+                              );
+                            }).toList(),
+                            onChanged: (value) {
+                              setState(() => _selectedStudent = value);
+                            },
+                          ),
+                        ],
+                      ),
+
+                    if (_selectedFilterType == 'section' &&
+                        _availableSections.isNotEmpty)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Select Section:',
+                              style: TextStyle(fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 8),
+                          DropdownButtonFormField<String>(
+                            value: _selectedSection,
+                            decoration: const InputDecoration(
+                              border: OutlineInputBorder(),
+                              contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 16),
+                            ),
+                            items: _availableSections.map((section) {
+                              return DropdownMenuItem<String>(
+                                value: section,
+                                child: Text(section),
+                              );
+                            }).toList(),
+                            onChanged: (value) {
+                              setState(() => _selectedSection = value);
+                            },
+                          ),
+                        ],
+                      ),
+
+                    if (_selectedFilterType == 'quarter')
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Select Quarter:',
+                              style: TextStyle(fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 8),
+                          DropdownButtonFormField<String>(
+                            value: _selectedQuarter,
+                            decoration: const InputDecoration(
+                              border: OutlineInputBorder(),
+                              contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 16),
+                            ),
+                            items: _availableQuarters.map((quarter) {
+                              return DropdownMenuItem<String>(
+                                value: quarter,
+                                child: Text(quarter),
+                              );
+                            }).toList(),
+                            onChanged: (value) {
+                              setState(() => _selectedQuarter = value);
+                            },
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: AppConstants.paddingL),
+
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(AppConstants.paddingL),
@@ -364,7 +628,9 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> {
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Icon(Icons.print),
-                      label: Text(_isGenerating ? 'Generating...' : 'Print / Save as PDF'),
+                      label: Text(_isGenerating
+                          ? 'Generating...'
+                          : 'Print / Save as PDF'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.teacherPrimary,
                         foregroundColor: Colors.white,
@@ -375,9 +641,7 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> {
                 ),
               ),
             ),
-            
             const SizedBox(height: AppConstants.paddingL),
-            
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(AppConstants.paddingL),

@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../utils/colors.dart';
 import '../../utils/constants.dart';
+import '../../routes/app_routes.dart';
 import '../../widgets/stat_card.dart';
 import '../../widgets/feature_card.dart';
 import '../../models/user_model.dart';
@@ -53,7 +54,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
   void initState() {
     super.initState();
     _screens = [
-      _DashboardHome(onNavigate: (index) => setState(() => _selectedIndex = index)),
+      _DashboardHome(
+          onNavigate: (index) => setState(() => _selectedIndex = index)),
       const _UserManagement(),
       const _ContentManagement(),
       const _SettingsPage(),
@@ -485,6 +487,16 @@ class _DashboardHomeState extends State<_DashboardHome> {
               iconColor: AppColors.error,
               onTap: () {
                 Navigator.pushNamed(context, '/admin-reports');
+              },
+            ),
+
+            FeatureCard(
+              title: 'Subject Management',
+              description: 'Manage subjects - Admin only',
+              icon: Icons.school_outlined,
+              iconColor: AppColors.teacherPrimary,
+              onTap: () {
+                Navigator.pushNamed(context, AppRoutes.subjectManagement);
               },
             ),
 

@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import '../../providers/theme_provider.dart';
+import '../../routes/app_routes.dart';
 import '../../utils/colors.dart';
 import '../../utils/constants.dart';
 import '../../utils/theme.dart';
@@ -61,7 +62,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final data = snapshot.data();
       if (data != null && mounted) {
         setState(() {
-          _notificationsEnabled = (data['notificationsEnabled'] as bool?) ?? true;
+          _notificationsEnabled =
+              (data['notificationsEnabled'] as bool?) ?? true;
           _autoPlayAR = (data['autoPlayAR'] as bool?) ?? true;
           _selectedLanguage = (data['language'] as String?) ?? 'English';
           _profilePhotoUrl = data['profilePhotoUrl'] as String?;
@@ -123,7 +125,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   void _showThemeDialog() {
     final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
-    
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -170,7 +172,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
-    
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Settings'),
@@ -224,20 +226,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ),
                 ),
-                
+
                 const SizedBox(height: AppConstants.paddingL),
-                
+
                 // Appearance Section
                 _SectionHeader(title: 'Appearance', color: _roleColor),
                 _SettingsTile(
-                  icon: themeProvider.isDarkMode ? Icons.dark_mode : Icons.light_mode,
+                  icon: themeProvider.isDarkMode
+                      ? Icons.dark_mode
+                      : Icons.light_mode,
                   title: 'Theme',
-                  subtitle: themeProvider.isDarkMode ? 'Dark Mode' : 'Light Mode',
+                  subtitle:
+                      themeProvider.isDarkMode ? 'Dark Mode' : 'Light Mode',
                   onTap: _showThemeDialog,
                 ),
-                
+
                 const SizedBox(height: AppConstants.paddingL),
-                
+
                 // Notifications Section
                 _SectionHeader(title: 'Notifications', color: _roleColor),
                 _SettingsTile(
@@ -253,9 +258,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     activeColor: _roleColor,
                   ),
                 ),
-                
+
                 const SizedBox(height: AppConstants.paddingL),
-                
+
                 // AR Settings Section
                 _SectionHeader(title: 'AR Experience', color: _roleColor),
                 _SettingsTile(
@@ -271,9 +276,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     activeColor: _roleColor,
                   ),
                 ),
-                
+
                 const SizedBox(height: AppConstants.paddingL),
-                
+
                 // Language Section
                 _SectionHeader(title: 'Language & Region', color: _roleColor),
                 _SettingsTile(
@@ -282,16 +287,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   subtitle: _selectedLanguage,
                   onTap: _showLanguageDialog,
                 ),
-                
+
                 const SizedBox(height: AppConstants.paddingL),
-                
+
                 // Account Section
                 _SectionHeader(title: 'Account', color: _roleColor),
                 _SettingsTile(
                   icon: Icons.lock_outline,
                   title: 'Change Password',
                   onTap: () {
-                    Navigator.pushNamed(context, '/forgot-password');
+                    Navigator.pushNamed(context, AppRoutes.changePassword);
                   },
                 ),
                 _SettingsTile(
@@ -302,9 +307,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     Navigator.pushNamed(context, '/help');
                   },
                 ),
-                
+
                 const SizedBox(height: AppConstants.paddingXL),
-                
+
                 // App Info
                 Center(
                   child: Column(
