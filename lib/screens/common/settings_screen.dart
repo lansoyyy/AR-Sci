@@ -21,11 +21,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _notificationsEnabled = true;
   bool _autoPlayAR = true;
   String _selectedLanguage = 'English';
+  String? _selectedAcademicYear;
   String? _profilePhotoUrl;
   String? _userName;
   bool _isLoading = true;
 
   final List<String> _languages = ['English', 'Filipino', 'Cebuano'];
+  final List<String> _academicYears = [
+    '2026-2027',
+    '2027-2028',
+    '2028-2029',
+    '2029-2030',
+    '2030-2031',
+    '2031-2032',
+    '2032-2033',
+    '2033-2034',
+    '2034-2035',
+    '2035-2036',
+    '2037-2038',
+    '2038-2039',
+  ];
+
+  String _getCurrentAcademicYear() {
+    final now = DateTime.now();
+    final currentYear = now.year;
+    final currentMonth = now.month;
+
+    // Academic years typically run from June to May
+    // If current month is January to May, use current year
+    // If current month is June to December, use next year
+    if (currentMonth >= 1 && currentMonth <= 5) {
+      return '$currentYear-${currentYear + 1}';
+    } else {
+      return '$currentYear-$currentYear';
+    }
+  }
 
   Color get _roleColor {
     switch (widget.role) {
@@ -120,6 +150,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (result != null && result != _selectedLanguage) {
       setState(() => _selectedLanguage = result);
       await _saveSetting('language', result);
+    }
+  }
+
+  Future<void> _showAcademicYearDialog() async {
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Select Academic Year'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: _academicYears.map((year) {
+            return RadioListTile<String>(
+              title: Text(year),
+              value: year,
+              groupValue: _selectedAcademicYear,
+              onChanged: (value) {
+                Navigator.pop(context, value);
+              },
+            );
+          }).toList(),
+        ),
+      ),
+    );
+
+    if (result != null && result != _selectedAcademicYear) {
+      setState(() => _selectedAcademicYear = result);
+      await _saveSetting('academicYear', result);
     }
   }
 
@@ -286,6 +343,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: 'Language',
                   subtitle: _selectedLanguage,
                   onTap: _showLanguageDialog,
+                ),
+
+                const SizedBox(height: AppConstants.paddingL),
+
+                _SettingsTile(
+                  icon: Icons.calendar_today_outlined,
+                  title: 'Academic Year',
+                  subtitle: _selectedAcademicYear ?? 'Not set',
+                  onTap: _showAcademicYearDialog,
                 ),
 
                 const SizedBox(height: AppConstants.paddingL),
