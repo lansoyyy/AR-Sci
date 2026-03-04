@@ -208,40 +208,83 @@ class _DashboardHome extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Welcome back,',
-                    style: TextStyle(
-                      fontSize: AppConstants.fontL,
-                      color: AppColors.textWhite,
-                    ),
-                  ),
-                  const SizedBox(height: AppConstants.paddingS),
-                  Text(
-                    isLoading ? 'Loading...' : teacherName,
-                    style: const TextStyle(
-                      fontSize: AppConstants.fontXXL,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textWhite,
-                    ),
-                  ),
-                  const SizedBox(height: AppConstants.paddingS),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppConstants.paddingM,
-                      vertical: AppConstants.paddingS,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.textWhite.withOpacity(0.2),
-                      borderRadius:
-                          BorderRadius.circular(AppConstants.radiusRound),
-                    ),
-                    child: Text(
-                      isLoading ? 'Loading...' : teacherSubject,
-                      style: const TextStyle(
-                        color: AppColors.textWhite,
-                        fontWeight: FontWeight.w600,
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Welcome back,',
+                              style: TextStyle(
+                                fontSize: AppConstants.fontL,
+                                color: AppColors.textWhite,
+                              ),
+                            ),
+                            const SizedBox(height: AppConstants.paddingS),
+                            Text(
+                              isLoading ? 'Loading...' : teacherName,
+                              style: const TextStyle(
+                                fontSize: AppConstants.fontXXL,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.textWhite,
+                              ),
+                            ),
+                            const SizedBox(height: AppConstants.paddingS),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppConstants.paddingM,
+                                vertical: AppConstants.paddingS,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.textWhite.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(
+                                    AppConstants.radiusRound),
+                              ),
+                              child: Text(
+                                isLoading ? 'Loading...' : teacherSubject,
+                                style: const TextStyle(
+                                  color: AppColors.textWhite,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
+                      StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                        stream: FirebaseFirestore.instance
+                            .collection('app_config')
+                            .doc('current')
+                            .snapshots(),
+                        builder: (context, snapshot) {
+                          final year =
+                              snapshot.data?.data()?['academicYear'] as String? ??
+                                  '2025-2026';
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                year,
+                                style: const TextStyle(
+                                  fontSize: AppConstants.fontXL,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.textWhite,
+                                ),
+                              ),
+                              const Text(
+                                'Academic Year',
+                                style: TextStyle(
+                                  fontSize: AppConstants.fontS,
+                                  color: AppColors.textWhite,
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    ],
                   ),
                 ],
               ),

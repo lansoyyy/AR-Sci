@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../utils/colors.dart';
 import '../../utils/constants.dart';
 import '../../widgets/custom_button.dart';
@@ -25,11 +26,44 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   Future<void> _handleResetPassword() async {
     if (!_formKey.currentState!.validate()) return;
 
+    final email = _emailController.text.trim().toLowerCase();
+
     setState(() => _isLoading = true);
     try {
-      await FirebaseAuth.instance.sendPasswordResetEmail(
-        email: _emailController.text.trim(),
-      );
+      // Check if user exists in Firestore first
+      final userQuery = await FirebaseFirestore.instance
+          .collection('users')
+          .where('email', isEqualTo: email)
+          .limit(1)
+          .get();
+
+      if (userQuery.docs.isEmpty) {
+        if (!mounted) return;
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No account found with this email address.'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+        return;
+      }
+
+      // User exists in Firestore, check if account is deleted
+      final userData = userQuery.docs.first.data();
+      if (userData['deleted'] == true) {
+        if (!mounted) return;
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('This account has been deactivated. Please contact the administrator.'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+        return;
+      }
+
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
 
       if (!mounted) return;
       setState(() => _isLoading = false);
@@ -44,11 +78,25 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
+      String message;
+      switch (e.code) {
+        case 'user-not-found':
+          message =
+              'Account registered but authentication not set up. Please contact the administrator.';
+          break;
+        case 'invalid-email':
+          message = 'Invalid email address format.';
+          break;
+        case 'too-many-requests':
+          message = 'Too many requests. Please try again later.';
+          break;
+        default:
+          message = e.message ?? 'Failed to send reset email. Please try again.';
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            e.message ?? 'Failed to send reset email. Please try again.',
-          ),
+          content: Text(message),
+          backgroundColor: AppColors.error,
         ),
       );
     } catch (_) {
@@ -59,6 +107,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           content: Text(
             'An unexpected error occurred. Please try again.',
           ),
+          backgroundColor: AppColors.error,
         ),
       );
     }

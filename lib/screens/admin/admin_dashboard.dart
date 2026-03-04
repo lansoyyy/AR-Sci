@@ -196,40 +196,83 @@ class _DashboardHomeState extends State<_DashboardHome> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Welcome back,',
-                    style: TextStyle(
-                      fontSize: AppConstants.fontL,
-                      color: AppColors.textWhite,
-                    ),
-                  ),
-                  const SizedBox(height: AppConstants.paddingS),
-                  const Text(
-                    'Administrator',
-                    style: TextStyle(
-                      fontSize: AppConstants.fontXXL,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textWhite,
-                    ),
-                  ),
-                  const SizedBox(height: AppConstants.paddingS),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppConstants.paddingM,
-                      vertical: AppConstants.paddingS,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.textWhite.withOpacity(0.2),
-                      borderRadius:
-                          BorderRadius.circular(AppConstants.radiusRound),
-                    ),
-                    child: const Text(
-                      'System Administrator',
-                      style: TextStyle(
-                        color: AppColors.textWhite,
-                        fontWeight: FontWeight.w600,
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Welcome back,',
+                              style: TextStyle(
+                                fontSize: AppConstants.fontL,
+                                color: AppColors.textWhite,
+                              ),
+                            ),
+                            const SizedBox(height: AppConstants.paddingS),
+                            const Text(
+                              'Administrator',
+                              style: TextStyle(
+                                fontSize: AppConstants.fontXXL,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.textWhite,
+                              ),
+                            ),
+                            const SizedBox(height: AppConstants.paddingS),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppConstants.paddingM,
+                                vertical: AppConstants.paddingS,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.textWhite.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(
+                                    AppConstants.radiusRound),
+                              ),
+                              child: const Text(
+                                'System Administrator',
+                                style: TextStyle(
+                                  color: AppColors.textWhite,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
+                      StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                        stream: FirebaseFirestore.instance
+                            .collection('app_config')
+                            .doc('current')
+                            .snapshots(),
+                        builder: (context, snapshot) {
+                          final year =
+                              snapshot.data?.data()?['academicYear'] as String? ??
+                                  '2025-2026';
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                year,
+                                style: const TextStyle(
+                                  fontSize: AppConstants.fontXL,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.textWhite,
+                                ),
+                              ),
+                              const Text(
+                                'Academic Year',
+                                style: TextStyle(
+                                  fontSize: AppConstants.fontS,
+                                  color: AppColors.textWhite,
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -631,6 +674,162 @@ class _UserManagementState extends State<_UserManagement> {
     }
   }
 
+  Future<void> _editUser(
+      String userId, Map<String, dynamic> currentData) async {
+    final nameController =
+        TextEditingController(text: currentData['name'] as String? ?? '');
+    final gradeLevelController = TextEditingController(
+        text: currentData['gradeLevel'] as String? ?? '');
+    final sectionController =
+        TextEditingController(text: currentData['section'] as String? ?? '');
+    final role = currentData['role'] as String? ?? '';
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Edit User Info'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Full Name',
+                  prefixIcon: Icon(Icons.person_outline),
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              if (role == 'student') ...[
+                const SizedBox(height: AppConstants.paddingM),
+                DropdownButtonFormField<String>(
+                  value: AppConstants.gradeLevels
+                          .contains(gradeLevelController.text)
+                      ? gradeLevelController.text
+                      : null,
+                  decoration: const InputDecoration(
+                    labelText: 'Grade Level',
+                    prefixIcon: Icon(Icons.school_outlined),
+                    border: OutlineInputBorder(),
+                  ),
+                  items: AppConstants.gradeLevels
+                      .map((g) =>
+                          DropdownMenuItem(value: g, child: Text(g)))
+                      .toList(),
+                  onChanged: (val) {
+                    if (val != null) gradeLevelController.text = val;
+                  },
+                ),
+                const SizedBox(height: AppConstants.paddingM),
+                TextField(
+                  controller: sectionController,
+                  decoration: const InputDecoration(
+                    labelText: 'Section',
+                    prefixIcon: Icon(Icons.group_outlined),
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                final updates = <String, dynamic>{
+                  'name': nameController.text.trim(),
+                  'updatedAt': FieldValue.serverTimestamp(),
+                };
+                if (role == 'student') {
+                  updates['gradeLevel'] = gradeLevelController.text.trim();
+                  updates['section'] = sectionController.text.trim();
+                }
+                await FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(userId)
+                    .update(updates);
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('User info updated successfully'),
+                    backgroundColor: AppColors.success,
+                  ),
+                );
+              } catch (e) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Failed to update user: $e'),
+                    backgroundColor: AppColors.error,
+                  ),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.adminPrimary,
+              foregroundColor: AppColors.textWhite,
+            ),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _resetUserPassword(String email) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Reset Password'),
+        content: Text(
+          'Send a password reset email to $email?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.adminPrimary,
+              foregroundColor: AppColors.textWhite,
+            ),
+            child: const Text('Send'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      await FirebaseAuth.instance
+          .sendPasswordResetEmail(email: email.trim().toLowerCase());
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Password reset email sent to $email'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to send reset email: $e'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -721,10 +920,11 @@ class _UserManagementState extends State<_UserManagement> {
 
                 final allDocs = snapshot.data?.docs ?? [];
 
-                // Filter by search text
+                // Filter by search text and exclude deleted users
                 final searchTerm = _searchController.text.toLowerCase().trim();
                 final filteredDocs = allDocs.where((doc) {
                   final data = doc.data();
+                  if (data['deleted'] == true) return false;
                   final name = (data['name'] as String? ?? '').toLowerCase();
                   final email = (data['email'] as String? ?? '').toLowerCase();
                   return name.contains(searchTerm) ||
@@ -759,6 +959,9 @@ class _UserManagementState extends State<_UserManagement> {
                     return _UserCard(
                       userModel: userModel,
                       onDelete: () => _deleteUser(doc.id, userModel.email),
+                      onEdit: () => _editUser(doc.id, doc.data()),
+                      onResetPassword: () =>
+                          _resetUserPassword(userModel.email),
                     );
                   },
                 );
@@ -1373,9 +1576,19 @@ class _SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<_SettingsPage> {
-  final _academicYearController = TextEditingController();
+  String? _selectedAcademicYear;
   bool _isLoading = true;
   bool _isSaving = false;
+
+  final List<String> _defaultYears = [
+    '2025-2026',
+    '2026-2027',
+    '2027-2028',
+    '2028-2029',
+    '2029-2030',
+  ];
+
+  List<String> _availableYears = [];
 
   @override
   void initState() {
@@ -1393,9 +1606,17 @@ class _SettingsPageState extends State<_SettingsPage> {
       if (doc.exists) {
         final data = doc.data();
         final academicYear = data?['academicYear'] as String? ?? '2025-2026';
-        _academicYearController.text = academicYear;
+        final customYears = data?['customYears'] != null
+            ? List<String>.from(data!['customYears'])
+            : <String>[];
+        final allYears = {..._defaultYears, ...customYears}.toList();
+        if (!allYears.contains(academicYear)) allYears.add(academicYear);
+        allYears.sort();
+        setState(() {
+          _availableYears = allYears;
+          _selectedAcademicYear = academicYear;
+        });
       } else {
-        // Create default config if it doesn't exist
         await FirebaseFirestore.instance
             .collection('app_config')
             .doc('current')
@@ -1403,7 +1624,10 @@ class _SettingsPageState extends State<_SettingsPage> {
           'academicYear': '2025-2026',
           'updatedAt': FieldValue.serverTimestamp(),
         });
-        _academicYearController.text = '2025-2026';
+        setState(() {
+          _availableYears = List.from(_defaultYears);
+          _selectedAcademicYear = '2025-2026';
+        });
       }
 
       if (!mounted) return;
@@ -1411,21 +1635,28 @@ class _SettingsPageState extends State<_SettingsPage> {
     } catch (e) {
       debugPrint('Error loading settings: $e');
       if (!mounted) return;
-      setState(() => _isLoading = false);
+      setState(() {
+        _availableYears = List.from(_defaultYears);
+        _isLoading = false;
+      });
     }
   }
 
   Future<void> _saveSettings() async {
+    if (_selectedAcademicYear == null) return;
     setState(() => _isSaving = true);
 
     try {
+      final customYears =
+          _availableYears.where((y) => !_defaultYears.contains(y)).toList();
       await FirebaseFirestore.instance
           .collection('app_config')
           .doc('current')
-          .update({
-        'academicYear': _academicYearController.text.trim(),
+          .set({
+        'academicYear': _selectedAcademicYear,
+        'customYears': customYears,
         'updatedAt': FieldValue.serverTimestamp(),
-      });
+      }, SetOptions(merge: true));
 
       if (!mounted) return;
       setState(() => _isSaving = false);
@@ -1449,10 +1680,116 @@ class _SettingsPageState extends State<_SettingsPage> {
     }
   }
 
-  @override
-  void dispose() {
-    _academicYearController.dispose();
-    super.dispose();
+  Future<void> _showYearPickerDialog() async {
+    String? tempSelected = _selectedAcademicYear;
+    List<String> tempYears = List.from(_availableYears);
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setStateDialog) => AlertDialog(
+          title: const Text('Select Academic Year'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 300),
+                  child: ListView(
+                    shrinkWrap: true,
+                    children: tempYears
+                        .map(
+                          (year) => RadioListTile<String>(
+                            title: Text(year),
+                            value: year,
+                            groupValue: tempSelected,
+                            activeColor: AppColors.adminPrimary,
+                            onChanged: (val) {
+                              setStateDialog(() => tempSelected = val);
+                            },
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ),
+                const Divider(),
+                TextButton.icon(
+                  icon: const Icon(Icons.add),
+                  label: const Text('Add Custom Year'),
+                  onPressed: () async {
+                    final controller = TextEditingController();
+                    final newYear = await showDialog<String>(
+                      context: ctx,
+                      builder: (ctx2) => AlertDialog(
+                        title: const Text('Add Academic Year'),
+                        content: TextField(
+                          controller: controller,
+                          decoration: const InputDecoration(
+                            hintText: 'e.g. 2030-2031',
+                            border: OutlineInputBorder(),
+                          ),
+                          autofocus: true,
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx2),
+                            child: const Text('Cancel'),
+                          ),
+                          ElevatedButton(
+                            onPressed: () {
+                              final val = controller.text.trim();
+                              if (val.isNotEmpty) {
+                                Navigator.pop(ctx2, val);
+                              }
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.adminPrimary,
+                              foregroundColor: AppColors.textWhite,
+                            ),
+                            child: const Text('Add'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (newYear != null && !tempYears.contains(newYear)) {
+                      setStateDialog(() {
+                        tempYears.add(newYear);
+                        tempYears.sort();
+                        tempSelected = newYear;
+                      });
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.adminPrimary,
+                foregroundColor: AppColors.textWhite,
+              ),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    // After dialog closes, update state with selection
+    if (tempSelected != _selectedAcademicYear ||
+        tempYears.length != _availableYears.length) {
+      setState(() {
+        _selectedAcademicYear = tempSelected;
+        _availableYears = tempYears;
+      });
+    }
   }
 
   @override
@@ -1514,12 +1851,40 @@ class _SettingsPageState extends State<_SettingsPage> {
                     ),
                   ),
                   const SizedBox(height: AppConstants.paddingS),
-                  TextField(
-                    controller: _academicYearController,
-                    decoration: const InputDecoration(
-                      hintText: 'e.g., 2025-2026',
-                      prefixIcon: Icon(Icons.school_outlined),
-                      border: OutlineInputBorder(),
+                  InkWell(
+                    onTap: _showYearPickerDialog,
+                    borderRadius:
+                        BorderRadius.circular(AppConstants.radiusM),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppConstants.paddingM,
+                        vertical: AppConstants.paddingM,
+                      ),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: AppColors.textSecondary),
+                        borderRadius:
+                            BorderRadius.circular(AppConstants.radiusM),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.school_outlined,
+                              color: AppColors.textSecondary),
+                          const SizedBox(width: AppConstants.paddingM),
+                          Expanded(
+                            child: Text(
+                              _selectedAcademicYear ?? 'Select Academic Year',
+                              style: TextStyle(
+                                fontSize: AppConstants.fontM,
+                                color: _selectedAcademicYear != null
+                                    ? AppColors.textPrimary
+                                    : AppColors.textSecondary,
+                              ),
+                            ),
+                          ),
+                          const Icon(Icons.arrow_drop_down,
+                              color: AppColors.textSecondary),
+                        ],
+                      ),
                     ),
                   ),
                   const SizedBox(height: AppConstants.paddingS),
@@ -1625,10 +1990,14 @@ class _FilterButton extends StatelessWidget {
 class _UserCard extends StatelessWidget {
   final UserModel userModel;
   final VoidCallback onDelete;
+  final VoidCallback onEdit;
+  final VoidCallback onResetPassword;
 
   const _UserCard({
     required this.userModel,
     required this.onDelete,
+    required this.onEdit,
+    required this.onResetPassword,
   });
 
   Color _getRoleColor() {
@@ -1702,7 +2071,11 @@ class _UserCard extends StatelessWidget {
         isThreeLine: true,
         trailing: PopupMenuButton<String>(
           onSelected: (value) {
-            if (value == 'delete') {
+            if (value == 'edit') {
+              onEdit();
+            } else if (value == 'reset_password') {
+              onResetPassword();
+            } else if (value == 'delete') {
               showDialog(
                 context: context,
                 builder: (context) => AlertDialog(
@@ -1730,8 +2103,38 @@ class _UserCard extends StatelessWidget {
               );
             }
           },
-          itemBuilder: (context) => [
-            const PopupMenuItem(value: 'delete', child: Text('Delete')),
+          itemBuilder: (context) => const [
+            PopupMenuItem(
+              value: 'edit',
+              child: Row(
+                children: [
+                  Icon(Icons.edit_outlined, size: 18),
+                  SizedBox(width: 8),
+                  Text('Edit Info'),
+                ],
+              ),
+            ),
+            PopupMenuItem(
+              value: 'reset_password',
+              child: Row(
+                children: [
+                  Icon(Icons.lock_reset_outlined, size: 18),
+                  SizedBox(width: 8),
+                  Text('Reset Password'),
+                ],
+              ),
+            ),
+            PopupMenuDivider(),
+            PopupMenuItem(
+              value: 'delete',
+              child: Row(
+                children: [
+                  Icon(Icons.delete_outline, size: 18, color: AppColors.error),
+                  SizedBox(width: 8),
+                  Text('Delete', style: TextStyle(color: AppColors.error)),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -1786,34 +2189,6 @@ class _ContentStatCard extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _SettingsTile extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String? subtitle;
-  final VoidCallback onTap;
-
-  const _SettingsTile({
-    required this.icon,
-    required this.title,
-    this.subtitle,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: AppConstants.paddingS),
-      child: ListTile(
-        leading: Icon(icon, color: AppColors.adminPrimary),
-        title: Text(title),
-        subtitle: subtitle != null ? Text(subtitle!) : null,
-        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-        onTap: onTap,
       ),
     );
   }

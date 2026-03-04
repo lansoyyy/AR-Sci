@@ -252,42 +252,87 @@ class _DashboardHome extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Welcome back,',
-                    style: TextStyle(
-                      fontSize: AppConstants.fontL,
-                      color: AppColors.textWhite,
-                    ),
-                  ),
-                  const SizedBox(height: AppConstants.paddingS),
-                  Text(
-                    isLoading ? 'Loading...' : (currentUser?.name ?? 'Student'),
-                    style: const TextStyle(
-                      fontSize: AppConstants.fontXXL,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textWhite,
-                    ),
-                  ),
-                  const SizedBox(height: AppConstants.paddingS),
-                  if (currentUser?.gradeLevel != null)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppConstants.paddingM,
-                        vertical: AppConstants.paddingS,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.textWhite.withOpacity(0.2),
-                        borderRadius:
-                            BorderRadius.circular(AppConstants.radiusRound),
-                      ),
-                      child: Text(
-                        currentUser!.gradeLevel!,
-                        style: const TextStyle(
-                          color: AppColors.textWhite,
-                          fontWeight: FontWeight.w600,
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Welcome back,',
+                              style: TextStyle(
+                                fontSize: AppConstants.fontL,
+                                color: AppColors.textWhite,
+                              ),
+                            ),
+                            const SizedBox(height: AppConstants.paddingS),
+                            Text(
+                              isLoading
+                                  ? 'Loading...'
+                                  : (currentUser?.name ?? 'Student'),
+                              style: const TextStyle(
+                                fontSize: AppConstants.fontXXL,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.textWhite,
+                              ),
+                            ),
+                            const SizedBox(height: AppConstants.paddingS),
+                            if (currentUser?.gradeLevel != null)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: AppConstants.paddingM,
+                                  vertical: AppConstants.paddingS,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.textWhite.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(
+                                      AppConstants.radiusRound),
+                                ),
+                                child: Text(
+                                  currentUser!.gradeLevel!,
+                                  style: const TextStyle(
+                                    color: AppColors.textWhite,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                       ),
-                    ),
+                      StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                        stream: FirebaseFirestore.instance
+                            .collection('app_config')
+                            .doc('current')
+                            .snapshots(),
+                        builder: (context, snapshot) {
+                          final year =
+                              snapshot.data?.data()?['academicYear'] as String? ??
+                                  '2025-2026';
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                year,
+                                style: const TextStyle(
+                                  fontSize: AppConstants.fontXL,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.textWhite,
+                                ),
+                              ),
+                              const Text(
+                                'Academic Year',
+                                style: TextStyle(
+                                  fontSize: AppConstants.fontS,
+                                  color: AppColors.textWhite,
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -683,9 +728,6 @@ class _LessonsPage extends StatefulWidget {
 class _LessonsPageState extends State<_LessonsPage> {
   String _selectedFilter = 'All';
 
-  String? get _studentGradeLevel => widget.currentUser?.gradeLevel;
-  String? get _studentSection => widget.currentUser?.section;
-
   List<Map<String, dynamic>> _applyFilter(List<Map<String, dynamic>> all) {
     if (_selectedFilter == 'All') {
       return all;
@@ -890,9 +932,6 @@ class _QuizzesPageBody extends StatefulWidget {
 
 class _QuizzesPageBodyState extends State<_QuizzesPageBody> {
   String _selectedFilter = 'All';
-
-  String? get _studentGradeLevel => widget.currentUser?.gradeLevel;
-  String? get _studentSection => widget.currentUser?.section;
 
   void _onFilterSelected(String label) {
     setState(() => _selectedFilter = label);
