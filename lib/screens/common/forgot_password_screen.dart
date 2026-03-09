@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../utils/colors.dart';
 import '../../utils/constants.dart';
 import '../../widgets/custom_button.dart';
@@ -30,39 +29,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
     setState(() => _isLoading = true);
     try {
-      // Check if user exists in Firestore first
-      final userQuery = await FirebaseFirestore.instance
-          .collection('users')
-          .where('email', isEqualTo: email)
-          .limit(1)
-          .get();
-
-      if (userQuery.docs.isEmpty) {
-        if (!mounted) return;
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No account found with this email address.'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-        return;
-      }
-
-      // User exists in Firestore, check if account is deleted
-      final userData = userQuery.docs.first.data();
-      if (userData['deleted'] == true) {
-        if (!mounted) return;
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('This account has been deactivated. Please contact the administrator.'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-        return;
-      }
-
       await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
 
       if (!mounted) return;
@@ -80,10 +46,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       setState(() => _isLoading = false);
       String message;
       switch (e.code) {
-        case 'user-not-found':
-          message =
-              'Account registered but authentication not set up. Please contact the administrator.';
-          break;
         case 'invalid-email':
           message = 'Invalid email address format.';
           break;

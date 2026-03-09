@@ -30,29 +30,7 @@ class _OTPForgotPasswordScreenState extends State<OTPForgotPasswordScreen> {
 
     setState(() => _isLoading = true);
     try {
-      final email = _emailController.text.trim();
-
-      // Check if user exists (optional - Firebase will handle this)
-      try {
-        final methods =
-            await FirebaseAuth.instance.fetchSignInMethodsForEmail(email);
-        if (methods.isEmpty) {
-          throw FirebaseAuthException(
-            code: 'user-not-found',
-            message: 'No account found with this email address.',
-          );
-        }
-      } on FirebaseAuthException catch (e) {
-        if (!mounted) return;
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.message ?? 'Email not found.'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-        return;
-      }
+      final email = _emailController.text.trim().toLowerCase();
 
       // Send password reset email using Firebase Auth
       await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
@@ -69,12 +47,34 @@ class _OTPForgotPasswordScreenState extends State<OTPForgotPasswordScreen> {
           backgroundColor: AppColors.success,
         ),
       );
-    } catch (e) {
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+
+      String message;
+      switch (e.code) {
+        case 'invalid-email':
+          message = 'Invalid email address format.';
+          break;
+        case 'too-many-requests':
+          message = 'Too many requests. Please try again later.';
+          break;
+        default:
+          message = e.message ?? 'Failed to send reset email. Please try again.';
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    } catch (_) {
       if (!mounted) return;
       setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to send reset email: ${e.toString()}'),
+        const SnackBar(
+          content: Text('An unexpected error occurred. Please try again.'),
           backgroundColor: AppColors.error,
         ),
       );
