@@ -149,11 +149,33 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> {
 
   Future<void> _generateMyLessonsReport(pw.Document pdf, DateTime now,
       DateFormat dateFormat, String? teacherId) async {
-    final lessonsSnapshot = await FirebaseFirestore.instance
+    Query<Map<String, dynamic>> query = FirebaseFirestore.instance
         .collection('lessons')
-        .where('createdBy', isEqualTo: teacherId)
-        .get();
-    final lessons = lessonsSnapshot.docs;
+        .where('createdBy', isEqualTo: teacherId);
+
+    // Apply quarter filter
+    if (_selectedFilterType == 'quarter' && _selectedQuarter != null) {
+      query = query.where('quarter', isEqualTo: _selectedQuarter);
+    }
+
+    final lessonsSnapshot = await query.get();
+    var lessons = lessonsSnapshot.docs;
+
+    // Apply section/grade filter
+    if (_selectedFilterType == 'section' && _selectedSection != null) {
+      lessons = lessons.where((l) {
+        final grade = l.data()['gradeLevel'] as String?;
+        return grade == _selectedSection;
+      }).toList();
+    }
+
+    // Build subtitle for filter context
+    String filterLabel = '';
+    if (_selectedFilterType == 'quarter' && _selectedQuarter != null) {
+      filterLabel = ' — $_selectedQuarter';
+    } else if (_selectedFilterType == 'section' && _selectedSection != null) {
+      filterLabel = ' — Section: $_selectedSection';
+    }
 
     pdf.addPage(
       pw.MultiPage(
@@ -162,7 +184,7 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> {
             _buildReportHeader('My Lessons Summary', now, dateFormat),
         footer: (context) => _buildReportFooter(),
         build: (context) => [
-          pw.Text('Lessons Created by You',
+          pw.Text('Lessons Created by You$filterLabel',
               style:
                   pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 20),
@@ -176,6 +198,7 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> {
             final data = lesson.data();
             final isPublished = data['isPublished'] == true;
             return pw.Container(
+              width: double.infinity,
               margin: const pw.EdgeInsets.only(bottom: 10),
               padding: const pw.EdgeInsets.all(10),
               decoration: pw.BoxDecoration(
@@ -224,14 +247,14 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> {
       }).toList();
     }
 
-    // Get results for these quizzes
+    // Get results for these quizzes (batch to stay within Firestore's 30-item whereIn limit)
     final quizIds = quizzes.map((q) => q.id).toList();
     Map<String, List<Map<String, dynamic>>> quizResults = {};
 
-    if (quizIds.isNotEmpty) {
+    for (final batch in _chunked(quizIds, 10)) {
       final resultsSnapshot = await FirebaseFirestore.instance
           .collection('quiz_results')
-          .where('quizId', whereIn: quizIds.take(10).toList())
+          .where('quizId', whereIn: batch)
           .get();
 
       for (final result in resultsSnapshot.docs) {
@@ -264,16 +287,26 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> {
             final data = quiz.data();
             final quizId = quiz.id;
             final results = quizResults[quizId] ?? [];
-            final avgScore = results.isEmpty
-                ? 0
-                : results.map((r) {
+
+            // If per-student filter, only count this student's results
+            final filteredResults = (_selectedFilterType == 'student' &&
+                    _selectedStudent != null)
+                ? results
+                    .where((r) => r['studentId'] == _selectedStudent)
+                    .toList()
+                : results;
+
+            final avgScore = filteredResults.isEmpty
+                ? 0.0
+                : filteredResults.map((r) {
                       final score = (r['score'] as num?)?.toDouble() ?? 0;
                       final total = (r['totalPoints'] as num?)?.toDouble() ?? 1;
                       return (score / total) * 100;
                     }).reduce((a, b) => a + b) /
-                    results.length;
+                    filteredResults.length;
 
             return pw.Container(
+              width: double.infinity,
               margin: const pw.EdgeInsets.only(bottom: 10),
               padding: const pw.EdgeInsets.all(10),
               decoration: pw.BoxDecoration(border: pw.Border.all()),
@@ -282,8 +315,12 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> {
                 children: [
                   pw.Text(data['title'] as String? ?? 'Untitled',
                       style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-                  pw.Text('Attempts: ${results.length}'),
-                  pw.Text('Average Score: ${avgScore.toStringAsFixed(1)}%'),
+                  pw.Text('Subject: ${data['subject'] ?? 'N/A'}'),
+                  pw.Text('Grade Level: ${data['gradeLevel'] ?? 'N/A'}'),
+                  pw.Text('Quarter: ${data['quarter'] ?? 'N/A'}'),
+                  pw.Text('Attempts: ${filteredResults.length}'),
+                  pw.Text(
+                      'Average Score: ${avgScore.toStringAsFixed(1)}%'),
                 ],
               ),
             );
@@ -305,13 +342,13 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> {
         (teacherData?['sectionsHandled'] as List<dynamic>?)?.cast<String>() ??
             [];
 
-    // Get students in those sections
-    Query<Map<String, dynamic>> studentsQuery = FirebaseFirestore.instance
+    // Get students
+    final studentsSnapshot = await FirebaseFirestore.instance
         .collection('users')
         .where('role', isEqualTo: 'student')
-        .where('verified', isEqualTo: true);
+        .where('verified', isEqualTo: true)
+        .get();
 
-    final studentsSnapshot = await studentsQuery.get();
     var students = studentsSnapshot.docs.where((s) {
       final grade = s.data()['gradeLevel'] as String?;
       final section = s.data()['section'] as String?;
@@ -319,25 +356,301 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> {
       return sections.contains(grade) || sections.contains(section);
     }).toList();
 
-    // Apply filters
+    // ── Per Student ──────────────────────────────────────────────────────────
     if (_selectedFilterType == 'student' && _selectedStudent != null) {
-      students = students.where((s) => s.id == _selectedStudent).toList();
+      final studentDoc =
+          students.firstWhere((s) => s.id == _selectedStudent,
+              orElse: () => studentsSnapshot.docs
+                  .firstWhere((s) => s.id == _selectedStudent));
+      final studentData = studentDoc.data();
+      final studentName = studentData['name'] as String? ?? 'Unknown';
+      final gradeLevel = studentData['gradeLevel'] as String? ?? 'N/A';
+      final section = studentData['section'] as String? ?? 'N/A';
+
+      // Fetch ALL quiz results for this student
+      final resultsSnapshot = await FirebaseFirestore.instance
+          .collection('quiz_results')
+          .where('studentId', isEqualTo: _selectedStudent)
+          .get();
+      final results = resultsSnapshot.docs;
+
+      // Collect quiz titles
+      final quizIds =
+          results.map((r) => r.data()['quizId'] as String?).whereType<String>().toSet().toList();
+      final Map<String, String> quizTitles = {};
+      final Map<String, String> quizQuarters = {};
+      for (final batch in _chunked(quizIds, 10)) {
+        final quizSnap = await FirebaseFirestore.instance
+            .collection('quizzes')
+            .where(FieldPath.documentId, whereIn: batch)
+            .get();
+        for (final q in quizSnap.docs) {
+          quizTitles[q.id] = q.data()['title'] as String? ?? 'Untitled';
+          quizQuarters[q.id] = q.data()['quarter'] as String? ?? 'N/A';
+        }
+      }
+
+      double overallAvg = 0;
+      if (results.isNotEmpty) {
+        final total = results.map((r) {
+          final score = (r.data()['score'] as num?)?.toDouble() ?? 0;
+          final totalPts = (r.data()['totalPoints'] as num?)?.toDouble() ?? 1;
+          return totalPts > 0 ? (score / totalPts) * 100 : 0.0;
+        }).reduce((a, b) => a + b);
+        overallAvg = total / results.length;
+      }
+
+      pdf.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4,
+          header: (ctx) =>
+              _buildReportHeader('Student Progress Report', now, dateFormat),
+          footer: (_) => _buildReportFooter(),
+          build: (_) => [
+            // Student info banner
+            pw.Container(
+              width: double.infinity,
+              padding: const pw.EdgeInsets.all(12),
+              decoration: pw.BoxDecoration(
+                color: PdfColors.blue50,
+                border: pw.Border.all(color: PdfColors.blue200),
+                borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+              ),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(studentName,
+                      style: pw.TextStyle(
+                          fontSize: 18, fontWeight: pw.FontWeight.bold)),
+                  pw.SizedBox(height: 4),
+                  pw.Text('Grade Level: $gradeLevel   |   Section: $section'),
+                  pw.Text(
+                      'Overall Average: ${overallAvg.toStringAsFixed(1)}%  (${results.length} attempt${results.length != 1 ? 's' : ''})'),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 20),
+            pw.Text('Quiz Results',
+                style:
+                    pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+            pw.SizedBox(height: 10),
+            if (results.isEmpty)
+              pw.Text('No quiz attempts recorded for this student.',
+                  style:
+                      const pw.TextStyle(color: PdfColors.grey))
+            else
+              ...results.map((r) {
+                final data = r.data();
+                final quizId = data['quizId'] as String? ?? '';
+                final score = (data['score'] as num?)?.toDouble() ?? 0;
+                final totalPts = (data['totalPoints'] as num?)?.toDouble() ?? 1;
+                final pct = totalPts > 0 ? (score / totalPts) * 100 : 0.0;
+                final submittedAt = data['submittedAt'];
+                String dateStr = '';
+                if (submittedAt is Timestamp) {
+                  dateStr = dateFormat.format(submittedAt.toDate());
+                }
+                return pw.Container(
+                  width: double.infinity,
+                  margin: const pw.EdgeInsets.only(bottom: 8),
+                  padding: const pw.EdgeInsets.all(10),
+                  decoration: pw.BoxDecoration(border: pw.Border.all()),
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(quizTitles[quizId] ?? 'Unknown Quiz',
+                          style:
+                              pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                      pw.Text('Quarter: ${quizQuarters[quizId] ?? 'N/A'}'),
+                      pw.Text(
+                          'Score: ${score.toStringAsFixed(0)} / ${totalPts.toStringAsFixed(0)}  (${pct.toStringAsFixed(1)}%)'),
+                      if (dateStr.isNotEmpty) pw.Text('Date: $dateStr'),
+                    ],
+                  ),
+                );
+              }),
+          ],
+        ),
+      );
+      return;
     }
 
+    // ── Per Section ──────────────────────────────────────────────────────────
     if (_selectedFilterType == 'section' && _selectedSection != null) {
       students = students.where((s) {
-        final section = s.data()['section'] as String?;
-        return section == _selectedSection;
+        final sec = s.data()['section'] as String?;
+        final grade = s.data()['gradeLevel'] as String?;
+        return sec == _selectedSection || grade == _selectedSection;
       }).toList();
+
+      // Get quiz results for each student
+      final Map<String, List<Map<String, dynamic>>> studentResults = {};
+      for (final student in students) {
+        final resSnap = await FirebaseFirestore.instance
+            .collection('quiz_results')
+            .where('studentId', isEqualTo: student.id)
+            .get();
+        studentResults[student.id] = resSnap.docs.map((d) => d.data()).toList();
+      }
+
+      pdf.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4,
+          header: (ctx) =>
+              _buildReportHeader('Student Progress Report', now, dateFormat),
+          footer: (_) => _buildReportFooter(),
+          build: (_) => [
+            pw.Text('Section: $_selectedSection',
+                style: pw.TextStyle(
+                    fontSize: 18, fontWeight: pw.FontWeight.bold)),
+            pw.SizedBox(height: 6),
+            pw.Text('Total Students: ${students.length}'),
+            pw.SizedBox(height: 20),
+            ...students.map((s) {
+              final data = s.data();
+              final name = data['name'] as String? ?? 'Unknown';
+              final results = studentResults[s.id] ?? [];
+              double avg = 0;
+              if (results.isNotEmpty) {
+                final sum = results.map((r) {
+                  final score = (r['score'] as num?)?.toDouble() ?? 0;
+                  final tp = (r['totalPoints'] as num?)?.toDouble() ?? 1;
+                  return tp > 0 ? (score / tp) * 100 : 0.0;
+                }).reduce((a, b) => a + b);
+                avg = sum / results.length;
+              }
+              return pw.Container(
+                width: double.infinity,
+                margin: const pw.EdgeInsets.only(bottom: 8),
+                padding: const pw.EdgeInsets.all(10),
+                decoration: pw.BoxDecoration(border: pw.Border.all()),
+                child: pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Expanded(
+                      child: pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          pw.Text(name,
+                              style: pw.TextStyle(
+                                  fontWeight: pw.FontWeight.bold)),
+                          pw.Text(
+                              'Grade: ${data['gradeLevel'] ?? 'N/A'}  |  Attempts: ${results.length}'),
+                        ],
+                      ),
+                    ),
+                    pw.Text('${avg.toStringAsFixed(1)}%',
+                        style: pw.TextStyle(
+                            fontSize: 16, fontWeight: pw.FontWeight.bold)),
+                  ],
+                ),
+              );
+            }),
+          ],
+        ),
+      );
+      return;
     }
 
+    // ── Per Quarter ───────────────────────────────────────────────────────────
+    if (_selectedFilterType == 'quarter' && _selectedQuarter != null) {
+      // Get quizzes for this quarter from this teacher
+      final quizzesSnap = await FirebaseFirestore.instance
+          .collection('quizzes')
+          .where('createdBy', isEqualTo: teacherId)
+          .where('quarter', isEqualTo: _selectedQuarter)
+          .get();
+      final quizIds = quizzesSnap.docs.map((q) => q.id).toList();
+      final Map<String, String> quizTitles = {
+        for (final q in quizzesSnap.docs)
+          q.id: q.data()['title'] as String? ?? 'Untitled'
+      };
+
+      // Get all results for those quizzes
+      final Map<String, List<Map<String, dynamic>>> studentResultsMap = {};
+      for (final batch in _chunked(quizIds, 10)) {
+        final resSnap = await FirebaseFirestore.instance
+            .collection('quiz_results')
+            .where('quizId', whereIn: batch)
+            .get();
+        for (final r in resSnap.docs) {
+          final data = r.data();
+          final sid = data['studentId'] as String?;
+          if (sid != null) {
+            studentResultsMap.putIfAbsent(sid, () => []).add(data);
+          }
+        }
+      }
+
+      pdf.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4,
+          header: (ctx) =>
+              _buildReportHeader('Student Progress Report', now, dateFormat),
+          footer: (_) => _buildReportFooter(),
+          build: (_) => [
+            pw.Text('Quarter: $_selectedQuarter',
+                style: pw.TextStyle(
+                    fontSize: 18, fontWeight: pw.FontWeight.bold)),
+            pw.SizedBox(height: 6),
+            pw.Text('Quizzes in this quarter: ${quizzesSnap.docs.length}'),
+            pw.SizedBox(height: 20),
+            ...students.map((s) {
+              final data = s.data();
+              final name = data['name'] as String? ?? 'Unknown';
+              final results = studentResultsMap[s.id] ?? [];
+              if (results.isEmpty) return pw.SizedBox();
+              double avg = 0;
+              final sum = results.map((r) {
+                final score = (r['score'] as num?)?.toDouble() ?? 0;
+                final tp = (r['totalPoints'] as num?)?.toDouble() ?? 1;
+                return tp > 0 ? (score / tp) * 100 : 0.0;
+              }).reduce((a, b) => a + b);
+              avg = sum / results.length;
+              return pw.Container(
+                width: double.infinity,
+                margin: const pw.EdgeInsets.only(bottom: 8),
+                padding: const pw.EdgeInsets.all(10),
+                decoration: pw.BoxDecoration(border: pw.Border.all()),
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text(name,
+                        style:
+                            pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                    pw.Text(
+                        'Grade: ${data['gradeLevel'] ?? 'N/A'}  |  Attempts: ${results.length}  |  Avg: ${avg.toStringAsFixed(1)}%'),
+                    pw.SizedBox(height: 6),
+                    ...results.map((r) {
+                      final qid = r['quizId'] as String? ?? '';
+                      final score = (r['score'] as num?)?.toDouble() ?? 0;
+                      final tp = (r['totalPoints'] as num?)?.toDouble() ?? 1;
+                      final pct = tp > 0 ? (score / tp) * 100 : 0.0;
+                      return pw.Padding(
+                        padding:
+                            const pw.EdgeInsets.only(left: 10, bottom: 2),
+                        child: pw.Text(
+                            '• ${quizTitles[qid] ?? 'Quiz'}: ${score.toStringAsFixed(0)}/${tp.toStringAsFixed(0)} (${pct.toStringAsFixed(1)}%)'),
+                      );
+                    }),
+                  ],
+                ),
+              );
+            }).where((w) => w is! pw.SizedBox).toList(),
+          ],
+        ),
+      );
+      return;
+    }
+
+    // ── All Data (default) ────────────────────────────────────────────────────
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
-        header: (context) =>
+        header: (ctx) =>
             _buildReportHeader('Student Progress Report', now, dateFormat),
-        footer: (context) => _buildReportFooter(),
-        build: (context) => [
+        footer: (_) => _buildReportFooter(),
+        build: (_) => [
           pw.Text('Students in Your Classes',
               style:
                   pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
@@ -345,12 +658,13 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> {
           pw.Text('Total Students: ${students.length}'),
           pw.SizedBox(height: 20),
           _buildStatsTable([
-            ['Student Name', 'Grade/Section', 'Status'],
+            ['Student Name', 'Grade', 'Section', 'Status'],
             ...students.map((s) {
               final data = s.data();
               return [
                 data['name'] as String? ?? 'Unknown',
-                '${data['gradeLevel'] ?? 'N/A'} / ${data['section'] ?? 'N/A'}',
+                data['gradeLevel'] as String? ?? 'N/A',
+                data['section'] as String? ?? 'N/A',
                 'Active',
               ];
             }),
@@ -358,6 +672,15 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> {
         ],
       ),
     );
+  }
+
+  /// Splits a list into chunks of at most [size] elements.
+  List<List<T>> _chunked<T>(List<T> list, int size) {
+    final chunks = <List<T>>[];
+    for (var i = 0; i < list.length; i += size) {
+      chunks.add(list.sublist(i, i + size > list.length ? list.length : i + size));
+    }
+    return chunks;
   }
 
   Future<void> _generateClassOverviewReport(pw.Document pdf, DateTime now,
