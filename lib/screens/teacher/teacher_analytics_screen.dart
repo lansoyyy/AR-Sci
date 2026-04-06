@@ -15,21 +15,6 @@ class TeacherAnalyticsScreen extends StatefulWidget {
 
 class _TeacherAnalyticsScreenState extends State<TeacherAnalyticsScreen> {
   String _selectedTimeRange = '30days';
-  final List<String> _timeRanges = ['7days', '30days', '90days', 'all'];
-
-  DateTime get _startDate {
-    final now = DateTime.now();
-    switch (_selectedTimeRange) {
-      case '7days':
-        return now.subtract(const Duration(days: 7));
-      case '30days':
-        return now.subtract(const Duration(days: 30));
-      case '90days':
-        return now.subtract(const Duration(days: 90));
-      default:
-        return DateTime(2020);
-    }
-  }
 
   String? get _teacherId => FirebaseAuth.instance.currentUser?.uid;
 
@@ -414,7 +399,7 @@ class _TeacherAnalyticsScreenState extends State<TeacherAnalyticsScreen> {
                               dotData: const FlDotData(show: true),
                               belowBarData: BarAreaData(
                                 show: true,
-                                color: AppColors.warning.withOpacity(0.2),
+                                color: AppColors.warning.withValues(alpha: 0.2),
                               ),
                             ),
                           ],
@@ -475,10 +460,6 @@ class _TeacherAnalyticsScreenState extends State<TeacherAnalyticsScreen> {
           .snapshots(),
       builder: (context, snapshot) {
         final results = snapshot.data?.docs ?? [];
-
-        // Get unique students who took quizzes recently
-        final studentIds =
-            results.map((r) => r.data()['studentId'] as String?).toSet();
 
         return Card(
           child: Column(

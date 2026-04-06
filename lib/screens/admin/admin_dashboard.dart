@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../common/settings_screen.dart';
 import '../../utils/colors.dart';
 import '../../utils/constants.dart';
 import '../../routes/app_routes.dart';
@@ -58,7 +59,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
           onNavigate: (index) => setState(() => _selectedIndex = index)),
       const _UserManagement(),
       const _ContentManagement(),
-      const _SettingsPage(),
+      const SettingsScreen(role: 'admin'),
     ];
   }
 
@@ -118,6 +119,55 @@ class _DashboardHome extends StatefulWidget {
 }
 
 class _DashboardHomeState extends State<_DashboardHome> {
+  bool _isLessonArReady(Map<String, dynamic> lesson) {
+    final arItems = (lesson['arItems'] as List<dynamic>? ?? <dynamic>[])
+        .map((item) => item.toString().trim())
+        .where((item) => item.isNotEmpty)
+        .toList();
+    final modelUrl = (lesson['arModelUrl'] ?? '').toString().trim();
+    return arItems.isNotEmpty || modelUrl.isNotEmpty;
+  }
+
+  Future<void> _openAdminArExperience() async {
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('lessons')
+          .where('isPublished', isEqualTo: true)
+          .limit(50)
+          .get();
+
+      final arReadyLessons = snapshot.docs
+          .map((doc) => <String, dynamic>{
+                ...doc.data(),
+                'id': doc.data()['id'] ?? doc.id,
+              })
+          .where(_isLessonArReady)
+          .toList();
+
+      if (arReadyLessons.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No AR-ready lessons are available right now.'),
+          ),
+        );
+        return;
+      }
+
+      if (!mounted) return;
+      Navigator.pushNamed(
+        context,
+        AppRoutes.lessonDetail,
+        arguments: arReadyLessons.first,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to open AR experience. $e')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -125,19 +175,26 @@ class _DashboardHomeState extends State<_DashboardHome> {
         title: const Text('Admin Dashboard'),
         backgroundColor: AppColors.adminPrimary,
         actions: [
-          // IconButton(
-          //   icon: const Icon(Icons.notifications_outlined),
-          //   onPressed: () {
-          //     Navigator.pushNamed(context, '/notifications',
-          //         arguments: 'admin');
-          //   },
-          // ),
-          // IconButton(
-          //   icon: const Icon(Icons.person_outline),
-          //   onPressed: () {
-          //     Navigator.pushNamed(context, '/profile', arguments: 'admin');
-          //   },
-          // ),
+          IconButton(
+            icon: const Icon(Icons.notifications_outlined),
+            onPressed: () {
+              Navigator.pushNamed(
+                context,
+                AppRoutes.notifications,
+                arguments: 'admin',
+              );
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.person_outline),
+            onPressed: () {
+              Navigator.pushNamed(
+                context,
+                AppRoutes.profile,
+                arguments: 'admin',
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () async {
@@ -247,9 +304,9 @@ class _DashboardHomeState extends State<_DashboardHome> {
                             .doc('current')
                             .snapshots(),
                         builder: (context, snapshot) {
-                          final year =
-                              snapshot.data?.data()?['academicYear'] as String? ??
-                                  '2025-2026';
+                          final year = snapshot.data?.data()?['academicYear']
+                                  as String? ??
+                              '2025-2026';
                           return Column(
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
@@ -308,10 +365,15 @@ class _DashboardHomeState extends State<_DashboardHome> {
                     child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                       stream: FirebaseFirestore.instance
                           .collection('users')
-                          .where('verified', isEqualTo: true)
                           .snapshots(),
                       builder: (context, snapshot) {
-                        final activeUsers = snapshot.data?.docs.length ?? 0;
+                        final activeUsers =
+                            (snapshot.data?.docs ?? []).where((doc) {
+                          final data = doc.data();
+                          return data['verified'] == true &&
+                              data['deleted'] != true &&
+                              data['deactivated'] != true;
+                        }).length;
                         return StatCard(
                           title: 'Active',
                           value: activeUsers.toString(),
@@ -477,7 +539,12 @@ class _DashboardHomeState extends State<_DashboardHome> {
                   .where('verified', isEqualTo: false)
                   .snapshots(),
               builder: (context, snapshot) {
-                final pending = snapshot.data?.docs.length ?? 0;
+                final pending = (snapshot.data?.docs ?? []).where((doc) {
+                  final data = doc.data();
+                  return data['rejected'] != true &&
+                      data['deleted'] != true &&
+                      data['deactivated'] != true;
+                }).length;
                 final suffix = pending == 0
                     ? 'No pending accounts'
                     : '$pending pending accounts';
@@ -514,6 +581,14 @@ class _DashboardHomeState extends State<_DashboardHome> {
             ),
 
             FeatureCard(
+              title: 'AR Science Lab',
+              description: 'Inspect published AR-ready lessons as admin',
+              icon: Icons.view_in_ar_outlined,
+              iconColor: AppColors.studentPrimary,
+              onTap: _openAdminArExperience,
+            ),
+
+            FeatureCard(
               title: 'Analytics Dashboard',
               description: 'View user stats, engagement & performance trends',
               icon: Icons.analytics_outlined,
@@ -534,18 +609,8 @@ class _DashboardHomeState extends State<_DashboardHome> {
             ),
 
             FeatureCard(
-              title: 'Subject Management',
-              description: 'Manage subjects - Admin only',
-              icon: Icons.school_outlined,
-              iconColor: AppColors.teacherPrimary,
-              onTap: () {
-                Navigator.pushNamed(context, AppRoutes.subjectManagement);
-              },
-            ),
-
-            FeatureCard(
               title: 'Global Announcements',
-              description: 'Send notifications to all users',
+              description: 'Broadcast announcements to active users by role',
               icon: Icons.campaign_outlined,
               iconColor: AppColors.secondary,
               onTap: () {
@@ -570,6 +635,7 @@ class _UserManagement extends StatefulWidget {
 
 class _UserManagementState extends State<_UserManagement> {
   String _selectedFilter = 'all';
+  String _accountStatusFilter = 'active';
   final TextEditingController _searchController = TextEditingController();
 
   Query<Map<String, dynamic>> _getUsersQuery() {
@@ -586,21 +652,31 @@ class _UserManagementState extends State<_UserManagement> {
     return query.orderBy('createdAt', descending: true);
   }
 
-  Future<void> _deleteUser(String userId, String email) async {
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _deactivateUser(
+    String userId,
+    Map<String, dynamic> userData,
+  ) async {
+    final email = (userData['email'] ?? '').toString().trim();
+    final name = (userData['name'] ?? email).toString().trim();
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete User?'),
+        title: const Text('Deactivate User?'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Are you sure you want to delete $email?'),
+            Text('Deactivate $name${email.isEmpty ? '' : ' ($email)'}?'),
             const SizedBox(height: AppConstants.paddingM),
             const Text(
-              'This will mark the user as deleted in Firestore. '
-              'Firebase Auth user deletion requires Firebase Admin SDK (server-side). '
-              'Related data (quiz results, progress) will be kept.',
+              'This keeps the account record, quiz results, and progress, '
+              'but removes the user from the active roster until restored.',
               style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
             ),
           ],
@@ -616,7 +692,7 @@ class _UserManagementState extends State<_UserManagement> {
               backgroundColor: AppColors.error,
               foregroundColor: AppColors.textWhite,
             ),
-            child: const Text('Delete'),
+            child: const Text('Deactivate'),
           ),
         ],
       ),
@@ -626,18 +702,9 @@ class _UserManagementState extends State<_UserManagement> {
 
     try {
       final currentUser = FirebaseAuth.instance.currentUser;
+      final userName = userData['name'] as String? ?? '';
+      final userRole = userData['role'] as String? ?? '';
 
-      // Get user data before deletion for logging
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .get();
-
-      final userData = userDoc.data();
-      final userName = userData?['name'] as String? ?? '';
-      final userRole = userData?['role'] as String? ?? '';
-
-      // Create deletion log for audit purposes
       await FirebaseFirestore.instance.collection('deletion_logs').add({
         'userId': userId,
         'userName': userName,
@@ -646,20 +713,24 @@ class _UserManagementState extends State<_UserManagement> {
         'deletedBy': currentUser?.uid,
         'deletedAt': FieldValue.serverTimestamp(),
         'deletedByRole': 'admin',
+        'action': 'deactivated',
       });
 
-      // Mark user as deleted in Firestore (soft delete)
-      // Note: Firebase Auth user deletion requires Firebase Admin SDK (server-side)
       await FirebaseFirestore.instance.collection('users').doc(userId).update({
         'deleted': true,
+        'deactivated': true,
+        'accountStatus': 'deactivated',
         'deletedAt': FieldValue.serverTimestamp(),
         'deletedBy': currentUser?.uid,
+        'deactivatedAt': FieldValue.serverTimestamp(),
+        'deactivatedBy': currentUser?.uid,
+        'updatedAt': FieldValue.serverTimestamp(),
       });
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('User marked as deleted successfully'),
+          content: Text('Account deactivated successfully'),
           backgroundColor: AppColors.success,
         ),
       );
@@ -667,19 +738,178 @@ class _UserManagementState extends State<_UserManagement> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to delete user: $e'),
+          content: Text('Failed to deactivate user: $e'),
           backgroundColor: AppColors.error,
         ),
       );
     }
   }
 
+  Future<void> _restoreUser(
+    String userId,
+    Map<String, dynamic> userData,
+  ) async {
+    final email = (userData['email'] ?? '').toString().trim();
+    final name = (userData['name'] ?? email).toString().trim();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Restore User?'),
+        content: Text(
+          'Restore $name${email.isEmpty ? '' : ' ($email)'} to the active roster?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.success,
+              foregroundColor: AppColors.textWhite,
+            ),
+            child: const Text('Restore'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      await FirebaseFirestore.instance.collection('users').doc(userId).update({
+        'deleted': false,
+        'deactivated': false,
+        'accountStatus': 'active',
+        'restoredAt': FieldValue.serverTimestamp(),
+        'restoredBy': currentUser?.uid,
+        'updatedAt': FieldValue.serverTimestamp(),
+        'deletedAt': FieldValue.delete(),
+        'deletedBy': FieldValue.delete(),
+        'deactivatedAt': FieldValue.delete(),
+        'deactivatedBy': FieldValue.delete(),
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Account restored successfully'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to restore user: $e'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
+
+  Future<void> _showUserDetails(
+    Map<String, dynamic> userData, {
+    required bool isDeactivated,
+  }) async {
+    final name = (userData['name'] ?? 'Unknown').toString().trim();
+    final email = (userData['email'] ?? 'No email').toString().trim();
+    final role = (userData['role'] ?? 'unknown').toString().trim();
+    final gradeLevel = (userData['gradeLevel'] ?? '').toString().trim();
+    final section = (userData['section'] ?? '').toString().trim();
+    final subjects = (userData['subjects'] as List<dynamic>? ?? <dynamic>[])
+        .map((item) => item.toString().trim())
+        .where((item) => item.isNotEmpty)
+        .join(', ');
+    final sectionsHandled =
+        (userData['sectionsHandled'] as List<dynamic>? ?? <dynamic>[])
+            .map((item) => item.toString().trim())
+            .where((item) => item.isNotEmpty)
+            .join(', ');
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Account Details'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                name,
+                style: const TextStyle(
+                  fontSize: AppConstants.fontL,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: AppConstants.paddingM),
+              SelectableText('Email: $email'),
+              const SizedBox(height: AppConstants.paddingS),
+              Text('Role: ${role.toUpperCase()}'),
+              const SizedBox(height: AppConstants.paddingS),
+              Text('Status: ${isDeactivated ? 'Deactivated' : 'Active'}'),
+              if (gradeLevel.isNotEmpty) ...[
+                const SizedBox(height: AppConstants.paddingS),
+                Text('Grade Level: $gradeLevel'),
+              ],
+              if (section.isNotEmpty) ...[
+                const SizedBox(height: AppConstants.paddingS),
+                Text('Section: $section'),
+              ],
+              if (subjects.isNotEmpty) ...[
+                const SizedBox(height: AppConstants.paddingS),
+                Text('Subjects: $subjects'),
+              ],
+              if (sectionsHandled.isNotEmpty) ...[
+                const SizedBox(height: AppConstants.paddingS),
+                Text('Sections Handled: $sectionsHandled'),
+              ],
+              const SizedBox(height: AppConstants.paddingM),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(AppConstants.paddingM),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceLight,
+                  borderRadius: BorderRadius.circular(AppConstants.radiusM),
+                ),
+                child: const Text(
+                  'Password: Not retrievable from Firebase Auth. Use the reset password action if the user needs a new password.',
+                  style: TextStyle(color: AppColors.textSecondary),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _resetUserPassword(email);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.adminPrimary,
+              foregroundColor: AppColors.textWhite,
+            ),
+            child: const Text('Reset Password'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _editUser(
       String userId, Map<String, dynamic> currentData) async {
     final nameController =
         TextEditingController(text: currentData['name'] as String? ?? '');
-    final gradeLevelController = TextEditingController(
-        text: currentData['gradeLevel'] as String? ?? '');
+    final gradeLevelController =
+        TextEditingController(text: currentData['gradeLevel'] as String? ?? '');
     final sectionController =
         TextEditingController(text: currentData['section'] as String? ?? '');
     final role = currentData['role'] as String? ?? '';
@@ -713,8 +943,7 @@ class _UserManagementState extends State<_UserManagement> {
                     border: OutlineInputBorder(),
                   ),
                   items: AppConstants.gradeLevels
-                      .map((g) =>
-                          DropdownMenuItem(value: g, child: Text(g)))
+                      .map((g) => DropdownMenuItem(value: g, child: Text(g)))
                       .toList(),
                   onChanged: (val) {
                     if (val != null) gradeLevelController.text = val;
@@ -842,30 +1071,59 @@ class _UserManagementState extends State<_UserManagement> {
           // Filter Tabs
           Container(
             padding: const EdgeInsets.all(AppConstants.paddingM),
-            child: Row(
+            child: Column(
               children: [
-                Expanded(
-                  child: _FilterButton(
-                    label: 'All',
-                    isSelected: _selectedFilter == 'all',
-                    onTap: () => setState(() => _selectedFilter = 'all'),
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _FilterButton(
+                        label: 'All',
+                        isSelected: _selectedFilter == 'all',
+                        onTap: () => setState(() => _selectedFilter = 'all'),
+                      ),
+                    ),
+                    const SizedBox(width: AppConstants.paddingS),
+                    Expanded(
+                      child: _FilterButton(
+                        label: 'Students',
+                        isSelected: _selectedFilter == 'student',
+                        onTap: () =>
+                            setState(() => _selectedFilter = 'student'),
+                      ),
+                    ),
+                    const SizedBox(width: AppConstants.paddingS),
+                    Expanded(
+                      child: _FilterButton(
+                        label: 'Teachers',
+                        isSelected: _selectedFilter == 'teacher',
+                        onTap: () =>
+                            setState(() => _selectedFilter = 'teacher'),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: AppConstants.paddingS),
-                Expanded(
-                  child: _FilterButton(
-                    label: 'Students',
-                    isSelected: _selectedFilter == 'student',
-                    onTap: () => setState(() => _selectedFilter = 'student'),
-                  ),
-                ),
-                const SizedBox(width: AppConstants.paddingS),
-                Expanded(
-                  child: _FilterButton(
-                    label: 'Teachers',
-                    isSelected: _selectedFilter == 'teacher',
-                    onTap: () => setState(() => _selectedFilter = 'teacher'),
-                  ),
+                const SizedBox(height: AppConstants.paddingM),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _FilterButton(
+                        label: 'Active',
+                        isSelected: _accountStatusFilter == 'active',
+                        onTap: () =>
+                            setState(() => _accountStatusFilter = 'active'),
+                      ),
+                    ),
+                    const SizedBox(width: AppConstants.paddingS),
+                    Expanded(
+                      child: _FilterButton(
+                        label: 'Deactivated',
+                        isSelected: _accountStatusFilter == 'deactivated',
+                        onTap: () => setState(
+                          () => _accountStatusFilter = 'deactivated',
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -920,15 +1178,18 @@ class _UserManagementState extends State<_UserManagement> {
 
                 final allDocs = snapshot.data?.docs ?? [];
 
-                // Filter by search text and exclude deleted users
                 final searchTerm = _searchController.text.toLowerCase().trim();
                 final filteredDocs = allDocs.where((doc) {
                   final data = doc.data();
-                  if (data['deleted'] == true) return false;
+                  final isDeactivated =
+                      data['deleted'] == true || data['deactivated'] == true;
+                  final matchesStatus = _accountStatusFilter == 'deactivated'
+                      ? isDeactivated
+                      : !isDeactivated;
                   final name = (data['name'] as String? ?? '').toLowerCase();
                   final email = (data['email'] as String? ?? '').toLowerCase();
-                  return name.contains(searchTerm) ||
-                      email.contains(searchTerm);
+                  return matchesStatus &&
+                      (name.contains(searchTerm) || email.contains(searchTerm));
                 }).toList();
 
                 if (filteredDocs.isEmpty) {
@@ -954,11 +1215,22 @@ class _UserManagementState extends State<_UserManagement> {
                   itemBuilder: (context, index) {
                     final doc = filteredDocs[index];
                     final data = doc.data();
-                    final userModel = UserModel.fromJson(data);
+                    final isDeactivated =
+                        data['deleted'] == true || data['deactivated'] == true;
+                    final userModel = UserModel.fromJson({
+                      ...data,
+                      'id': doc.id,
+                    });
 
                     return _UserCard(
                       userModel: userModel,
-                      onDelete: () => _deleteUser(doc.id, userModel.email),
+                      isDeactivated: isDeactivated,
+                      onViewDetails: () => _showUserDetails(
+                        data,
+                        isDeactivated: isDeactivated,
+                      ),
+                      onDeactivate: () => _deactivateUser(doc.id, data),
+                      onRestore: () => _restoreUser(doc.id, data),
                       onEdit: () => _editUser(doc.id, doc.data()),
                       onResetPassword: () =>
                           _resetUserPassword(userModel.email),
@@ -978,15 +1250,6 @@ class _UserManagementState extends State<_UserManagement> {
 
 class _ContentManagement extends StatelessWidget {
   const _ContentManagement();
-
-  String _subjectToColorName(String subject) {
-    final s = subject.toLowerCase();
-    if (s.contains('physics')) return 'physics';
-    if (s.contains('chemistry')) return 'chemistry';
-    if (s.contains('biology')) return 'biology';
-    if (s.contains('earth')) return 'earthScience';
-    return 'physics';
-  }
 
   int _countPending(List<QueryDocumentSnapshot<Map<String, dynamic>>> docs) {
     return docs.where((d) => d.data()['isPublished'] != true).length;
@@ -1036,292 +1299,8 @@ class _ContentManagement extends StatelessWidget {
     }
   }
 
-  Future<void> _showEditLessonDialog(
-    BuildContext context, {
-    required String id,
-    required Map<String, dynamic> data,
-  }) async {
-    final titleController =
-        TextEditingController(text: (data['title'] ?? '').toString());
-    final descriptionController =
-        TextEditingController(text: (data['description'] ?? '').toString());
-    final contentController =
-        TextEditingController(text: (data['content'] ?? '').toString());
-
-    var subject = (data['subject'] ?? AppConstants.subjects.first).toString();
-    var gradeLevel =
-        (data['gradeLevel'] ?? data['grade'] ?? AppConstants.gradeLevels.first)
-            .toString();
-    var quarter = (data['quarter'] ?? 'Quarter 3').toString();
-    var isPublished = data['isPublished'] == true;
-
-    await showDialog<void>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: const Text('Edit Lesson'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: titleController,
-                  decoration: const InputDecoration(labelText: 'Title'),
-                ),
-                const SizedBox(height: AppConstants.paddingM),
-                TextField(
-                  controller: descriptionController,
-                  decoration: const InputDecoration(labelText: 'Description'),
-                  maxLines: 3,
-                ),
-                const SizedBox(height: AppConstants.paddingM),
-                DropdownButtonFormField<String>(
-                  value: subject,
-                  decoration: const InputDecoration(labelText: 'Subject'),
-                  items: AppConstants.subjects
-                      .map((s) => DropdownMenuItem(value: s, child: Text(s)))
-                      .toList(),
-                  onChanged: (value) {
-                    if (value == null) return;
-                    setState(() => subject = value);
-                  },
-                ),
-                const SizedBox(height: AppConstants.paddingM),
-                DropdownButtonFormField<String>(
-                  value: gradeLevel,
-                  decoration: const InputDecoration(labelText: 'Grade Level'),
-                  items: AppConstants.gradeLevels
-                      .map((g) => DropdownMenuItem(value: g, child: Text(g)))
-                      .toList(),
-                  onChanged: (value) {
-                    if (value == null) return;
-                    setState(() => gradeLevel = value);
-                  },
-                ),
-                const SizedBox(height: AppConstants.paddingM),
-                DropdownButtonFormField<String>(
-                  value: quarter,
-                  decoration: const InputDecoration(labelText: 'Quarter'),
-                  items: const [
-                    DropdownMenuItem(
-                        value: 'Quarter 3', child: Text('Quarter 3')),
-                    DropdownMenuItem(
-                        value: 'Quarter 4', child: Text('Quarter 4')),
-                  ],
-                  onChanged: (value) {
-                    if (value == null) return;
-                    setState(() => quarter = value);
-                  },
-                ),
-                const SizedBox(height: AppConstants.paddingM),
-                TextField(
-                  controller: contentController,
-                  decoration: const InputDecoration(labelText: 'Content'),
-                  maxLines: 6,
-                ),
-                const SizedBox(height: AppConstants.paddingM),
-                SwitchListTile(
-                  value: isPublished,
-                  onChanged: (v) => setState(() => isPublished = v),
-                  activeColor: AppColors.adminPrimary,
-                  title: const Text('Published'),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () async {
-                try {
-                  await FirebaseFirestore.instance
-                      .collection('lessons')
-                      .doc(id)
-                      .update({
-                    'title': titleController.text.trim(),
-                    'description': descriptionController.text.trim(),
-                    'subject': subject,
-                    'gradeLevel': gradeLevel,
-                    'quarter': quarter,
-                    'color': _subjectToColorName(subject),
-                    'content': contentController.text.trim(),
-                    'isPublished': isPublished,
-                  });
-
-                  if (!context.mounted) return;
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Lesson updated.')),
-                  );
-                } catch (e) {
-                  if (!context.mounted) return;
-                  final message = e is FirebaseException
-                      ? '${e.code}: ${e.message ?? 'Unknown Firebase error'}'
-                      : e.toString();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Update failed. $message')),
-                  );
-                }
-              },
-              child: const Text('Save'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _showEditQuizDialog(
-    BuildContext context, {
-    required String id,
-    required Map<String, dynamic> data,
-  }) async {
-    final titleController =
-        TextEditingController(text: (data['title'] ?? '').toString());
-    final descriptionController =
-        TextEditingController(text: (data['description'] ?? '').toString());
-    final durationController = TextEditingController(
-      text: (data['duration'] ?? 30).toString(),
-    );
-
-    final lessonId = (data['lessonId'] ?? '').toString();
-
-    var subject = (data['subject'] ?? AppConstants.subjects.first).toString();
-    var gradeLevel =
-        (data['gradeLevel'] ?? data['grade'] ?? AppConstants.gradeLevels.first)
-            .toString();
-    var isPublished = data['isPublished'] == true;
-
-    await showDialog<void>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: const Text('Edit Quiz'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: titleController,
-                  decoration: const InputDecoration(labelText: 'Title'),
-                ),
-                const SizedBox(height: AppConstants.paddingM),
-                TextField(
-                  controller: descriptionController,
-                  decoration: const InputDecoration(labelText: 'Description'),
-                  maxLines: 3,
-                ),
-                const SizedBox(height: AppConstants.paddingM),
-                DropdownButtonFormField<String>(
-                  value: subject,
-                  decoration: const InputDecoration(labelText: 'Subject'),
-                  items: AppConstants.subjects
-                      .map((s) => DropdownMenuItem(value: s, child: Text(s)))
-                      .toList(),
-                  onChanged: (value) {
-                    if (value == null) return;
-                    setState(() => subject = value);
-                  },
-                ),
-                const SizedBox(height: AppConstants.paddingM),
-                DropdownButtonFormField<String>(
-                  value: gradeLevel,
-                  decoration: const InputDecoration(labelText: 'Grade Level'),
-                  items: AppConstants.gradeLevels
-                      .map((g) => DropdownMenuItem(value: g, child: Text(g)))
-                      .toList(),
-                  onChanged: (value) {
-                    if (value == null) return;
-                    setState(() => gradeLevel = value);
-                  },
-                ),
-                const SizedBox(height: AppConstants.paddingM),
-                TextField(
-                  controller: durationController,
-                  keyboardType: TextInputType.number,
-                  decoration:
-                      const InputDecoration(labelText: 'Duration (minutes)'),
-                ),
-                if (lessonId.isNotEmpty) ...[
-                  const SizedBox(height: AppConstants.paddingM),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Lesson ID: $lessonId',
-                      style: const TextStyle(color: AppColors.textSecondary),
-                    ),
-                  ),
-                ],
-                const SizedBox(height: AppConstants.paddingM),
-                SwitchListTile(
-                  value: isPublished,
-                  onChanged: (v) => setState(() => isPublished = v),
-                  activeColor: AppColors.adminPrimary,
-                  title: const Text('Published'),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () async {
-                try {
-                  final duration =
-                      int.tryParse(durationController.text.trim()) ?? 30;
-                  await FirebaseFirestore.instance
-                      .collection('quizzes')
-                      .doc(id)
-                      .update({
-                    'title': titleController.text.trim(),
-                    'description': descriptionController.text.trim(),
-                    'subject': subject,
-                    'gradeLevel': gradeLevel,
-                    'duration': duration,
-                    'isPublished': isPublished,
-                  });
-
-                  if (!context.mounted) return;
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Quiz updated.')),
-                  );
-                } catch (e) {
-                  if (!context.mounted) return;
-                  final message = e is FirebaseException
-                      ? '${e.code}: ${e.message ?? 'Unknown Firebase error'}'
-                      : e.toString();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Update failed. $message')),
-                  );
-                }
-              },
-              child: const Text('Save'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    // Use broadcast streams to allow multiple listeners
-    final lessonsStream = FirebaseFirestore.instance
-        .collection('lessons')
-        .snapshots()
-        .asBroadcastStream();
-    final quizzesStream = FirebaseFirestore.instance
-        .collection('quizzes')
-        .snapshots()
-        .asBroadcastStream();
-
     return DefaultTabController(
       length: 2,
       child: Scaffold(
@@ -1343,7 +1322,9 @@ class _ContentManagement extends StatelessWidget {
                 children: [
                   Expanded(
                     child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                      stream: lessonsStream,
+                      stream: FirebaseFirestore.instance
+                          .collection('lessons')
+                          .snapshots(),
                       builder: (context, snapshot) {
                         final docs = snapshot.data?.docs ?? [];
                         return _ContentStatCard(
@@ -1358,7 +1339,9 @@ class _ContentManagement extends StatelessWidget {
                   const SizedBox(width: AppConstants.paddingM),
                   Expanded(
                     child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                      stream: quizzesStream,
+                      stream: FirebaseFirestore.instance
+                          .collection('quizzes')
+                          .snapshots(),
                       builder: (context, snapshot) {
                         final docs = snapshot.data?.docs ?? [];
                         return _ContentStatCard(
@@ -1377,7 +1360,9 @@ class _ContentManagement extends StatelessWidget {
               child: TabBarView(
                 children: [
                   StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                    stream: lessonsStream,
+                    stream: FirebaseFirestore.instance
+                        .collection('lessons')
+                        .snapshots(),
                     builder: (context, snapshot) {
                       if (snapshot.connectionState == ConnectionState.waiting) {
                         return const Center(child: CircularProgressIndicator());
@@ -1410,6 +1395,10 @@ class _ContentManagement extends StatelessWidget {
                         itemBuilder: (context, index) {
                           final doc = docs[index];
                           final data = doc.data();
+                          final lesson = <String, dynamic>{
+                            ...data,
+                            'id': doc.data()['id'] ?? doc.id,
+                          };
                           final title = (data['title'] ?? '').toString();
                           final subject = (data['subject'] ?? '').toString();
                           final grade =
@@ -1421,6 +1410,13 @@ class _ContentManagement extends StatelessWidget {
                             margin: const EdgeInsets.only(
                                 bottom: AppConstants.paddingM),
                             child: ListTile(
+                              onTap: () {
+                                Navigator.pushNamed(
+                                  context,
+                                  AppRoutes.lessonDetail,
+                                  arguments: lesson,
+                                );
+                              },
                               title: Text(
                                 title.isEmpty ? '(Untitled lesson)' : title,
                                 style: const TextStyle(
@@ -1436,10 +1432,14 @@ class _ContentManagement extends StatelessWidget {
                               trailing: PopupMenuButton<String>(
                                 onSelected: (value) {
                                   if (value == 'edit') {
-                                    _showEditLessonDialog(
+                                    Navigator.pushNamed(
                                       context,
-                                      id: doc.id,
-                                      data: data,
+                                      AppRoutes.adminCreateLesson,
+                                      arguments: <String, dynamic>{
+                                        'role': 'admin',
+                                        'lessonId': doc.id,
+                                        'lessonData': lesson,
+                                      },
                                     );
                                   }
                                   if (value == 'delete') {
@@ -1465,7 +1465,9 @@ class _ContentManagement extends StatelessWidget {
                     },
                   ),
                   StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                    stream: quizzesStream,
+                    stream: FirebaseFirestore.instance
+                        .collection('quizzes')
+                        .snapshots(),
                     builder: (context, snapshot) {
                       if (snapshot.connectionState == ConnectionState.waiting) {
                         return const Center(child: CircularProgressIndicator());
@@ -1498,6 +1500,10 @@ class _ContentManagement extends StatelessWidget {
                         itemBuilder: (context, index) {
                           final doc = docs[index];
                           final data = doc.data();
+                          final quiz = <String, dynamic>{
+                            ...data,
+                            'id': doc.data()['id'] ?? doc.id,
+                          };
                           final title = (data['title'] ?? '').toString();
                           final subject = (data['subject'] ?? '').toString();
                           final grade =
@@ -1514,6 +1520,13 @@ class _ContentManagement extends StatelessWidget {
                             margin: const EdgeInsets.only(
                                 bottom: AppConstants.paddingM),
                             child: ListTile(
+                              onTap: () {
+                                Navigator.pushNamed(
+                                  context,
+                                  AppRoutes.quizDetail,
+                                  arguments: quiz,
+                                );
+                              },
                               title: Text(
                                 title.isEmpty ? '(Untitled quiz)' : title,
                                 style: const TextStyle(
@@ -1530,10 +1543,14 @@ class _ContentManagement extends StatelessWidget {
                               trailing: PopupMenuButton<String>(
                                 onSelected: (value) {
                                   if (value == 'edit') {
-                                    _showEditQuizDialog(
+                                    Navigator.pushNamed(
                                       context,
-                                      id: doc.id,
-                                      data: data,
+                                      AppRoutes.adminCreateQuiz,
+                                      arguments: <String, dynamic>{
+                                        'role': 'admin',
+                                        'quizId': doc.id,
+                                        'quizData': quiz,
+                                      },
                                     );
                                   }
                                   if (value == 'delete') {
@@ -1853,8 +1870,7 @@ class _SettingsPageState extends State<_SettingsPage> {
                   const SizedBox(height: AppConstants.paddingS),
                   InkWell(
                     onTap: _showYearPickerDialog,
-                    borderRadius:
-                        BorderRadius.circular(AppConstants.radiusM),
+                    borderRadius: BorderRadius.circular(AppConstants.radiusM),
                     child: Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: AppConstants.paddingM,
@@ -1989,13 +2005,19 @@ class _FilterButton extends StatelessWidget {
 
 class _UserCard extends StatelessWidget {
   final UserModel userModel;
-  final VoidCallback onDelete;
+  final bool isDeactivated;
+  final VoidCallback onViewDetails;
+  final VoidCallback onDeactivate;
+  final VoidCallback onRestore;
   final VoidCallback onEdit;
   final VoidCallback onResetPassword;
 
   const _UserCard({
     required this.userModel,
-    required this.onDelete,
+    required this.isDeactivated,
+    required this.onViewDetails,
+    required this.onDeactivate,
+    required this.onRestore,
     required this.onEdit,
     required this.onResetPassword,
   });
@@ -2054,6 +2076,28 @@ class _UserCard extends StatelessWidget {
                     ),
                   ),
                 ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isDeactivated
+                        ? AppColors.warning.withOpacity(0.14)
+                        : AppColors.success.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    isDeactivated ? 'DEACTIVATED' : 'ACTIVE',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color:
+                          isDeactivated ? AppColors.warning : AppColors.success,
+                    ),
+                  ),
+                ),
                 if (userModel.gradeLevel != null) ...[
                   const SizedBox(width: 8),
                   Text(
@@ -2071,50 +2115,41 @@ class _UserCard extends StatelessWidget {
         isThreeLine: true,
         trailing: PopupMenuButton<String>(
           onSelected: (value) {
-            if (value == 'edit') {
+            if (value == 'view_details') {
+              onViewDetails();
+            } else if (value == 'edit') {
               onEdit();
             } else if (value == 'reset_password') {
               onResetPassword();
-            } else if (value == 'delete') {
-              showDialog(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text('Delete User'),
-                  content: Text(
-                    'Are you sure you want to delete ${userModel.name}? This action cannot be undone.',
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Cancel'),
-                    ),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        onDelete();
-                      },
-                      style: TextButton.styleFrom(
-                        foregroundColor: AppColors.error,
-                      ),
-                      child: const Text('Delete'),
-                    ),
-                  ],
-                ),
-              );
+            } else if (value == 'deactivate') {
+              onDeactivate();
+            } else if (value == 'restore') {
+              onRestore();
             }
           },
-          itemBuilder: (context) => const [
-            PopupMenuItem(
-              value: 'edit',
+          itemBuilder: (context) => [
+            const PopupMenuItem(
+              value: 'view_details',
               child: Row(
                 children: [
-                  Icon(Icons.edit_outlined, size: 18),
+                  Icon(Icons.info_outline, size: 18),
                   SizedBox(width: 8),
-                  Text('Edit Info'),
+                  Text('View Details'),
                 ],
               ),
             ),
-            PopupMenuItem(
+            if (!isDeactivated)
+              const PopupMenuItem(
+                value: 'edit',
+                child: Row(
+                  children: [
+                    Icon(Icons.edit_outlined, size: 18),
+                    SizedBox(width: 8),
+                    Text('Edit Info'),
+                  ],
+                ),
+              ),
+            const PopupMenuItem(
               value: 'reset_password',
               child: Row(
                 children: [
@@ -2124,14 +2159,24 @@ class _UserCard extends StatelessWidget {
                 ],
               ),
             ),
-            PopupMenuDivider(),
+            const PopupMenuDivider(),
             PopupMenuItem(
-              value: 'delete',
+              value: isDeactivated ? 'restore' : 'deactivate',
               child: Row(
                 children: [
-                  Icon(Icons.delete_outline, size: 18, color: AppColors.error),
-                  SizedBox(width: 8),
-                  Text('Delete', style: TextStyle(color: AppColors.error)),
+                  Icon(
+                    isDeactivated ? Icons.restore_outlined : Icons.block,
+                    size: 18,
+                    color: isDeactivated ? AppColors.success : AppColors.error,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    isDeactivated ? 'Restore' : 'Deactivate',
+                    style: TextStyle(
+                      color:
+                          isDeactivated ? AppColors.success : AppColors.error,
+                    ),
+                  ),
                 ],
               ),
             ),

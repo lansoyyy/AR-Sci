@@ -1,4 +1,7 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+
 import '../../utils/colors.dart';
 import '../../utils/constants.dart';
 
@@ -8,6 +11,7 @@ class ARViewScreen extends StatefulWidget {
   final String lessonId;
   final String lessonTitle;
   final List<String> arItems;
+  final String? modelAssetPath;
   final String? color;
 
   const ARViewScreen({
@@ -15,6 +19,7 @@ class ARViewScreen extends StatefulWidget {
     required this.lessonId,
     required this.lessonTitle,
     this.arItems = const [],
+    this.modelAssetPath,
     this.color,
   });
 
@@ -63,6 +68,10 @@ class _DetailLine extends StatelessWidget {
 }
 
 class _ARViewScreenState extends State<ARViewScreen> {
+  bool _autoLaunchAr = true;
+  bool _preferencesLoaded = false;
+  bool _didAutoOpen = false;
+
   static final List<_ARModelItem> _volcanoModels = <_ARModelItem>[
     _ARModelItem(
       title: 'Structure of a Volcano',
@@ -509,34 +518,246 @@ class _ARViewScreenState extends State<ARViewScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _loadArPreference();
+  }
+
+  Future<void> _loadArPreference() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        if (!mounted) return;
+        setState(() => _preferencesLoaded = true);
+        return;
+      }
+
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      final data = doc.data();
+
+      if (!mounted) return;
+      setState(() {
+        _autoLaunchAr = (data?['autoPlayAR'] as bool?) ?? true;
+        _preferencesLoaded = true;
+      });
+      _maybeAutoOpen();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _preferencesLoaded = true);
+    }
+  }
+
+  Color get _accentColor {
+    switch ((widget.color ?? '').trim().toLowerCase()) {
+      case 'red':
+        return const Color(0xFFE53935);
+      case 'orange':
+        return const Color(0xFFFB8C00);
+      case 'yellow':
+        return const Color(0xFFFDD835);
+      case 'green':
+        return const Color(0xFF43A047);
+      case 'blue':
+        return const Color(0xFF1E88E5);
+      case 'teal':
+        return const Color(0xFF00897B);
+      default:
+        return AppColors.studentPrimary;
+    }
+  }
+
+  String _normalize(String value) {
+    return value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), ' ').trim();
+  }
+
+  Set<String> _candidateFilters() {
+    final filters = widget.arItems
+        .map(_normalize)
+        .where((entry) => entry.isNotEmpty)
+        .toSet();
+
+    final normalizedTitle = _normalize(widget.lessonTitle);
+    if (normalizedTitle.isNotEmpty && normalizedTitle != 'ar view') {
+      filters.add(normalizedTitle);
+      filters.addAll(
+        normalizedTitle.split(' ').where((token) => token.trim().length >= 4),
+      );
+    }
+
+    return filters;
+  }
+
+  bool _matchesFilters(_ARModelItem item, Set<String> filters) {
+    final searchableText = _normalize(
+      [
+        item.title,
+        item.description,
+        item.mainFocus,
+        item.subjectArea,
+        item.gradeLevel,
+        ...item.keyComponents,
+      ].join(' '),
+    );
+
+    return filters.any((filter) {
+      if (filter.isEmpty) {
+        return false;
+      }
+      return searchableText.contains(filter) ||
+          filter.contains(_normalize(item.title));
+    });
+  }
+
+  _ARModelItem? get _lessonLinkedModel {
+    final modelPath = (widget.modelAssetPath ?? '').trim();
+    if (modelPath.isEmpty) {
+      return null;
+    }
+
+    return _ARModelItem(
+      title: widget.lessonTitle.trim().isEmpty
+          ? 'Lesson AR Model'
+          : widget.lessonTitle,
+      description: 'This AR model is linked directly to the selected lesson.',
+      keyComponents: widget.arItems.isEmpty
+          ? <String>['Interactive 3D model']
+          : widget.arItems,
+      type: 'Lesson-linked 3D model',
+      mainFocus: widget.lessonTitle.trim().isEmpty
+          ? 'Lesson visualization'
+          : widget.lessonTitle,
+      purpose: 'Explore the lesson model in 3D and augmented reality.',
+      subjectArea: 'Science',
+      gradeLevel: '',
+      importance:
+          'Supports closer inspection of the lesson topic from multiple angles.',
+      modelAssetPath: modelPath,
+      imageAssetPath: null,
+    );
+  }
+
+  List<_ARModelItem> get _visibleModels {
+    final linkedModel = _lessonLinkedModel;
+    if (linkedModel != null) {
+      return <_ARModelItem>[linkedModel];
+    }
+
+    final filters = _candidateFilters();
+    if (filters.isEmpty) {
+      return _volcanoModels;
+    }
+
+    final matches =
+        _volcanoModels.where((item) => _matchesFilters(item, filters)).toList();
+
+    return matches.isNotEmpty ? matches : _volcanoModels;
+  }
+
+  void _openModel(_ARModelItem item) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ARModelViewerScreen(
+          title: item.title,
+          modelAssetPath: item.modelAssetPath,
+          alt: item.title,
+          autoLaunchAr: _autoLaunchAr,
+        ),
+      ),
+    );
+  }
+
+  void _maybeAutoOpen() {
+    if (!_preferencesLoaded || !_autoLaunchAr || _didAutoOpen) {
+      return;
+    }
+
+    final models = _visibleModels;
+    if (models.length != 1) {
+      return;
+    }
+
+    _didAutoOpen = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _openModel(models.first);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final visibleModels = _visibleModels;
+    final isLessonScoped =
+        _lessonLinkedModel != null || widget.arItems.isNotEmpty;
+
+    _maybeAutoOpen();
+
     return Scaffold(
       appBar: AppBar(
-        title: Text('AR Science Lab'),
-        backgroundColor: AppColors.studentPrimary,
+        title: Text(
+          widget.lessonTitle.trim().isEmpty || widget.lessonTitle == 'AR View'
+              ? 'AR Science Lab'
+              : widget.lessonTitle,
+        ),
+        backgroundColor: _accentColor,
       ),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(AppConstants.paddingM),
-        itemCount: _volcanoModels.length,
-        itemBuilder: (context, index) {
-          final item = _volcanoModels[index];
-          return _ARModelCard(
-            item: item,
-            onViewAr: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => ARModelViewerScreen(
-                    title: item.title,
-                    modelAssetPath: item.modelAssetPath,
-                    alt: item.title,
-                    autoLaunchAr: true,
+      body: Column(
+        children: [
+          if (isLessonScoped)
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.fromLTRB(
+                AppConstants.paddingM,
+                AppConstants.paddingM,
+                AppConstants.paddingM,
+                0,
+              ),
+              padding: const EdgeInsets.all(AppConstants.paddingM),
+              decoration: BoxDecoration(
+                color: _accentColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(AppConstants.radiusM),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    visibleModels.length == 1
+                        ? 'Lesson-specific AR model ready'
+                        : '${visibleModels.length} lesson-related AR models found',
+                    style: TextStyle(
+                      fontSize: AppConstants.fontL,
+                      fontWeight: FontWeight.w700,
+                      color: _accentColor,
+                    ),
                   ),
-                ),
-              );
-            },
-          );
-        },
+                  const SizedBox(height: AppConstants.paddingXS),
+                  Text(
+                    _autoLaunchAr
+                        ? 'Your AR preference is enabled. A single lesson-linked model opens automatically.'
+                        : 'Your AR preference is off. Select a model below when you are ready.',
+                    style: const TextStyle(color: AppColors.textSecondary),
+                  ),
+                ],
+              ),
+            ),
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.all(AppConstants.paddingM),
+              itemCount: visibleModels.length,
+              itemBuilder: (context, index) {
+                final item = visibleModels[index];
+                return _ARModelCard(
+                  item: item,
+                  accentColor: _accentColor,
+                  onViewAr: () => _openModel(item),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -553,7 +774,7 @@ class _ARModelItem {
   final String gradeLevel;
   final String importance;
   final String modelAssetPath;
-  final String imageAssetPath;
+  final String? imageAssetPath;
 
   const _ARModelItem({
     required this.title,
@@ -566,16 +787,18 @@ class _ARModelItem {
     required this.gradeLevel,
     required this.importance,
     required this.modelAssetPath,
-    required this.imageAssetPath,
+    this.imageAssetPath,
   });
 }
 
 class _ARModelCard extends StatelessWidget {
   final _ARModelItem item;
+  final Color accentColor;
   final VoidCallback onViewAr;
 
   const _ARModelCard({
     required this.item,
+    required this.accentColor,
     required this.onViewAr,
   });
 
@@ -584,15 +807,28 @@ class _ARModelCard extends StatelessWidget {
     return Card(
       margin: const EdgeInsets.only(bottom: AppConstants.paddingM),
       child: ExpansionTile(
-        leading: ClipRRect(
-          borderRadius: BorderRadius.circular(AppConstants.radiusM),
-          child: Image.asset(
-            item.imageAssetPath,
-            width: 56,
-            height: 56,
-            fit: BoxFit.cover,
-          ),
-        ),
+        leading: item.imageAssetPath != null && item.imageAssetPath!.isNotEmpty
+            ? ClipRRect(
+                borderRadius: BorderRadius.circular(AppConstants.radiusM),
+                child: Image.asset(
+                  item.imageAssetPath!,
+                  width: 56,
+                  height: 56,
+                  fit: BoxFit.cover,
+                ),
+              )
+            : Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: accentColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(AppConstants.radiusM),
+                ),
+                child: Icon(
+                  Icons.view_in_ar,
+                  color: accentColor,
+                ),
+              ),
         title: Text(
           item.title,
           style: const TextStyle(fontWeight: FontWeight.w600),
@@ -645,7 +881,7 @@ class _ARModelCard extends StatelessWidget {
                   icon: const Icon(Icons.view_in_ar),
                   label: const Text('View in AR'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.studentPrimary,
+                    backgroundColor: accentColor,
                     foregroundColor: AppColors.textWhite,
                     padding: const EdgeInsets.symmetric(
                       vertical: AppConstants.paddingM,

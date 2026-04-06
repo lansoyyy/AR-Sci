@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../utils/text_utils.dart';
+
 class UserModel {
   final String id;
   final String name;
@@ -11,6 +13,8 @@ class UserModel {
   final String? subject; // For teachers (legacy, single subject)
   final List<String>? subjects; // For teachers (multiple subjects)
   final List<String>? sectionsHandled; // For teachers (sections they teach)
+  final bool notificationsEnabled;
+  final String? profilePhotoUrl;
   final DateTime createdAt;
 
   UserModel({
@@ -24,24 +28,29 @@ class UserModel {
     this.subject,
     this.subjects,
     this.sectionsHandled,
+    this.notificationsEnabled = true,
+    this.profilePhotoUrl,
     required this.createdAt,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
     return UserModel(
       id: json['id'] ?? '',
-      name: json['name'] ?? '',
+      name: normalizePersonName((json['name'] ?? '').toString()),
       email: json['email'] ?? '',
       role: json['role'] ?? '',
-      photoUrl: json['photoUrl'],
+      photoUrl: json['photoUrl'] ?? json['profilePhotoUrl'],
       gradeLevel: json['gradeLevel'],
       section: json['section'],
       subject: json['subject'],
-      subjects:
-          json['subjects'] != null ? List<String>.from(json['subjects']) : null,
-      sectionsHandled: json['sectionsHandled'] != null
-          ? List<String>.from(json['sectionsHandled'])
+      subjects: json['subjects'] != null
+          ? normalizeTextList(List<String>.from(json['subjects']))
           : null,
+      sectionsHandled: json['sectionsHandled'] != null
+          ? normalizeTextList(List<String>.from(json['sectionsHandled']))
+          : null,
+      notificationsEnabled: json['notificationsEnabled'] != false,
+      profilePhotoUrl: json['profilePhotoUrl'] as String?,
       createdAt: _parseDateTime(json['createdAt']),
     );
   }
@@ -49,15 +58,18 @@ class UserModel {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'name': name,
+      'name': normalizePersonName(name),
       'email': email,
       'role': role,
-      'photoUrl': photoUrl,
+      'photoUrl': photoUrl ?? profilePhotoUrl,
       'gradeLevel': gradeLevel,
       'section': section,
       'subject': subject,
-      'subjects': subjects,
-      'sectionsHandled': sectionsHandled,
+      'subjects': subjects != null ? normalizeTextList(subjects!) : null,
+      'sectionsHandled':
+          sectionsHandled != null ? normalizeTextList(sectionsHandled!) : null,
+      'notificationsEnabled': notificationsEnabled,
+      'profilePhotoUrl': profilePhotoUrl ?? photoUrl,
       'createdAt': createdAt.toIso8601String(),
     };
   }

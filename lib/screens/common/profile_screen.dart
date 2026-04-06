@@ -1,11 +1,15 @@
 import 'dart:io';
-import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+
 import '../../utils/colors.dart';
 import '../../utils/constants.dart';
+import '../../utils/password_policy.dart';
+import '../../utils/text_utils.dart';
 import '../../widgets/custom_button.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -21,7 +25,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController(text: '');
   final _emailController = TextEditingController(text: '');
-  final _gradeController = TextEditingController(text: '');
   final _subjectController = TextEditingController(text: '');
   final _currentPasswordController = TextEditingController(text: '');
   final _newPasswordController = TextEditingController(text: '');
@@ -33,12 +36,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _notificationsEnabled = true;
   String? _roleFromDb;
   String? _gradeLevel;
-  String? _subject;
-  List<String>? _subjects;
-  List<String>? _sectionsHandled;
+  String? _section;
+  List<String> _subjects = <String>[];
+  List<String> _sectionsHandled = <String>[];
   String? _profilePhotoUrl;
-  String? _selectedLanguage;
-  final List<String> _languages = ['English', 'Filipino', 'Cebuano'];
 
   final ImagePicker _imagePicker = ImagePicker();
 
@@ -85,26 +86,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _emailController.text = (data['email'] as String?) ?? '';
         _roleFromDb = data['role'] as String?;
         _gradeLevel = data['gradeLevel'] as String?;
-        _subject = data['subject'] as String?;
+        _section = data['section'] as String?;
         _subjects = data['subjects'] != null
-            ? List<String>.from(data['subjects'])
-            : null;
+            ? normalizeTextList(List<String>.from(data['subjects']))
+            : normalizeTextList([
+                if ((data['subject'] as String?)?.trim().isNotEmpty ?? false)
+                  (data['subject'] as String?)!,
+              ]);
         _sectionsHandled = data['sectionsHandled'] != null
-            ? List<String>.from(data['sectionsHandled'])
-            : null;
+            ? normalizeTextList(List<String>.from(data['sectionsHandled']))
+            : <String>[];
         _profilePhotoUrl = data['profilePhotoUrl'] as String?;
         _notificationsEnabled = (data['notificationsEnabled'] as bool?) ?? true;
-        _selectedLanguage = (data['language'] as String?) ?? 'English';
-
-        if (_gradeLevel != null && _gradeLevel!.isNotEmpty) {
-          _gradeController.text = _gradeLevel!;
-        }
-        // For teachers, display subjects in the controller
-        if (_subjects != null && _subjects!.isNotEmpty) {
-          _subjectController.text = _subjects!.join(', ');
-        } else if (_subject != null && _subject!.isNotEmpty) {
-          _subjectController.text = _subject!;
-        }
+        _subjectController.text = _subjects.join(', ');
       });
     } catch (_) {}
   }
@@ -177,8 +171,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         return;
       }
 
-      final newName = _nameController.text.trim();
-      final newEmail = _emailController.text.trim();
+      final newName = normalizePersonName(_nameController.text);
+      final newEmail = _emailController.text.trim().toLowerCase();
 
       if (newName.isEmpty) {
         setState(() => _isSaving = false);
@@ -188,34 +182,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
         return;
       }
 
-      String? gradeLevel;
+      String? gradeLevel = _gradeLevel;
+      String? section = _section;
       String? subject;
-      List<String>? subjects;
-      List<String>? sectionsHandled;
+      List<String> subjects = <String>[];
 
-      if (widget.role == 'student') {
-        gradeLevel = _gradeController.text.trim();
+      if (widget.role == 'student' &&
+          (gradeLevel == null ||
+              gradeLevel.trim().isEmpty ||
+              section == null ||
+              section.trim().isEmpty)) {
+        setState(() => _isSaving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Grade level and section are required')),
+        );
+        return;
       }
 
       if (widget.role == 'teacher') {
-        final subjectText = _subjectController.text.trim();
-        if (subjectText.isNotEmpty) {
-          // Check if it's a comma-separated list or single subject
-          final subjectList = subjectText
+        subjects = normalizeTextList(
+          _subjectController.text
               .split(',')
-              .map((s) => s.trim())
-              .where((s) => s.isNotEmpty)
-              .toList();
-          if (subjectList.length == 1) {
-            // Single subject - store in both subject and subjects
-            subject = subjectList.first;
-            subjects = subjectList;
-          } else {
-            // Multiple subjects - store in subjects array
-            subjects = subjectList;
-            subject = subjectList.first; // Primary subject for display
-          }
-        }
+              .map((value) => value.trim())
+              .where((value) => value.isNotEmpty),
+        );
+        subject = subjects.isNotEmpty ? subjects.first : null;
       }
 
       if (newEmail.isNotEmpty && newEmail != currentUser.email) {
@@ -233,23 +224,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
         'name': newName,
         'email': newEmail,
         'notificationsEnabled': _notificationsEnabled,
-        'language': _selectedLanguage,
       };
 
-      if (gradeLevel != null && gradeLevel.isNotEmpty) {
+      if (widget.role == 'student') {
         updates['gradeLevel'] = gradeLevel;
+        updates['section'] = section;
       }
 
       if (subject != null && subject.isNotEmpty) {
         updates['subject'] = subject;
       }
 
-      if (subjects != null && subjects!.isNotEmpty) {
+      if (widget.role == 'teacher') {
         updates['subjects'] = subjects;
-      }
-
-      if (sectionsHandled != null && sectionsHandled!.isNotEmpty) {
-        updates['sectionsHandled'] = sectionsHandled;
+        updates['sectionsHandled'] = _sectionsHandled;
       }
 
       await FirebaseFirestore.instance
@@ -263,9 +251,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _isSaving = false;
         _isEditing = false;
         _gradeLevel = gradeLevel ?? _gradeLevel;
-        _subject = subject ?? _subject;
-        _subjects = subjects ?? _subjects;
-        _sectionsHandled = sectionsHandled ?? _sectionsHandled;
+        _section = section ?? _section;
+        _subjects = subjects.isNotEmpty ? subjects : _subjects;
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -319,9 +306,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
               TextField(
                 controller: _newPasswordController,
                 obscureText: true,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'New Password',
                   prefixIcon: Icon(Icons.lock_outline),
+                  helperText: PasswordPolicy.helperText,
                 ),
               ),
               const SizedBox(height: 16),
@@ -356,19 +344,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 return;
               }
 
-              if (newPassword.length < 8) {
+              final passwordValidation = PasswordPolicy.validate(newPassword);
+              if (passwordValidation != null) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                      content: Text('Password must be at least 8 characters')),
+                  SnackBar(content: Text(passwordValidation)),
                 );
                 return;
               }
 
-              if (!RegExp(r'(?=.*[A-Za-z])(?=.*\d)').hasMatch(newPassword)) {
+              if (newPassword == currentPassword) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                      content: Text(
-                          'Password must contain both letters and numbers')),
+                    content: Text(
+                        'New password must be different from current password'),
+                  ),
                 );
                 return;
               }
@@ -421,38 +410,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Future<void> _showLanguageDialog() async {
-    final result = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Select Language'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: _languages.map((language) {
-            return RadioListTile<String>(
-              title: Text(language),
-              value: language,
-              groupValue: _selectedLanguage,
-              onChanged: (value) {
-                Navigator.pop(context, value);
-              },
-            );
-          }).toList(),
-        ),
-      ),
-    );
-
-    if (result != null && result != _selectedLanguage) {
-      setState(() => _selectedLanguage = result);
-      await _saveProfile();
-    }
-  }
-
   @override
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
-    _gradeController.dispose();
     _subjectController.dispose();
     _currentPasswordController.dispose();
     _newPasswordController.dispose();
@@ -570,7 +531,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   const SizedBox(height: AppConstants.paddingL),
                   Text(
-                    _nameController.text,
+                    normalizePersonName(_nameController.text),
                     style: const TextStyle(
                       fontSize: AppConstants.fontXXL,
                       fontWeight: FontWeight.bold,
@@ -655,15 +616,45 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     const SizedBox(height: AppConstants.paddingL),
 
-                    if (widget.role == 'student')
-                      TextFormField(
-                        controller: _gradeController,
-                        enabled: _isEditing,
+                    if (widget.role == 'student') ...[
+                      DropdownButtonFormField<String>(
+                        value: _gradeLevel,
                         decoration: const InputDecoration(
                           labelText: 'Grade Level',
                           prefixIcon: Icon(Icons.school_outlined),
                         ),
+                        items: AppConstants.gradeLevels
+                            .map(
+                              (grade) => DropdownMenuItem<String>(
+                                value: grade,
+                                child: Text(grade),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: _isEditing
+                            ? (value) => setState(() => _gradeLevel = value)
+                            : null,
                       ),
+                      const SizedBox(height: AppConstants.paddingL),
+                      DropdownButtonFormField<String>(
+                        value: _section,
+                        decoration: const InputDecoration(
+                          labelText: 'Section',
+                          prefixIcon: Icon(Icons.groups_outlined),
+                        ),
+                        items: AppConstants.studentSections
+                            .map(
+                              (section) => DropdownMenuItem<String>(
+                                value: section,
+                                child: Text(section),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: _isEditing
+                            ? (value) => setState(() => _section = value)
+                            : null,
+                      ),
+                    ],
 
                     if (widget.role == 'teacher')
                       Column(
@@ -699,8 +690,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   runSpacing: AppConstants.paddingS,
                                   children: AppConstants.studentSections
                                       .map((section) {
-                                    final isSelected = (_sectionsHandled ?? [])
-                                        .contains(section);
+                                    final isSelected =
+                                        _sectionsHandled.contains(section);
                                     return FilterChip(
                                       label: Text(section),
                                       selected: isSelected,
@@ -708,12 +699,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                           ? (selected) {
                                               setState(() {
                                                 if (selected) {
-                                                  _sectionsHandled ??= [];
-                                                  _sectionsHandled!
-                                                      .add(section);
+                                                  if (!_sectionsHandled
+                                                      .contains(section)) {
+                                                    _sectionsHandled
+                                                        .add(section);
+                                                  }
                                                 } else {
                                                   _sectionsHandled
-                                                      ?.remove(section);
+                                                      .remove(section);
                                                 }
                                               });
                                             }
@@ -726,15 +719,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 ),
                               ],
                             )
-                          else if (_sectionsHandled != null &&
-                              _sectionsHandled!.isNotEmpty)
+                          else if (_sectionsHandled.isNotEmpty)
                             Padding(
                               padding: const EdgeInsets.only(
                                   top: AppConstants.paddingM),
                               child: Wrap(
                                 spacing: AppConstants.paddingS,
                                 runSpacing: AppConstants.paddingS,
-                                children: _sectionsHandled!.map((section) {
+                                children: _sectionsHandled.map((section) {
                                   return Chip(
                                     label: Text(section),
                                     backgroundColor:
@@ -776,13 +768,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       icon: Icons.lock_outline,
                       title: 'Change Password',
                       onTap: _showChangePasswordDialog,
-                    ),
-
-                    _SettingsTile(
-                      icon: Icons.language_outlined,
-                      title: 'Language',
-                      subtitle: _selectedLanguage ?? 'English',
-                      onTap: _showLanguageDialog,
                     ),
 
                     _SettingsTile(

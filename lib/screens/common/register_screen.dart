@@ -3,6 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../utils/colors.dart';
 import '../../utils/constants.dart';
+import '../../utils/password_policy.dart';
+import '../../utils/text_utils.dart';
 import '../../widgets/custom_button.dart';
 import '../../models/user_model.dart';
 
@@ -47,7 +49,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
 
-      final email = _emailController.text.trim();
+      final email = _emailController.text.trim().toLowerCase();
       final password = _passwordController.text.trim();
 
       try {
@@ -108,18 +110,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
             );
             return;
           }
-          subjects = _selectedSubjects;
-          
+          subjects = normalizeTextList(_selectedSubjects);
+
           // Teachers can optionally select sections they handle
           if (_selectedSectionsHandled.isNotEmpty) {
-            sectionsHandled = _selectedSectionsHandled;
+            sectionsHandled = normalizeTextList(_selectedSectionsHandled);
           }
         }
 
         // Combine first name and last name
-        final firstName = _firstNameController.text.trim();
-        final lastName = _lastNameController.text.trim();
-        final fullName = '$firstName $lastName'.trim();
+        final firstName = toTitleCase(_firstNameController.text.trim());
+        final lastName = toTitleCase(_lastNameController.text.trim());
+        final fullName = normalizePersonName('$firstName $lastName');
 
         final userModel = UserModel(
           id: user.uid,
@@ -315,7 +317,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       },
                     ),
                     const SizedBox(height: AppConstants.paddingL),
-
                     DropdownButtonFormField<String>(
                       value: _selectedSection,
                       decoration: const InputDecoration(
@@ -359,15 +360,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             TextButton(
                               onPressed: () {
                                 setState(() {
-                                  if (_selectedSubjects.length == AppConstants.subjects.length) {
+                                  if (_selectedSubjects.length ==
+                                      AppConstants.subjects.length) {
                                     _selectedSubjects.clear();
                                   } else {
-                                    _selectedSubjects = List.from(AppConstants.subjects);
+                                    _selectedSubjects =
+                                        List.from(AppConstants.subjects);
                                   }
                                 });
                               },
                               child: Text(
-                                _selectedSubjects.length == AppConstants.subjects.length
+                                _selectedSubjects.length ==
+                                        AppConstants.subjects.length
                                     ? 'Deselect All'
                                     : 'Select All',
                                 style: TextStyle(
@@ -383,7 +387,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           spacing: AppConstants.paddingS,
                           runSpacing: AppConstants.paddingS,
                           children: AppConstants.subjects.map((subject) {
-                            final isSelected = _selectedSubjects.contains(subject);
+                            final isSelected =
+                                _selectedSubjects.contains(subject);
                             return FilterChip(
                               label: Text(subject),
                               selected: isSelected,
@@ -421,7 +426,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           spacing: AppConstants.paddingS,
                           runSpacing: AppConstants.paddingS,
                           children: AppConstants.studentSections.map((section) {
-                            final isSelected = _selectedSectionsHandled.contains(section);
+                            final isSelected =
+                                _selectedSectionsHandled.contains(section);
                             return FilterChip(
                               label: Text(section),
                               selected: isSelected,
@@ -466,14 +472,26 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       if (value == null || value.isEmpty) {
                         return 'Please enter a password';
                       }
-                      if (value.length < 8) {
-                        return 'Password must be at least 8 characters';
-                      }
-                      if (!RegExp(r'(?=.*[A-Za-z])(?=.*\d)').hasMatch(value)) {
-                        return 'Password must contain both letters and numbers';
-                      }
-                      return null;
+                      return PasswordPolicy.validate(value);
                     },
+                    autovalidateMode: AutovalidateMode.onUserInteraction,
+                    buildCounter: (
+                      BuildContext context, {
+                      required int currentLength,
+                      required bool isFocused,
+                      required int? maxLength,
+                    }) {
+                      return const SizedBox.shrink();
+                    },
+                  ),
+
+                  const SizedBox(height: AppConstants.paddingS),
+                  Text(
+                    PasswordPolicy.helperText,
+                    style: const TextStyle(
+                      fontSize: AppConstants.fontS,
+                      color: AppColors.textSecondary,
+                    ),
                   ),
 
                   const SizedBox(height: AppConstants.paddingL),

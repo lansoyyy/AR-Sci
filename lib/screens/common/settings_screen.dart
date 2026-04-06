@@ -6,7 +6,7 @@ import '../../providers/theme_provider.dart';
 import '../../routes/app_routes.dart';
 import '../../utils/colors.dart';
 import '../../utils/constants.dart';
-import '../../utils/theme.dart';
+import '../../utils/text_utils.dart';
 
 class SettingsScreen extends StatefulWidget {
   final String role;
@@ -20,42 +20,19 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _notificationsEnabled = true;
   bool _autoPlayAR = true;
-  String _selectedLanguage = 'English';
-  String? _selectedAcademicYear;
   String? _profilePhotoUrl;
   String? _userName;
   bool _isLoading = true;
-
-  final List<String> _languages = ['English', 'Filipino', 'Cebuano'];
-  final List<String> _academicYears = [
+  bool _isSavingAcademicYear = false;
+  String? _selectedAcademicYear;
+  final List<String> _defaultYears = const <String>[
+    '2025-2026',
     '2026-2027',
     '2027-2028',
     '2028-2029',
     '2029-2030',
-    '2030-2031',
-    '2031-2032',
-    '2032-2033',
-    '2033-2034',
-    '2034-2035',
-    '2035-2036',
-    '2037-2038',
-    '2038-2039',
   ];
-
-  String _getCurrentAcademicYear() {
-    final now = DateTime.now();
-    final currentYear = now.year;
-    final currentMonth = now.month;
-
-    // Academic years typically run from June to May
-    // If current month is January to May, use current year
-    // If current month is June to December, use next year
-    if (currentMonth >= 1 && currentMonth <= 5) {
-      return '$currentYear-${currentYear + 1}';
-    } else {
-      return '$currentYear-$currentYear';
-    }
-  }
+  List<String> _availableYears = <String>[];
 
   Color get _roleColor {
     switch (widget.role) {
@@ -79,32 +56,61 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _loadUserSettings() async {
     try {
       final currentUser = FirebaseAuth.instance.currentUser;
-      if (currentUser == null) {
-        setState(() => _isLoading = false);
-        return;
-      }
+      bool notificationsEnabled = true;
+      bool autoPlayAR = true;
+      String? profilePhotoUrl;
+      String? userName;
+      String? selectedAcademicYear;
+      List<String> availableYears = <String>[];
 
-      final snapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUser.uid)
-          .get();
+      if (currentUser != null) {
+        final snapshot = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(currentUser.uid)
+            .get();
 
-      final data = snapshot.data();
-      if (data != null && mounted) {
-        setState(() {
-          _notificationsEnabled =
+        final data = snapshot.data();
+        if (data != null) {
+          notificationsEnabled =
               (data['notificationsEnabled'] as bool?) ?? true;
-          _autoPlayAR = (data['autoPlayAR'] as bool?) ?? true;
-          _selectedLanguage = (data['language'] as String?) ?? 'English';
-          _profilePhotoUrl = data['profilePhotoUrl'] as String?;
-          _userName = data['name'] as String?;
-          _isLoading = false;
-        });
-      } else {
+          autoPlayAR = (data['autoPlayAR'] as bool?) ?? true;
+          profilePhotoUrl = data['profilePhotoUrl'] as String?;
+          userName = normalizePersonName((data['name'] as String?) ?? '');
+        }
+      }
+
+      if (widget.role == 'admin') {
+        final configDoc = await FirebaseFirestore.instance
+            .collection('app_config')
+            .doc('current')
+            .get();
+        final configData = configDoc.data();
+        selectedAcademicYear =
+            (configData?['academicYear'] as String?) ?? '2025-2026';
+        final customYears = configData?['customYears'] != null
+            ? List<String>.from(configData!['customYears'])
+            : <String>[];
+        availableYears = {..._defaultYears, ...customYears}.toList();
+        if (!availableYears.contains(selectedAcademicYear)) {
+          availableYears.add(selectedAcademicYear);
+        }
+        availableYears.sort();
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _notificationsEnabled = notificationsEnabled;
+        _autoPlayAR = autoPlayAR;
+        _profilePhotoUrl = profilePhotoUrl;
+        _userName = userName;
+        _selectedAcademicYear = selectedAcademicYear;
+        _availableYears = availableYears;
+        _isLoading = false;
+      });
+    } catch (_) {
+      if (mounted) {
         setState(() => _isLoading = false);
       }
-    } catch (_) {
-      setState(() => _isLoading = false);
     }
   }
 
@@ -123,60 +129,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           SnackBar(content: Text('Failed to save setting: ${e.toString()}')),
         );
       }
-    }
-  }
-
-  Future<void> _showLanguageDialog() async {
-    final result = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Select Language'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: _languages.map((language) {
-            return RadioListTile<String>(
-              title: Text(language),
-              value: language,
-              groupValue: _selectedLanguage,
-              onChanged: (value) {
-                Navigator.pop(context, value);
-              },
-            );
-          }).toList(),
-        ),
-      ),
-    );
-
-    if (result != null && result != _selectedLanguage) {
-      setState(() => _selectedLanguage = result);
-      await _saveSetting('language', result);
-    }
-  }
-
-  Future<void> _showAcademicYearDialog() async {
-    final result = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Select Academic Year'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: _academicYears.map((year) {
-            return RadioListTile<String>(
-              title: Text(year),
-              value: year,
-              groupValue: _selectedAcademicYear,
-              onChanged: (value) {
-                Navigator.pop(context, value);
-              },
-            );
-          }).toList(),
-        ),
-      ),
-    );
-
-    if (result != null && result != _selectedAcademicYear) {
-      setState(() => _selectedAcademicYear = result);
-      await _saveSetting('academicYear', result);
     }
   }
 
@@ -224,6 +176,160 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _saveAcademicYearSettings() async {
+    if (widget.role != 'admin' || _selectedAcademicYear == null) {
+      return;
+    }
+
+    setState(() => _isSavingAcademicYear = true);
+    try {
+      final customYears = _availableYears
+          .where((year) => !_defaultYears.contains(year))
+          .toList();
+      await FirebaseFirestore.instance
+          .collection('app_config')
+          .doc('current')
+          .set({
+        'academicYear': _selectedAcademicYear,
+        'customYears': customYears,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Academic year updated successfully'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to update academic year: $e'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSavingAcademicYear = false);
+      }
+    }
+  }
+
+  Future<void> _showAcademicYearDialog() async {
+    String? tempSelected = _selectedAcademicYear;
+    final tempYears = List<String>.from(_availableYears);
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setStateDialog) => AlertDialog(
+          title: const Text('Select Academic Year'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 300),
+                  child: ListView(
+                    shrinkWrap: true,
+                    children: tempYears
+                        .map(
+                          (year) => RadioListTile<String>(
+                            title: Text(year),
+                            value: year,
+                            groupValue: tempSelected,
+                            activeColor: _roleColor,
+                            onChanged: (value) {
+                              setStateDialog(() => tempSelected = value);
+                            },
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ),
+                const Divider(),
+                TextButton.icon(
+                  icon: const Icon(Icons.add),
+                  label: const Text('Add Custom Year'),
+                  onPressed: () async {
+                    final controller = TextEditingController();
+                    final newYear = await showDialog<String>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('Add Academic Year'),
+                        content: TextField(
+                          controller: controller,
+                          decoration: const InputDecoration(
+                            hintText: 'e.g. 2030-2031',
+                            border: OutlineInputBorder(),
+                          ),
+                          autofocus: true,
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text('Cancel'),
+                          ),
+                          ElevatedButton(
+                            onPressed: () {
+                              final value = controller.text.trim();
+                              if (value.isNotEmpty) {
+                                Navigator.pop(context, value);
+                              }
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _roleColor,
+                              foregroundColor: AppColors.textWhite,
+                            ),
+                            child: const Text('Add'),
+                          ),
+                        ],
+                      ),
+                    );
+
+                    if (newYear != null && !tempYears.contains(newYear)) {
+                      setStateDialog(() {
+                        tempYears.add(newYear);
+                        tempYears.sort();
+                        tempSelected = newYear;
+                      });
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _roleColor,
+                foregroundColor: AppColors.textWhite,
+              ),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (tempSelected != _selectedAcademicYear ||
+        tempYears.length != _availableYears.length) {
+      setState(() {
+        _selectedAcademicYear = tempSelected;
+        _availableYears = tempYears;
+      });
+      await _saveAcademicYearSettings();
+    }
   }
 
   @override
@@ -336,26 +442,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                 const SizedBox(height: AppConstants.paddingL),
 
-                // Language Section
-                _SectionHeader(title: 'Language & Region', color: _roleColor),
-                _SettingsTile(
-                  icon: Icons.language_outlined,
-                  title: 'Language',
-                  subtitle: _selectedLanguage,
-                  onTap: _showLanguageDialog,
-                ),
-
-                const SizedBox(height: AppConstants.paddingL),
-
-                _SettingsTile(
-                  icon: Icons.calendar_today_outlined,
-                  title: 'Academic Year',
-                  subtitle: _selectedAcademicYear ?? 'Not set',
-                  onTap: _showAcademicYearDialog,
-                ),
-
-                const SizedBox(height: AppConstants.paddingL),
-
                 // Account Section
                 _SectionHeader(title: 'Account', color: _roleColor),
                 _SettingsTile(
@@ -373,6 +459,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     Navigator.pushNamed(context, '/help');
                   },
                 ),
+
+                if (widget.role == 'admin') ...[
+                  const SizedBox(height: AppConstants.paddingL),
+                  _SectionHeader(title: 'Administration', color: _roleColor),
+                  _SettingsTile(
+                    icon: Icons.school_outlined,
+                    title: 'Academic Year',
+                    subtitle: _selectedAcademicYear ?? 'Set active school year',
+                    trailing: _isSavingAcademicYear
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : null,
+                    onTap: _showAcademicYearDialog,
+                  ),
+                ],
 
                 const SizedBox(height: AppConstants.paddingXL),
 

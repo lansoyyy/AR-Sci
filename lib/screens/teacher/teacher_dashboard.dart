@@ -259,9 +259,9 @@ class _DashboardHome extends StatelessWidget {
                             .doc('current')
                             .snapshots(),
                         builder: (context, snapshot) {
-                          final year =
-                              snapshot.data?.data()?['academicYear'] as String? ??
-                                  '2025-2026';
+                          final year = snapshot.data?.data()?['academicYear']
+                                  as String? ??
+                              '2025-2026';
                           return Column(
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
@@ -530,7 +530,11 @@ class _DashboardHome extends StatelessWidget {
               icon: Icons.add_box_outlined,
               iconColor: AppColors.teacherPrimary,
               onTap: () {
-                Navigator.pushNamed(context, '/admin-create-lesson');
+                Navigator.pushNamed(
+                  context,
+                  '/admin-create-lesson',
+                  arguments: const <String, dynamic>{'role': 'teacher'},
+                );
               },
             ),
 
@@ -540,7 +544,11 @@ class _DashboardHome extends StatelessWidget {
               icon: Icons.quiz_outlined,
               iconColor: AppColors.studentPrimary,
               onTap: () {
-                Navigator.pushNamed(context, '/admin-create-quiz');
+                Navigator.pushNamed(
+                  context,
+                  '/admin-create-quiz',
+                  arguments: const <String, dynamic>{'role': 'teacher'},
+                );
               },
             ),
 
@@ -810,94 +818,6 @@ class _LessonsManagementState extends State<_LessonsManagement> {
     }
   }
 
-  Future<void> _showEditDialog({
-    required String lessonId,
-    required Map<String, dynamic> lesson,
-  }) async {
-    final titleController =
-        TextEditingController(text: (lesson['title'] ?? '').toString());
-    final descriptionController =
-        TextEditingController(text: (lesson['description'] ?? '').toString());
-    bool isPublished = lesson['isPublished'] == true;
-
-    final didSave = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setLocalState) {
-            return AlertDialog(
-              title: const Text('Edit Lesson'),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: titleController,
-                      decoration: const InputDecoration(labelText: 'Title'),
-                    ),
-                    const SizedBox(height: AppConstants.paddingM),
-                    TextField(
-                      controller: descriptionController,
-                      maxLines: 3,
-                      decoration:
-                          const InputDecoration(labelText: 'Description'),
-                    ),
-                    const SizedBox(height: AppConstants.paddingM),
-                    SwitchListTile(
-                      value: isPublished,
-                      onChanged: (v) => setLocalState(() => isPublished = v),
-                      title: const Text('Published'),
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: const Text('Cancel'),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  child: const Text('Save'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-
-    if (didSave != true) {
-      titleController.dispose();
-      descriptionController.dispose();
-      return;
-    }
-
-    try {
-      await FirebaseFirestore.instance
-          .collection('lessons')
-          .doc(lessonId)
-          .update({
-        'title': titleController.text.trim(),
-        'description': descriptionController.text.trim(),
-        'isPublished': isPublished,
-      });
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Lesson updated.')),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to update lesson. $e')),
-      );
-    } finally {
-      titleController.dispose();
-      descriptionController.dispose();
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -964,7 +884,17 @@ class _LessonsManagementState extends State<_LessonsManagement> {
                 },
                 onEdit: lessonId.isEmpty
                     ? null
-                    : () => _showEditDialog(lessonId: lessonId, lesson: lesson),
+                    : () {
+                        Navigator.pushNamed(
+                          context,
+                          '/admin-create-lesson',
+                          arguments: <String, dynamic>{
+                            'role': 'teacher',
+                            'lessonId': lessonId,
+                            'lessonData': lesson,
+                          },
+                        );
+                      },
                 onDelete: lessonId.isEmpty
                     ? null
                     : () => _confirmAndDelete(lessonId: lessonId, title: title),
@@ -975,7 +905,11 @@ class _LessonsManagementState extends State<_LessonsManagement> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
-          Navigator.pushNamed(context, '/admin-create-lesson');
+          Navigator.pushNamed(
+            context,
+            '/admin-create-lesson',
+            arguments: const <String, dynamic>{'role': 'teacher'},
+          );
         },
         backgroundColor: AppColors.teacherPrimary,
         icon: const Icon(Icons.add),
@@ -996,108 +930,6 @@ class _QuizzesManagement extends StatefulWidget {
 
 class _QuizzesManagementState extends State<_QuizzesManagement> {
   String? get _teacherId => FirebaseAuth.instance.currentUser?.uid;
-  Future<void> _showEditDialog({
-    required String quizId,
-    required Map<String, dynamic> quiz,
-  }) async {
-    final titleController =
-        TextEditingController(text: (quiz['title'] ?? '').toString());
-    final descriptionController =
-        TextEditingController(text: (quiz['description'] ?? '').toString());
-    final durationController = TextEditingController(
-      text: (quiz['duration'] ?? 30).toString(),
-    );
-    bool isPublished = quiz['isPublished'] == true;
-
-    final didSave = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setLocalState) {
-            return AlertDialog(
-              title: const Text('Edit Quiz'),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: titleController,
-                      decoration: const InputDecoration(labelText: 'Title'),
-                    ),
-                    const SizedBox(height: AppConstants.paddingM),
-                    TextField(
-                      controller: descriptionController,
-                      maxLines: 3,
-                      decoration:
-                          const InputDecoration(labelText: 'Description'),
-                    ),
-                    const SizedBox(height: AppConstants.paddingM),
-                    TextField(
-                      controller: durationController,
-                      keyboardType: TextInputType.number,
-                      decoration:
-                          const InputDecoration(labelText: 'Duration (min)'),
-                    ),
-                    const SizedBox(height: AppConstants.paddingM),
-                    SwitchListTile(
-                      value: isPublished,
-                      onChanged: (v) => setLocalState(() => isPublished = v),
-                      title: const Text('Published'),
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: const Text('Cancel'),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  child: const Text('Save'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-
-    if (didSave != true) {
-      titleController.dispose();
-      descriptionController.dispose();
-      durationController.dispose();
-      return;
-    }
-
-    try {
-      final duration = int.tryParse(durationController.text.trim()) ?? 30;
-      await FirebaseFirestore.instance
-          .collection('quizzes')
-          .doc(quizId)
-          .update({
-        'title': titleController.text.trim(),
-        'description': descriptionController.text.trim(),
-        'duration': duration,
-        'isPublished': isPublished,
-      });
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Quiz updated.')),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to update quiz. $e')),
-      );
-    } finally {
-      titleController.dispose();
-      descriptionController.dispose();
-      durationController.dispose();
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1205,7 +1037,17 @@ class _QuizzesManagementState extends State<_QuizzesManagement> {
                         arguments: quiz,
                       );
                     },
-                    onEdit: () => _showEditDialog(quizId: quizId, quiz: quiz),
+                    onEdit: () {
+                      Navigator.pushNamed(
+                        context,
+                        '/admin-create-quiz',
+                        arguments: <String, dynamic>{
+                          'role': 'teacher',
+                          'quizId': quizId,
+                          'quizData': quiz,
+                        },
+                      );
+                    },
                   );
                 },
               );
@@ -1215,7 +1057,11 @@ class _QuizzesManagementState extends State<_QuizzesManagement> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
-          Navigator.pushNamed(context, '/admin-create-quiz');
+          Navigator.pushNamed(
+            context,
+            '/admin-create-quiz',
+            arguments: const <String, dynamic>{'role': 'teacher'},
+          );
         },
         backgroundColor: AppColors.teacherPrimary,
         icon: const Icon(Icons.add),

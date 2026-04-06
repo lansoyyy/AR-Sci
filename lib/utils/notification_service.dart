@@ -1,7 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
-/// Notification types for different events
 enum NotificationType {
   lesson,
   quiz,
@@ -9,90 +7,193 @@ enum NotificationType {
   rejection,
   system,
   reminder,
+  grade,
 }
 
-/// Service for creating and managing notifications across the app
 class NotificationService {
-  /// Create a notification for a user
+  static const String _usersCollection = 'users';
+  static const String _notificationsCollection = 'notifications';
+
   static Future<void> createNotification({
     required String userId,
     required String role,
     required String title,
     required String message,
     required NotificationType type,
+    DateTime? deliverAt,
     Map<String, dynamic>? metadata,
   }) async {
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
+    await FirebaseFirestore.instance.collection(_notificationsCollection).add({
+      'userId': userId,
+      'role': role,
+      'title': title,
+      'message': message,
+      'type': type.name,
+      'isRead': false,
+      'createdAt': FieldValue.serverTimestamp(),
+      if (deliverAt != null) 'deliverAt': Timestamp.fromDate(deliverAt),
+      if (metadata != null && metadata.isNotEmpty) 'metadata': metadata,
+      if (metadata != null) ...metadata,
+    });
+  }
 
-      await FirebaseFirestore.instance.collection('notifications').add({
-        'userId': userId,
-        'role': role,
-        'title': title,
-        'message': message,
-        'type': type.name,
+  static Future<void> _createBatchNotifications(
+    List<Map<String, dynamic>> notifications,
+  ) async {
+    if (notifications.isEmpty) {
+      return;
+    }
+
+    final firestore = FirebaseFirestore.instance;
+    final batch = firestore.batch();
+    for (final notification in notifications) {
+      batch.set(
+        firestore.collection(_notificationsCollection).doc(),
+        notification,
+      );
+    }
+    await batch.commit();
+  }
+
+  static Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>>
+      _loadTargetStudents({
+    List<String> assignedSections = const <String>[],
+    List<String> assignedGradeLevels = const <String>[],
+  }) async {
+    final snapshot = await FirebaseFirestore.instance
+        .collection(_usersCollection)
+        .where('role', isEqualTo: 'student')
+        .where('verified', isEqualTo: true)
+        .get();
+
+    return snapshot.docs.where((doc) {
+      final data = doc.data();
+      if (data['notificationsEnabled'] == false) {
+        return false;
+      }
+
+      final section = (data['section'] ?? '').toString().trim();
+      final gradeLevel = (data['gradeLevel'] ?? '').toString().trim();
+
+      final matchesSection = assignedSections.isEmpty ||
+          (section.isNotEmpty && assignedSections.contains(section));
+      final matchesGrade = assignedGradeLevels.isEmpty ||
+          (gradeLevel.isNotEmpty && assignedGradeLevels.contains(gradeLevel));
+
+      return matchesSection && matchesGrade;
+    }).toList();
+  }
+
+  static Future<void> notifyLessonPublished({
+    required String lessonId,
+    required String lessonTitle,
+    List<String> assignedSections = const <String>[],
+    List<String> assignedGradeLevels = const <String>[],
+    String? teacherName,
+    DateTime? deliverAt,
+  }) async {
+    final targetStudents = await _loadTargetStudents(
+      assignedSections: assignedSections,
+      assignedGradeLevels: assignedGradeLevels,
+    );
+
+    final notifications = targetStudents.map((student) {
+      return <String, dynamic>{
+        'userId': student.id,
+        'role': 'student',
+        'title': 'New Lesson Available',
+        'message': teacherName == null || teacherName.trim().isEmpty
+            ? 'A new lesson "$lessonTitle" has been published.'
+            : '$teacherName published a new lesson: "$lessonTitle".',
+        'type': NotificationType.lesson.name,
         'isRead': false,
         'createdAt': FieldValue.serverTimestamp(),
-        if (metadata != null) ...metadata,
-      });
-    } catch (e) {
-      // Silently fail to avoid disrupting user flow
-      // In production, this should be logged to error tracking service
-    }
+        if (deliverAt != null) 'deliverAt': Timestamp.fromDate(deliverAt),
+        'lessonId': lessonId,
+        'contentType': 'lesson',
+      };
+    }).toList();
+
+    await _createBatchNotifications(notifications);
   }
 
-  /// Create notification for new lesson
-  static Future<void> notifyNewLesson({
-    required String teacherId,
-    required List<String> studentIds,
-    required String lessonTitle,
-  }) async {
-    for (final studentId in studentIds) {
-      await createNotification(
-        userId: studentId,
-        role: 'student',
-        title: 'New Lesson Available',
-        message: 'A new lesson "$lessonTitle" has been added.',
-        type: NotificationType.lesson,
-        metadata: {'lessonId': lessonTitle},
-      );
-    }
-  }
-
-  /// Create notification for new quiz
-  static Future<void> notifyNewQuiz({
-    required String teacherId,
-    required List<String> studentIds,
+  static Future<void> notifyQuizPublished({
+    required String quizId,
     required String quizTitle,
+    List<String> assignedSections = const <String>[],
+    List<String> assignedGradeLevels = const <String>[],
+    String? teacherName,
+    DateTime? deliverAt,
   }) async {
-    for (final studentId in studentIds) {
-      await createNotification(
-        userId: studentId,
-        role: 'student',
-        title: 'New Quiz Available',
-        message: 'A new quiz "$quizTitle" is now available.',
-        type: NotificationType.quiz,
-        metadata: {'quizId': quizTitle},
-      );
-    }
+    final targetStudents = await _loadTargetStudents(
+      assignedSections: assignedSections,
+      assignedGradeLevels: assignedGradeLevels,
+    );
+
+    final notifications = targetStudents.map((student) {
+      return <String, dynamic>{
+        'userId': student.id,
+        'role': 'student',
+        'title': 'Pending Quiz',
+        'message': teacherName == null || teacherName.trim().isEmpty
+            ? 'A new quiz "$quizTitle" is ready for you.'
+            : '$teacherName published a quiz: "$quizTitle".',
+        'type': NotificationType.reminder.name,
+        'isRead': false,
+        'createdAt': FieldValue.serverTimestamp(),
+        if (deliverAt != null) 'deliverAt': Timestamp.fromDate(deliverAt),
+        'quizId': quizId,
+        'contentType': 'quiz',
+      };
+    }).toList();
+
+    await _createBatchNotifications(notifications);
   }
 
-  /// Create notification for student approval
+  static Future<void> notifyQuizScore({
+    required String studentId,
+    required String quizId,
+    required String quizTitle,
+    required int score,
+    required int totalPoints,
+  }) async {
+    final studentDoc = await FirebaseFirestore.instance
+        .collection(_usersCollection)
+        .doc(studentId)
+        .get();
+    final data = studentDoc.data();
+    if (data == null || data['notificationsEnabled'] == false) {
+      return;
+    }
+
+    await createNotification(
+      userId: studentId,
+      role: 'student',
+      title: 'Quiz Score Posted',
+      message: 'Your score for "$quizTitle" is $score/$totalPoints.',
+      type: NotificationType.grade,
+      metadata: {
+        'quizId': quizId,
+        'contentType': 'quiz',
+      },
+    );
+  }
+
   static Future<void> notifyStudentApproved({
     required String studentId,
-    required String studentName,
+    String? studentName,
   }) async {
     await createNotification(
       userId: studentId,
       role: 'student',
       title: 'Account Approved',
-      message: 'Your account has been verified and approved.',
+      message: studentName == null || studentName.trim().isEmpty
+          ? 'Your account has been verified and approved.'
+          : 'Your account has been verified and approved, $studentName.',
       type: NotificationType.approval,
     );
   }
 
-  /// Create notification for student rejection
   static Future<void> notifyStudentRejected({
     required String studentId,
     required String reason,
@@ -107,110 +208,128 @@ class NotificationService {
     );
   }
 
-  /// Create notification for teacher when student submits quiz
   static Future<void> notifyQuizSubmission({
     required String teacherId,
     required String studentName,
     required String quizTitle,
   }) async {
+    final teacherDoc = await FirebaseFirestore.instance
+        .collection(_usersCollection)
+        .doc(teacherId)
+        .get();
+    final data = teacherDoc.data();
+    if (data == null || data['notificationsEnabled'] == false) {
+      return;
+    }
+
     await createNotification(
       userId: teacherId,
       role: 'teacher',
       title: 'Quiz Submitted',
-      message: '$studentName has submitted quiz "$quizTitle".',
+      message: '$studentName submitted "$quizTitle".',
       type: NotificationType.quiz,
-      metadata: {'studentName': studentName, 'quizTitle': quizTitle},
+      metadata: {
+        'quizTitle': quizTitle,
+        'studentName': studentName,
+      },
     );
   }
 
-  /// Create notification for system announcement
   static Future<void> notifySystemAnnouncement({
     required List<String> userIds,
     required String role,
     required String title,
     required String message,
+    DateTime? deliverAt,
+    Map<String, dynamic>? metadata,
   }) async {
-    for (final userId in userIds) {
-      await createNotification(
-        userId: userId,
-        role: role,
-        title: title,
-        message: message,
-        type: NotificationType.system,
-      );
+    if (userIds.isEmpty) {
+      return;
     }
+
+    final notifications = <Map<String, dynamic>>[];
+    for (final userId in userIds) {
+      final userDoc = await FirebaseFirestore.instance
+          .collection(_usersCollection)
+          .doc(userId)
+          .get();
+      final data = userDoc.data();
+      if (data == null || data['notificationsEnabled'] == false) {
+        continue;
+      }
+
+      notifications.add({
+        'userId': userId,
+        'role': role,
+        'title': title,
+        'message': message,
+        'type': NotificationType.system.name,
+        'isRead': false,
+        'createdAt': FieldValue.serverTimestamp(),
+        if (deliverAt != null) 'deliverAt': Timestamp.fromDate(deliverAt),
+        if (metadata != null && metadata.isNotEmpty) 'metadata': metadata,
+        if (metadata != null) ...metadata,
+      });
+    }
+
+    await _createBatchNotifications(notifications);
   }
 
-  /// Create notification for lesson progress reminder
   static Future<void> notifyLessonReminder({
     required String userId,
     required String lessonTitle,
+    DateTime? deliverAt,
   }) async {
     await createNotification(
       userId: userId,
       role: 'student',
       title: 'Lesson Reminder',
-      message: 'Continue learning with lesson "$lessonTitle".',
+      message: 'Continue learning with "$lessonTitle".',
       type: NotificationType.reminder,
+      deliverAt: deliverAt,
       metadata: {'lessonTitle': lessonTitle},
     );
   }
 
-  /// Mark notification as read
   static Future<void> markAsRead(String notificationId) async {
-    try {
-      await FirebaseFirestore.instance
-          .collection('notifications')
-          .doc(notificationId)
-          .update({'isRead': true});
-    } catch (e) {
-      // Silently fail
-    }
+    await FirebaseFirestore.instance
+        .collection(_notificationsCollection)
+        .doc(notificationId)
+        .update({'isRead': true});
   }
 
-  /// Mark all notifications as read for a user
   static Future<void> markAllAsRead(String userId) async {
-    try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('notifications')
-          .where('userId', isEqualTo: userId)
-          .get();
+    final snapshot = await FirebaseFirestore.instance
+        .collection(_notificationsCollection)
+        .where('userId', isEqualTo: userId)
+        .get();
 
-      for (final doc in snapshot.docs) {
-        if (doc.data()['isRead'] == false) {
-          await doc.reference.update({'isRead': true});
-        }
+    final batch = FirebaseFirestore.instance.batch();
+    for (final doc in snapshot.docs) {
+      if (doc.data()['isRead'] == false) {
+        batch.update(doc.reference, {'isRead': true});
       }
-    } catch (e) {
-      // Silently fail
     }
+    await batch.commit();
   }
 
-  /// Delete a notification
   static Future<void> deleteNotification(String notificationId) async {
-    try {
-      await FirebaseFirestore.instance
-          .collection('notifications')
-          .doc(notificationId)
-          .delete();
-    } catch (e) {
-      // Silently fail
-    }
+    await FirebaseFirestore.instance
+        .collection(_notificationsCollection)
+        .doc(notificationId)
+        .delete();
   }
 
-  /// Clear all notifications for a user
   static Future<void> clearAll(String userId) async {
-    try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('notifications')
-          .where('userId', isEqualTo: userId)
-          .get();
+    final snapshot = await FirebaseFirestore.instance
+        .collection(_notificationsCollection)
+        .where('userId', isEqualTo: userId)
+        .get();
 
-      for (final doc in snapshot.docs) {
-        await doc.reference.delete();
-      }
-    } catch (e) {
-      // Silently fail
+    final batch = FirebaseFirestore.instance.batch();
+    for (final doc in snapshot.docs) {
+      batch.delete(doc.reference);
     }
+    await batch.commit();
   }
 }

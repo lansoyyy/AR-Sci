@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class QuizModel {
   final String id;
   final String title;
@@ -9,7 +11,14 @@ class QuizModel {
   final int duration; // in minutes
   final DateTime createdAt;
   final DateTime? scheduledDate;
+  final DateTime? availableFrom;
+  final DateTime? availableTo;
   final bool isPublished;
+  final List<String> assignedSections;
+  final List<String> assignedGradeLevels;
+  final bool showQuestionsAfterSubmission;
+  final bool showCorrectAnswersAfterSubmission;
+  final bool showIncorrectAnswersAfterSubmission;
 
   QuizModel({
     required this.id,
@@ -22,10 +31,30 @@ class QuizModel {
     required this.duration,
     required this.createdAt,
     this.scheduledDate,
+    this.availableFrom,
+    this.availableTo,
     this.isPublished = false,
+    this.assignedSections = const [],
+    this.assignedGradeLevels = const [],
+    this.showQuestionsAfterSubmission = true,
+    this.showCorrectAnswersAfterSubmission = true,
+    this.showIncorrectAnswersAfterSubmission = true,
   });
 
   factory QuizModel.fromJson(Map<String, dynamic> json) {
+    DateTime _parseDate(dynamic value) {
+      if (value is Timestamp) return value.toDate();
+      if (value is DateTime) return value;
+      return DateTime.tryParse(value?.toString() ?? '') ?? DateTime.now();
+    }
+
+    DateTime? _parseOptionalDate(dynamic value) {
+      if (value == null) return null;
+      if (value is Timestamp) return value.toDate();
+      if (value is DateTime) return value;
+      return DateTime.tryParse(value.toString());
+    }
+
     return QuizModel(
       id: json['id'] ?? '',
       title: json['title'] ?? '',
@@ -33,11 +62,25 @@ class QuizModel {
       lessonId: json['lessonId'] ?? '',
       subject: json['subject'] ?? '',
       gradeLevel: json['gradeLevel'] ?? '',
-      questions: (json['questions'] as List?)?.map((q) => QuizQuestion.fromJson(q)).toList() ?? [],
+      questions: (json['questions'] as List?)
+              ?.map((q) => QuizQuestion.fromJson(q))
+              .toList() ??
+          [],
       duration: json['duration'] ?? 30,
-      createdAt: DateTime.parse(json['createdAt'] ?? DateTime.now().toIso8601String()),
-      scheduledDate: json['scheduledDate'] != null ? DateTime.parse(json['scheduledDate']) : null,
+      createdAt: _parseDate(json['createdAt']),
+      scheduledDate: _parseOptionalDate(json['scheduledDate']),
+      availableFrom: _parseOptionalDate(json['availableFrom']),
+      availableTo: _parseOptionalDate(json['availableTo']),
       isPublished: json['isPublished'] ?? false,
+      assignedSections: List<String>.from(json['assignedSections'] ?? const []),
+      assignedGradeLevels:
+          List<String>.from(json['assignedGradeLevels'] ?? const []),
+      showQuestionsAfterSubmission:
+          json['showQuestionsAfterSubmission'] != false,
+      showCorrectAnswersAfterSubmission:
+          json['showCorrectAnswersAfterSubmission'] != false,
+      showIncorrectAnswersAfterSubmission:
+          json['showIncorrectAnswersAfterSubmission'] != false,
     );
   }
 
@@ -53,7 +96,15 @@ class QuizModel {
       'duration': duration,
       'createdAt': createdAt.toIso8601String(),
       'scheduledDate': scheduledDate?.toIso8601String(),
+      'availableFrom': availableFrom?.toIso8601String(),
+      'availableTo': availableTo?.toIso8601String(),
       'isPublished': isPublished,
+      'assignedSections': assignedSections,
+      'assignedGradeLevels': assignedGradeLevels,
+      'showQuestionsAfterSubmission': showQuestionsAfterSubmission,
+      'showCorrectAnswersAfterSubmission': showCorrectAnswersAfterSubmission,
+      'showIncorrectAnswersAfterSubmission':
+          showIncorrectAnswersAfterSubmission,
     };
   }
 }
@@ -63,7 +114,8 @@ class QuizQuestion {
   final String question;
   final QuestionType type;
   final List<String> options;
-  final dynamic correctAnswer; // String for single answer, List<String> for multiple
+  final dynamic
+      correctAnswer; // String for single answer, List<String> for multiple
   final int points;
 
   QuizQuestion({
@@ -103,6 +155,7 @@ class QuizQuestion {
 
 enum QuestionType {
   multipleChoice,
+  multipleResponse,
   trueFalse,
   matching,
   fillInBlank,
@@ -139,7 +192,8 @@ class QuizResult {
       score: json['score'] ?? 0,
       totalPoints: json['totalPoints'] ?? 0,
       answers: Map<String, dynamic>.from(json['answers'] ?? {}),
-      completedAt: DateTime.parse(json['completedAt'] ?? DateTime.now().toIso8601String()),
+      completedAt: DateTime.parse(
+          json['completedAt'] ?? DateTime.now().toIso8601String()),
       timeTaken: json['timeTaken'] ?? 0,
     );
   }

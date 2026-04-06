@@ -1,10 +1,13 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+
+import '../../models/quiz_model.dart';
 import '../../utils/colors.dart';
 import '../../utils/constants.dart';
-import '../../models/quiz_model.dart';
+import '../../utils/notification_service.dart';
 
 class QuizDetailScreen extends StatefulWidget {
   final Map<String, dynamic>? quizData;
@@ -21,24 +24,25 @@ class QuizDetailScreen extends StatefulWidget {
 }
 
 class _QuizDetailScreenState extends State<QuizDetailScreen> {
-  final Map<String, dynamic> _quiz = {};
+  final Map<String, dynamic> _quiz = <String, dynamic>{};
   final Map<String, dynamic> _userAnswers = {};
   final Map<String, TextEditingController> _textControllers = {};
+  bool _isLoading = true;
   bool _isTakingQuiz = false;
   bool _isSubmitting = false;
   bool _hasSubmitted = false;
+  bool _isBookmarked = false;
   int _currentQuestionIndex = 0;
   int _remainingTime = 0;
   Timer? _timer;
   int _score = 0;
   int _totalPoints = 0;
+  String? _viewerRole;
 
   @override
   void initState() {
     super.initState();
-    if (widget.quizData != null) {
-      _quiz.addAll(widget.quizData!);
-    }
+    _loadQuizData();
   }
 
   @override
@@ -50,7 +54,59 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
     super.dispose();
   }
 
+  Future<void> _loadQuizData() async {
+    try {
+      if (widget.quizData != null) {
+        _quiz.addAll(widget.quizData!);
+      } else if (widget.quizId != null && widget.quizId!.trim().isNotEmpty) {
+        final doc = await FirebaseFirestore.instance
+            .collection('quizzes')
+            .doc(widget.quizId)
+            .get();
+        if (doc.exists) {
+          _quiz.addAll({
+            ...?doc.data(),
+            'id': doc.data()?['id'] ?? doc.id,
+          });
+        }
+      }
+
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+        _viewerRole = (userDoc.data()?['role'] ?? '').toString();
+
+        if (_viewerRole == 'student') {
+          final quizId = (_quiz['id'] ?? '').toString();
+          if (quizId.isNotEmpty) {
+            final bookmarkDoc = await FirebaseFirestore.instance
+                .collection('bookmarks')
+                .where('userId', isEqualTo: user.uid)
+                .where('contentId', isEqualTo: quizId)
+                .where('contentType', isEqualTo: 'quiz')
+                .limit(1)
+                .get();
+            _isBookmarked = bookmarkDoc.docs.isNotEmpty;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Failed to load quiz: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
   void _startQuiz() {
+    if (_viewerRole != 'student') {
+      return;
+    }
+
     final duration = _quiz['duration'] is int
         ? _quiz['duration'] as int
         : int.tryParse((_quiz['duration'] ?? '').toString()) ?? 30;
@@ -77,9 +133,65 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
     });
   }
 
+  void _toggleMultipleResponseAnswer(
+    String questionId,
+    String option,
+    bool selected,
+  ) {
+    final answers = List<String>.from(_userAnswers[questionId] as List? ?? []);
+    if (selected) {
+      if (!answers.contains(option)) {
+        answers.add(option);
+      }
+    } else {
+      answers.remove(option);
+    }
+    _selectAnswer(questionId, answers);
+  }
+
+  Future<void> _toggleBookmark() async {
+    final user = FirebaseAuth.instance.currentUser;
+    final quizId = (_quiz['id'] ?? '').toString();
+    if (user == null || quizId.isEmpty) {
+      return;
+    }
+
+    try {
+      if (_isBookmarked) {
+        final bookmarks = await FirebaseFirestore.instance
+            .collection('bookmarks')
+            .where('userId', isEqualTo: user.uid)
+            .where('contentId', isEqualTo: quizId)
+            .where('contentType', isEqualTo: 'quiz')
+            .get();
+        for (final doc in bookmarks.docs) {
+          await doc.reference.delete();
+        }
+        setState(() => _isBookmarked = false);
+      } else {
+        await FirebaseFirestore.instance.collection('bookmarks').add({
+          'userId': user.uid,
+          'contentType': 'quiz',
+          'contentId': quizId,
+          'quizId': quizId,
+          'title': _quiz['title'] ?? '',
+          'subject': _quiz['subject'] ?? '',
+          'gradeLevel': _quiz['gradeLevel'] ?? _quiz['grade'] ?? '',
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+        setState(() => _isBookmarked = true);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update bookmark: $e')),
+      );
+    }
+  }
+
   Future<void> _submitQuiz() async {
     _timer?.cancel();
-    if (_hasSubmitted) return;
+    if (_hasSubmitted || _isSubmitting) return;
 
     setState(() => _isSubmitting = true);
 
@@ -136,8 +248,27 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
           .doc(result.id)
           .set({
         ...result.toJson(),
+        'quizTitle': _quiz['title'] ?? '',
         'completedAt': FieldValue.serverTimestamp(), // Use server timestamp
       });
+
+      final teacherId = (_quiz['createdBy'] ?? '').toString();
+      if (teacherId.isNotEmpty) {
+        await NotificationService.notifyQuizSubmission(
+          teacherId: teacherId,
+          studentName:
+              FirebaseAuth.instance.currentUser?.displayName ?? 'A student',
+          quizTitle: (_quiz['title'] ?? 'Quiz').toString(),
+        );
+      }
+
+      await NotificationService.notifyQuizScore(
+        studentId: user.uid,
+        quizId: (_quiz['id'] ?? '').toString(),
+        quizTitle: (_quiz['title'] ?? 'Quiz').toString(),
+        score: score,
+        totalPoints: totalPoints,
+      );
 
       if (!mounted) return;
       setState(() {
@@ -159,19 +290,20 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
     if (userAnswer == null) return false;
     if (correctAnswer == null) return false;
 
-    // Handle different answer types
     if (correctAnswer is List) {
       if (userAnswer is List) {
-        // Compare lists (order doesn't matter for multiple select)
-        final correctSet = correctAnswer.toSet();
-        final userSet = userAnswer.toSet();
+        final correctSet = correctAnswer
+            .map((entry) => entry.toString().trim().toLowerCase())
+            .toSet();
+        final userSet = userAnswer
+            .map((entry) => entry.toString().trim().toLowerCase())
+            .toSet();
         return correctSet.difference(userSet).isEmpty &&
             userSet.difference(correctSet).isEmpty;
       }
       return false;
     }
 
-    // String comparison (case-insensitive)
     return userAnswer.toString().toLowerCase() ==
         correctAnswer.toString().toLowerCase();
   }
@@ -184,6 +316,27 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_quiz.isEmpty) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Quiz'),
+          backgroundColor: AppColors.studentPrimary,
+        ),
+        body: const Center(
+          child: Text(
+            'Quiz not found.',
+            style: TextStyle(fontSize: AppConstants.fontL),
+          ),
+        ),
+      );
+    }
+
     final title = (_quiz['title'] ?? 'Quiz').toString();
     final description = (_quiz['description'] ?? '').toString();
     final subject = (_quiz['subject'] ?? '').toString();
@@ -200,34 +353,38 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
       appBar: AppBar(
         title: Text(title),
         backgroundColor: AppColors.studentPrimary,
-        actions: _isTakingQuiz
-            ? [
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: _remainingTime < 60
-                        ? AppColors.error
-                        : AppColors.textWhite.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(20),
+        actions: [
+          if (_viewerRole == 'student' && !_isTakingQuiz)
+            IconButton(
+              icon: Icon(
+                _isBookmarked ? Icons.bookmark : Icons.bookmark_outline,
+              ),
+              onPressed: _toggleBookmark,
+            ),
+          if (_isTakingQuiz)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: _remainingTime < 60
+                    ? AppColors.error
+                    : AppColors.textWhite.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.access_time, size: 18, color: Colors.white),
+                  const SizedBox(width: 4),
+                  Text(
+                    _formatTime(_remainingTime),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.access_time,
-                          size: 18, color: Colors.white),
-                      const SizedBox(width: 4),
-                      Text(
-                        _formatTime(_remainingTime),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ]
-            : null,
+                ],
+              ),
+            ),
+        ],
       ),
       body: _hasSubmitted
           ? _buildResultScreen()
@@ -379,10 +536,29 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
               );
             }),
           const SizedBox(height: AppConstants.paddingXL),
+          if (_viewerRole != 'student')
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(AppConstants.paddingM),
+              decoration: BoxDecoration(
+                color: AppColors.info.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(AppConstants.radiusM),
+                border: Border.all(color: AppColors.info.withOpacity(0.25)),
+              ),
+              child: const Text(
+                'Preview mode: only students can submit this quiz.',
+                style: TextStyle(color: AppColors.textSecondary),
+              ),
+            )
+          else
+            const SizedBox.shrink(),
+          const SizedBox(height: AppConstants.paddingXL),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: rawQuestions.isEmpty ? null : _startQuiz,
+              onPressed: rawQuestions.isEmpty || _viewerRole != 'student'
+                  ? null
+                  : _startQuiz,
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.studentPrimary,
                 foregroundColor: AppColors.textWhite,
@@ -495,13 +671,15 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
                 const SizedBox(width: AppConstants.paddingM),
               Expanded(
                 child: ElevatedButton(
-                  onPressed: () {
-                    if (_currentQuestionIndex < rawQuestions.length - 1) {
-                      setState(() => _currentQuestionIndex++);
-                    } else {
-                      _submitQuiz();
-                    }
-                  },
+                  onPressed: _isSubmitting
+                      ? null
+                      : () {
+                          if (_currentQuestionIndex < rawQuestions.length - 1) {
+                            setState(() => _currentQuestionIndex++);
+                          } else {
+                            _submitQuiz();
+                          }
+                        },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.studentPrimary,
                     foregroundColor: AppColors.textWhite,
@@ -510,11 +688,20 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
                       borderRadius: BorderRadius.circular(AppConstants.radiusM),
                     ),
                   ),
-                  child: Text(
-                    _currentQuestionIndex < rawQuestions.length - 1
-                        ? 'Next'
-                        : 'Submit',
-                  ),
+                  child: _isSubmitting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Text(
+                          _currentQuestionIndex < rawQuestions.length - 1
+                              ? 'Next'
+                              : 'Submit',
+                        ),
                 ),
               ),
             ],
@@ -528,6 +715,29 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
     final userAnswer = _userAnswers[questionId];
 
     switch (type) {
+      case 'multipleResponse':
+        final selectedAnswers = List<String>.from(userAnswer as List? ?? []);
+        return Column(
+          children: options.map((option) {
+            final optionText = option.toString();
+            final isSelected = selectedAnswers.contains(optionText);
+            return Padding(
+              padding: const EdgeInsets.only(bottom: AppConstants.paddingM),
+              child: _buildOptionTile(
+                questionId,
+                optionText,
+                isSelected,
+                () => _toggleMultipleResponseAnswer(
+                  questionId,
+                  optionText,
+                  !isSelected,
+                ),
+                multiSelect: true,
+              ),
+            );
+          }).toList(),
+        );
+
       case 'trueFalse':
         return Column(
           children: [
@@ -587,11 +797,8 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
   }
 
   Widget _buildOptionTile(
-    String questionId,
-    String option,
-    bool isSelected,
-    VoidCallback onTap,
-  ) {
+      String questionId, String option, bool isSelected, VoidCallback onTap,
+      {bool multiSelect = false}) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(AppConstants.radiusM),
@@ -612,7 +819,7 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
               width: 24,
               height: 24,
               decoration: BoxDecoration(
-                shape: BoxShape.circle,
+                shape: multiSelect ? BoxShape.rectangle : BoxShape.circle,
                 border: Border.all(
                   color: isSelected
                       ? AppColors.studentPrimary
@@ -647,87 +854,190 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
   Widget _buildResultScreen() {
     final percentage = _totalPoints > 0 ? (_score / _totalPoints * 100) : 0;
     final passed = percentage >= 60;
+    final rawQuestions = _quiz['questions'] as List? ?? const [];
+    final showQuestions = _quiz['showQuestionsAfterSubmission'] != false;
+    final showCorrectAnswers =
+        _quiz['showCorrectAnswersAfterSubmission'] != false;
+    final showIncorrectAnswers =
+        _quiz['showIncorrectAnswersAfterSubmission'] != false;
 
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(AppConstants.paddingL),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 150,
-              height: 150,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: passed
-                    ? AppColors.success.withOpacity(0.1)
-                    : AppColors.error.withOpacity(0.1),
-              ),
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      passed ? Icons.check_circle : Icons.cancel,
-                      size: 60,
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(AppConstants.paddingL),
+      child: Column(
+        children: [
+          Container(
+            width: 150,
+            height: 150,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: passed
+                  ? AppColors.success.withOpacity(0.1)
+                  : AppColors.error.withOpacity(0.1),
+            ),
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    passed ? Icons.check_circle : Icons.cancel,
+                    size: 60,
+                    color: passed ? AppColors.success : AppColors.error,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '${percentage.toStringAsFixed(0)}%',
+                    style: TextStyle(
+                      fontSize: AppConstants.fontXXL,
+                      fontWeight: FontWeight.bold,
                       color: passed ? AppColors.success : AppColors.error,
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      '${percentage.toStringAsFixed(0)}%',
-                      style: TextStyle(
-                        fontSize: AppConstants.fontXXL,
-                        fontWeight: FontWeight.bold,
-                        color: passed ? AppColors.success : AppColors.error,
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: AppConstants.paddingXL),
-            Text(
-              passed ? 'Congratulations!' : 'Keep Practicing!',
-              style: const TextStyle(
-                fontSize: AppConstants.fontXXL,
-                fontWeight: FontWeight.bold,
-                color: AppColors.textPrimary,
+          ),
+          const SizedBox(height: AppConstants.paddingXL),
+          Text(
+            passed ? 'Congratulations!' : 'Keep Practicing!',
+            style: const TextStyle(
+              fontSize: AppConstants.fontXXL,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: AppConstants.paddingM),
+          Text(
+            'You scored $_score out of $_totalPoints points',
+            style: const TextStyle(
+              fontSize: AppConstants.fontL,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: AppConstants.paddingXL),
+          if (!showQuestions)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(AppConstants.paddingM),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceLight,
+                borderRadius: BorderRadius.circular(AppConstants.radiusM),
+              ),
+              child: const Text(
+                'Your teacher has hidden post-submission question review for this quiz.',
+                style: TextStyle(color: AppColors.textSecondary),
+              ),
+            )
+          else ...[
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Review',
+                style: const TextStyle(
+                  fontSize: AppConstants.fontXL,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
             const SizedBox(height: AppConstants.paddingM),
-            Text(
-              'You scored $_score out of $_totalPoints points',
-              style: const TextStyle(
-                fontSize: AppConstants.fontL,
-                color: AppColors.textSecondary,
-              ),
-            ),
-            const SizedBox(height: AppConstants.paddingXL),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.studentPrimary,
-                  foregroundColor: AppColors.textWhite,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppConstants.radiusM),
+            ...rawQuestions.asMap().entries.map((entry) {
+              final questionMap = entry.value is Map
+                  ? Map<String, dynamic>.from(entry.value as Map)
+                  : <String, dynamic>{};
+              final questionId = (questionMap['id'] ?? '').toString();
+              final correctAnswer = questionMap['correctAnswer'];
+              final userAnswer = _userAnswers[questionId];
+              final isCorrect = _isAnswerCorrect(userAnswer, correctAnswer);
+              final canShowThisQuestion = (isCorrect && showCorrectAnswers) ||
+                  (!isCorrect && showIncorrectAnswers);
+
+              if (!canShowThisQuestion) {
+                return const SizedBox.shrink();
+              }
+
+              return Card(
+                margin: const EdgeInsets.only(bottom: AppConstants.paddingM),
+                child: Padding(
+                  padding: const EdgeInsets.all(AppConstants.paddingM),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '${entry.key + 1}. ${(questionMap['question'] ?? '').toString()}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: AppConstants.paddingS),
+                          Icon(
+                            isCorrect ? Icons.check_circle : Icons.cancel,
+                            color:
+                                isCorrect ? AppColors.success : AppColors.error,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AppConstants.paddingS),
+                      Text(
+                        'Your answer: ${_formatAnswer(userAnswer)}',
+                        style: const TextStyle(color: AppColors.textSecondary),
+                      ),
+                      const SizedBox(height: AppConstants.paddingXS),
+                      Text(
+                        'Correct answer: ${_formatAnswer(correctAnswer)}',
+                        style: TextStyle(
+                          color: isCorrect
+                              ? AppColors.success
+                              : AppColors.textPrimary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                child: const Text(
-                  'Back to Quizzes',
-                  style: TextStyle(
-                    fontSize: AppConstants.fontL,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
+              );
+            }),
           ],
-        ),
+          const SizedBox(height: AppConstants.paddingXL),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.studentPrimary,
+                foregroundColor: AppColors.textWhite,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppConstants.radiusM),
+                ),
+              ),
+              child: const Text(
+                'Back to Quizzes',
+                style: TextStyle(
+                  fontSize: AppConstants.fontL,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
+  }
+
+  String _formatAnswer(dynamic answer) {
+    if (answer == null) {
+      return 'No answer';
+    }
+    if (answer is List) {
+      final values = answer.map((entry) => entry.toString()).toList();
+      return values.isEmpty ? 'No answer' : values.join(', ');
+    }
+    final text = answer.toString().trim();
+    return text.isEmpty ? 'No answer' : text;
   }
 }
 

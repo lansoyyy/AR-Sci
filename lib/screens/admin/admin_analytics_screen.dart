@@ -14,7 +14,6 @@ class AdminAnalyticsScreen extends StatefulWidget {
 
 class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
   String _selectedTimeRange = '7days';
-  final List<String> _timeRanges = ['7days', '30days', '90days', 'all'];
 
   DateTime get _startDate {
     final now = DateTime.now();
@@ -57,25 +56,25 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
             // Overview Stats
             _buildOverviewSection(),
             const SizedBox(height: AppConstants.paddingXL),
-            
+
             // User Statistics
             _buildSectionHeader('User Statistics'),
             const SizedBox(height: AppConstants.paddingM),
             _buildUserStatsChart(),
             const SizedBox(height: AppConstants.paddingXL),
-            
+
             // Lesson Engagement
             _buildSectionHeader('Lesson Engagement'),
             const SizedBox(height: AppConstants.paddingM),
             _buildLessonEngagementSection(),
             const SizedBox(height: AppConstants.paddingXL),
-            
+
             // Quiz Performance
             _buildSectionHeader('Quiz Performance Trends'),
             const SizedBox(height: AppConstants.paddingM),
             _buildQuizPerformanceSection(),
             const SizedBox(height: AppConstants.paddingXL),
-            
+
             // Top Content
             _buildSectionHeader('Top Performing Content'),
             const SizedBox(height: AppConstants.paddingM),
@@ -93,20 +92,23 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
         return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
           stream: FirebaseFirestore.instance
               .collection('quiz_results')
-              .where('completedAt', isGreaterThan: Timestamp.fromDate(_startDate))
+              .where('completedAt',
+                  isGreaterThan: Timestamp.fromDate(_startDate))
               .snapshots(),
           builder: (context, quizSnapshot) {
             return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
               stream: FirebaseFirestore.instance
                   .collection('lesson_progress')
-                  .where('lastAccessed', isGreaterThan: Timestamp.fromDate(_startDate))
+                  .where('lastAccessed',
+                      isGreaterThan: Timestamp.fromDate(_startDate))
                   .snapshots(),
               builder: (context, lessonSnapshot) {
                 final totalUsers = usersSnapshot.data?.docs.length ?? 0;
                 final activeUsers = usersSnapshot.data?.docs.where((d) {
-                  final verified = d.data()['verified'] as bool? ?? false;
-                  return verified;
-                }).length ?? 0;
+                      final verified = d.data()['verified'] as bool? ?? false;
+                      return verified;
+                    }).length ??
+                    0;
                 final quizAttempts = quizSnapshot.data?.docs.length ?? 0;
                 final lessonViews = lessonSnapshot.data?.docs.length ?? 0;
 
@@ -143,7 +145,9 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                             value: quizAttempts.toString(),
                             icon: Icons.quiz_outlined,
                             color: AppColors.warning,
-                            subtitle: _selectedTimeRange == 'all' ? 'All time' : 'This period',
+                            subtitle: _selectedTimeRange == 'all'
+                                ? 'All time'
+                                : 'This period',
                           ),
                         ),
                         const SizedBox(width: AppConstants.paddingM),
@@ -153,7 +157,9 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                             value: lessonViews.toString(),
                             icon: Icons.book_outlined,
                             color: AppColors.studentPrimary,
-                            subtitle: _selectedTimeRange == 'all' ? 'All time' : 'This period',
+                            subtitle: _selectedTimeRange == 'all'
+                                ? 'All time'
+                                : 'This period',
                           ),
                         ),
                       ],
@@ -194,7 +200,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
 
         final docs = snapshot.data?.docs ?? [];
         int students = 0, teachers = 0, admins = 0;
-        
+
         for (final doc in docs) {
           final role = doc.data()['role'] as String? ?? '';
           switch (role) {
@@ -273,9 +279,11 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    _buildLegend('Students', AppColors.studentPrimary, students),
+                    _buildLegend(
+                        'Students', AppColors.studentPrimary, students),
                     const SizedBox(width: AppConstants.paddingL),
-                    _buildLegend('Teachers', AppColors.teacherPrimary, teachers),
+                    _buildLegend(
+                        'Teachers', AppColors.teacherPrimary, teachers),
                     const SizedBox(width: AppConstants.paddingL),
                     _buildLegend('Admins', AppColors.adminPrimary, admins),
                   ],
@@ -310,7 +318,9 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
           .snapshots(),
       builder: (context, lessonsSnapshot) {
         return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: FirebaseFirestore.instance.collection('lesson_progress').snapshots(),
+          stream: FirebaseFirestore.instance
+              .collection('lesson_progress')
+              .snapshots(),
           builder: (context, progressSnapshot) {
             if (!lessonsSnapshot.hasData) {
               return const Card(
@@ -363,9 +373,11 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                       child: BarChart(
                         BarChartData(
                           alignment: BarChartAlignment.spaceAround,
-                          maxY: topLessons.isEmpty 
-                              ? 10 
-                              : (lessonViews[topLessons.first['id']] ?? 0).toDouble() * 1.2,
+                          maxY: topLessons.isEmpty
+                              ? 10
+                              : (lessonViews[topLessons.first['id']] ?? 0)
+                                      .toDouble() *
+                                  1.2,
                           barTouchData: BarTouchData(enabled: true),
                           titlesData: FlTitlesData(
                             show: true,
@@ -374,12 +386,14 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                                 showTitles: true,
                                 getTitlesWidget: (value, meta) {
                                   if (value.toInt() < topLessons.length) {
-                                    final title = topLessons[value.toInt()]['title'] as String? ?? '';
+                                    final title = topLessons[value.toInt()]
+                                            ['title'] as String? ??
+                                        '';
                                     return Padding(
                                       padding: const EdgeInsets.only(top: 8),
                                       child: Text(
-                                        title.length > 10 
-                                            ? '${title.substring(0, 10)}...' 
+                                        title.length > 10
+                                            ? '${title.substring(0, 10)}...'
                                             : title,
                                         style: const TextStyle(fontSize: 10),
                                       ),
@@ -462,7 +476,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
         }
 
         final results = snapshot.data?.docs ?? [];
-        
+
         if (results.isEmpty) {
           return const Card(
             child: Padding(
@@ -490,7 +504,8 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
             };
           }
           quizStats[quizId]!['scores'].add(percentage);
-          quizStats[quizId]!['attempts'] = (quizStats[quizId]!['attempts'] as int) + 1;
+          quizStats[quizId]!['attempts'] =
+              (quizStats[quizId]!['attempts'] as int) + 1;
         }
 
         // Calculate averages
@@ -504,7 +519,8 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
             'attempts': entry.value['attempts'],
           };
         }).toList()
-          ..sort((a, b) => (b['average'] as double).compareTo(a['average'] as double));
+          ..sort((a, b) =>
+              (b['average'] as double).compareTo(a['average'] as double));
 
         final topQuizzes = quizAverages.take(5).toList();
 
@@ -555,7 +571,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                           dotData: const FlDotData(show: true),
                           belowBarData: BarAreaData(
                             show: true,
-                            color: AppColors.warning.withOpacity(0.2),
+                            color: AppColors.warning.withValues(alpha: 0.2),
                           ),
                         ),
                       ],
@@ -580,12 +596,13 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: avg >= 70 
-                            ? AppColors.success 
-                            : avg >= 50 
-                                ? AppColors.warning 
+                        color: avg >= 70
+                            ? AppColors.success
+                            : avg >= 50
+                                ? AppColors.warning
                                 : AppColors.error,
-                        borderRadius: BorderRadius.circular(AppConstants.radiusRound),
+                        borderRadius:
+                            BorderRadius.circular(AppConstants.radiusRound),
                       ),
                       child: Text(
                         '${avg.toStringAsFixed(1)}%',
@@ -658,7 +675,8 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.visibility, size: 16, color: AppColors.textSecondary),
+                    const Icon(Icons.visibility,
+                        size: 16, color: AppColors.textSecondary),
                     const SizedBox(width: 4),
                     Text(
                       views.toString(),

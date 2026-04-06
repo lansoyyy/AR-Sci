@@ -1,13 +1,18 @@
-import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
-import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+import '../../models/formatted_content_block.dart';
 import '../../utils/colors.dart';
 import '../../utils/constants.dart';
+import '../../utils/content_utils.dart';
+import '../../widgets/formatted_content_editor.dart';
+import '../../widgets/formatted_content_view.dart';
 
 class LessonDetailScreen extends StatefulWidget {
   final Map<String, dynamic>? lessonData;
@@ -28,8 +33,10 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
   bool _isLoading = true;
   bool _isDownloading = false;
   bool _isBookmarked = false;
-  bool _isDownloadingPdf = false;
-  final _noteController = TextEditingController();
+  bool _isOpeningMaterial = false;
+  bool _isSavingNotes = false;
+  String? _viewerRole;
+  List<FormattedContentBlock> _noteBlocks = <FormattedContentBlock>[];
 
   Future<void> _downloadLessonPDF() async {
     setState(() => _isDownloading = true);
@@ -104,7 +111,11 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
               height: 100,
               decoration: pw.BoxDecoration(border: pw.Border.all()),
               padding: const pw.EdgeInsets.all(8),
-              child: pw.Text('Add your notes here...'),
+              child: pw.Text(
+                FormattedContentBlock.plainText(_noteBlocks).isEmpty
+                    ? 'No saved notes yet.'
+                    : FormattedContentBlock.plainText(_noteBlocks),
+              ),
             ),
           ],
         ),
@@ -134,12 +145,6 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
   void initState() {
     super.initState();
     _loadLessonData();
-  }
-
-  @override
-  void dispose() {
-    _noteController.dispose();
-    super.dispose();
   }
 
   Future<void> _loadLessonData() async {
@@ -172,7 +177,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
         _isLoading = false;
       });
 
-      await _loadProgressAndBookmark();
+      await _loadStudentState();
     } catch (e) {
       debugPrint('Error loading lesson: $e');
       if (!mounted) return;
@@ -180,10 +185,23 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
     }
   }
 
-  Future<void> _loadProgressAndBookmark() async {
+  Future<void> _loadStudentState() async {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
+
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      final role = (userDoc.data()?['role'] ?? '').toString();
+
+      if (!mounted) return;
+      setState(() => _viewerRole = role);
+
+      if (role != 'student') {
+        return;
+      }
 
       final lessonId = _lesson['id']?.toString() ?? '';
       if (lessonId.isEmpty) return;
@@ -214,8 +232,29 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
       setState(() {
         _isBookmarked = bookmarkDoc.docs.isNotEmpty;
       });
+
+      final noteDoc = await FirebaseFirestore.instance
+          .collection('lesson_notes')
+          .doc('${user.uid}_$lessonId')
+          .get();
+
+      if (!noteDoc.exists) {
+        return;
+      }
+
+      final noteData = noteDoc.data();
+      if (noteData == null) {
+        return;
+      }
+
+      setState(() {
+        _noteBlocks = FormattedContentBlock.listFromJson(
+          noteData['blocks'],
+          fallbackText: (noteData['plainText'] ?? '').toString(),
+        );
+      });
     } catch (e) {
-      debugPrint('Error loading progress/bookmark: $e');
+      debugPrint('Error loading lesson state: $e');
     }
   }
 
@@ -254,6 +293,11 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
         // Add bookmark
         await FirebaseFirestore.instance.collection('bookmarks').add({
           'userId': user.uid,
+          'contentType': 'lesson',
+          'contentId': lessonId,
+          'title': _lesson['title'] ?? '',
+          'subject': _lesson['subject'] ?? '',
+          'gradeLevel': _lesson['gradeLevel'] ?? _lesson['grade'] ?? '',
           'lessonId': lessonId,
           'lessonTitle': _lesson['title'] ?? '',
           'createdAt': FieldValue.serverTimestamp(),
@@ -274,37 +318,33 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
     }
   }
 
-  Future<void> _downloadTeacherPdf() async {
-    final pdfUrl = _lesson['pdfUrl'] as String?;
-    if (pdfUrl == null || pdfUrl.isEmpty) {
+  Future<void> _openLessonMaterial() async {
+    final materialUrl = effectiveMaterialUrl(_lesson).trim();
+    if (materialUrl.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No PDF available for this lesson.')),
+        const SnackBar(content: Text('No lesson material is attached.')),
       );
       return;
     }
 
-    setState(() => _isDownloadingPdf = true);
+    setState(() => _isOpeningMaterial = true);
 
     try {
-      // Ensure URL has proper scheme
-      String urlToLaunch = pdfUrl;
+      String urlToLaunch = materialUrl;
       if (!urlToLaunch.startsWith('http://') &&
           !urlToLaunch.startsWith('https://')) {
         urlToLaunch = 'https://$urlToLaunch';
       }
 
       final uri = Uri.parse(urlToLaunch);
-      debugPrint('Opening PDF URL: $urlToLaunch');
 
-      // Try to launch with external application mode
       bool launched = await launchUrl(
         uri,
         mode: LaunchMode.externalApplication,
       );
 
       if (!launched) {
-        // Fallback to platform default
         launched = await launchUrl(
           uri,
           mode: LaunchMode.platformDefault,
@@ -320,17 +360,17 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
         );
       }
     } catch (e) {
-      debugPrint('Error opening PDF: $e');
+      debugPrint('Error opening lesson material: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error opening PDF: $e'),
+          content: Text('Error opening lesson material: $e'),
           backgroundColor: AppColors.error,
         ),
       );
     } finally {
       if (mounted) {
-        setState(() => _isDownloadingPdf = false);
+        setState(() => _isOpeningMaterial = false);
       }
     }
   }
@@ -360,12 +400,95 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
     }
   }
 
+  Future<void> _saveNotes() async {
+    final user = FirebaseAuth.instance.currentUser;
+    final lessonId = _lesson['id']?.toString() ?? '';
+    if (user == null || lessonId.isEmpty) {
+      return;
+    }
+
+    setState(() => _isSavingNotes = true);
+
+    try {
+      final filteredBlocks =
+          _noteBlocks.where((block) => block.hasMeaningfulContent).toList();
+
+      await FirebaseFirestore.instance
+          .collection('lesson_notes')
+          .doc('${user.uid}_$lessonId')
+          .set({
+        'userId': user.uid,
+        'lessonId': lessonId,
+        'lessonTitle': _lesson['title'] ?? '',
+        'blocks': FormattedContentBlock.listToJson(filteredBlocks),
+        'plainText': FormattedContentBlock.plainText(filteredBlocks),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Notes saved.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to save notes: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSavingNotes = false);
+      }
+    }
+  }
+
   Future<void> _markAsComplete() async {
+    if (!hasLessonLearningContent(_lesson)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('This lesson has no learning content yet.'),
+        ),
+      );
+      return;
+    }
+
+    if (_progress < 0.75) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content:
+              Text('Reach 75% progress before marking this lesson complete.'),
+        ),
+      );
+      return;
+    }
+
     await _saveProgress(1.0);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Lesson marked as complete!')),
     );
+  }
+
+  Future<void> _markProgress() async {
+    if (!hasLessonLearningContent(_lesson)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Your teacher has not uploaded learning content yet.'),
+        ),
+      );
+      return;
+    }
+
+    final newProgress = (_progress + 0.25).clamp(0.0, 0.75);
+    await _saveProgress(newProgress);
+
+    if (!mounted) return;
+    if (newProgress >= 0.75) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You can now mark this lesson as complete.'),
+        ),
+      );
+    }
   }
 
   Color _getSubjectColor(String? colorName) {
@@ -430,22 +553,32 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
     final contentText = _lesson['content'] is String
         ? (_lesson['content'] as String).trim()
         : '';
+    final contentBlocks = FormattedContentBlock.listFromJson(
+      _lesson['contentBlocks'],
+      fallbackText: contentText,
+    );
     final Color subjectColor = _getSubjectColor(
       _lesson['color'] ?? _subjectToColorName(_lesson['subject']),
     );
     final imageUrls = _lesson['imageUrls'] as List? ?? [];
     final videoUrls = _lesson['videoUrls'] as List? ?? [];
-    final pdfUrl = _lesson['pdfUrl'] as String?;
+    final materialUrl = effectiveMaterialUrl(_lesson).trim();
+    final materialName = effectiveMaterialName(_lesson);
+    final materialType = effectiveMaterialType(_lesson);
+    final isStudentViewer = _viewerRole == 'student';
+    final canComplete = hasLessonLearningContent(_lesson) && _progress >= 0.75;
 
     return Scaffold(
       appBar: AppBar(
         title: Text(_lesson['title'] ?? 'Lesson'),
         backgroundColor: subjectColor,
         actions: [
-          IconButton(
-            icon: Icon(_isBookmarked ? Icons.bookmark : Icons.bookmark_outline),
-            onPressed: _toggleBookmark,
-          ),
+          if (isStudentViewer)
+            IconButton(
+              icon:
+                  Icon(_isBookmarked ? Icons.bookmark : Icons.bookmark_outline),
+              onPressed: _toggleBookmark,
+            ),
           IconButton(
             icon: _isDownloading
                 ? const SizedBox(
@@ -546,7 +679,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                     ),
                   ),
 
-                  if (contentText.isNotEmpty) ...[
+                  if (contentBlocks.isNotEmpty) ...[
                     const SizedBox(height: AppConstants.paddingL),
                     const Text(
                       'Lesson Content',
@@ -557,13 +690,9 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                       ),
                     ),
                     const SizedBox(height: AppConstants.paddingS),
-                    Text(
-                      contentText,
-                      style: const TextStyle(
-                        fontSize: AppConstants.fontM,
-                        color: AppColors.textSecondary,
-                        height: 1.4,
-                      ),
+                    FormattedContentView(
+                      blocks: contentBlocks,
+                      fallbackText: contentText,
                     ),
                   ],
 
@@ -643,8 +772,8 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
               ),
             ),
 
-            // PDF Attachment Section
-            if (pdfUrl != null && pdfUrl.isNotEmpty) ...[
+            // Material Attachment Section
+            if (materialUrl.isNotEmpty) ...[
               Padding(
                 padding: const EdgeInsets.all(AppConstants.paddingL),
                 child: Card(
@@ -660,13 +789,14 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                               padding:
                                   const EdgeInsets.all(AppConstants.paddingM),
                               decoration: BoxDecoration(
-                                color: AppColors.error.withOpacity(0.1),
+                                color: _materialColor(materialType)
+                                    .withOpacity(0.1),
                                 borderRadius: BorderRadius.circular(
                                     AppConstants.radiusRound),
                               ),
-                              child: const Icon(
-                                Icons.picture_as_pdf,
-                                color: AppColors.error,
+                              child: Icon(
+                                _materialIcon(materialType),
+                                color: _materialColor(materialType),
                                 size: 32,
                               ),
                             ),
@@ -676,7 +806,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   const Text(
-                                    'Lesson Material (PDF)',
+                                    'Lesson Material',
                                     style: TextStyle(
                                       fontSize: AppConstants.fontL,
                                       fontWeight: FontWeight.w600,
@@ -686,7 +816,9 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                                   const SizedBox(
                                       height: AppConstants.paddingXS),
                                   Text(
-                                    'Download the PDF material provided by your teacher',
+                                    materialName.isEmpty
+                                        ? 'Open the file provided by your teacher.'
+                                        : '$materialName (${materialType.toUpperCase()})',
                                     style: TextStyle(
                                       fontSize: AppConstants.fontM,
                                       color: AppColors.textSecondary,
@@ -702,21 +834,25 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                           width: double.infinity,
                           child: ElevatedButton.icon(
                             onPressed:
-                                _isDownloadingPdf ? null : _downloadTeacherPdf,
+                                _isOpeningMaterial ? null : _openLessonMaterial,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.error,
+                              backgroundColor: _materialColor(materialType),
                               foregroundColor: AppColors.textWhite,
                               padding: const EdgeInsets.symmetric(vertical: 12),
                             ),
-                            icon: _isDownloadingPdf
+                            icon: _isOpeningMaterial
                                 ? const SizedBox(
                                     width: 20,
                                     height: 20,
                                     child: CircularProgressIndicator(
                                         strokeWidth: 2, color: Colors.white),
                                   )
-                                : const Icon(Icons.download),
-                            label: const Text('Download PDF'),
+                                : Icon(_materialIcon(materialType)),
+                            label: Text(
+                              materialType == 'pdf'
+                                  ? 'Open PDF'
+                                  : 'Open ${materialType.toUpperCase()} File',
+                            ),
                           ),
                         ),
                       ],
@@ -726,124 +862,167 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
               ),
             ],
 
-            // Progress Section
-            Padding(
-              padding: const EdgeInsets.all(AppConstants.paddingL),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Your Progress',
-                        style: TextStyle(
-                          fontSize: AppConstants.fontL,
-                          fontWeight: FontWeight.w600,
+            if (isStudentViewer) ...[
+              Padding(
+                padding: const EdgeInsets.all(AppConstants.paddingL),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Your Progress',
+                          style: TextStyle(
+                            fontSize: AppConstants.fontL,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                      ),
-                      Text(
-                        '${(_progress * 100).toStringAsFixed(0)}%',
-                        style: TextStyle(
-                          fontSize: AppConstants.fontL,
-                          fontWeight: FontWeight.bold,
-                          color: subjectColor,
+                        Text(
+                          '${(_progress * 100).toStringAsFixed(0)}%',
+                          style: TextStyle(
+                            fontSize: AppConstants.fontL,
+                            fontWeight: FontWeight.bold,
+                            color: subjectColor,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppConstants.paddingM),
-                  ClipRRect(
-                    borderRadius:
-                        BorderRadius.circular(AppConstants.radiusRound),
-                    child: LinearProgressIndicator(
-                      value: _progress,
-                      backgroundColor: AppColors.divider,
-                      valueColor: AlwaysStoppedAnimation<Color>(subjectColor),
-                      minHeight: 8,
+                      ],
                     ),
-                  ),
-                  const SizedBox(height: AppConstants.paddingL),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () {
-                            final newProgress =
-                                (_progress + 0.25).clamp(0.0, 1.0);
-                            _saveProgress(newProgress);
-                          },
-                          style: OutlinedButton.styleFrom(
-                            side: BorderSide(color: subjectColor),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                          ),
-                          child: const Text('Mark Progress'),
-                        ),
+                    const SizedBox(height: AppConstants.paddingM),
+                    ClipRRect(
+                      borderRadius:
+                          BorderRadius.circular(AppConstants.radiusRound),
+                      child: LinearProgressIndicator(
+                        value: _progress,
+                        backgroundColor: AppColors.divider,
+                        valueColor: AlwaysStoppedAnimation<Color>(subjectColor),
+                        minHeight: 8,
                       ),
-                      const SizedBox(width: AppConstants.paddingM),
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: _progress >= 1.0 ? null : _markAsComplete,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: subjectColor,
-                            foregroundColor: AppColors.textWhite,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                          ),
-                          child: const Text('Mark Complete'),
-                        ),
+                    ),
+                    const SizedBox(height: AppConstants.paddingS),
+                    Text(
+                      hasLessonLearningContent(_lesson)
+                          ? 'Review the lesson content first. Progress reaches 75% before completion is unlocked.'
+                          : 'Completion is disabled until your teacher uploads learning content.',
+                      style: const TextStyle(
+                        fontSize: AppConstants.fontS,
+                        color: AppColors.textSecondary,
                       ),
-                    ],
-                  ),
-                ],
+                    ),
+                    const SizedBox(height: AppConstants.paddingL),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: _markProgress,
+                            style: OutlinedButton.styleFrom(
+                              side: BorderSide(color: subjectColor),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            child: const Text('Mark Progress'),
+                          ),
+                        ),
+                        const SizedBox(width: AppConstants.paddingM),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: _progress >= 1.0 || !canComplete
+                                ? null
+                                : _markAsComplete,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: subjectColor,
+                              foregroundColor: AppColors.textWhite,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            child: const Text('Mark Complete'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-
-            // Notes Section
-            Padding(
-              padding: const EdgeInsets.all(AppConstants.paddingL),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'My Notes',
-                    style: TextStyle(
-                      fontSize: AppConstants.fontL,
-                      fontWeight: FontWeight.w600,
+              Padding(
+                padding: const EdgeInsets.all(AppConstants.paddingL),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'My Notes',
+                      style: TextStyle(
+                        fontSize: AppConstants.fontL,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: AppConstants.paddingM),
-                  TextField(
-                    controller: _noteController,
-                    maxLines: 4,
-                    decoration: const InputDecoration(
-                      hintText: 'Add your notes here...',
-                      border: OutlineInputBorder(),
+                    const SizedBox(height: AppConstants.paddingS),
+                    const Text(
+                      'Use formatted text blocks for bold, underline, highlight, and font size changes.',
+                      style: TextStyle(
+                        fontSize: AppConstants.fontS,
+                        color: AppColors.textSecondary,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: AppConstants.paddingM),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        // Save notes functionality
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Notes saved!')),
-                        );
+                    const SizedBox(height: AppConstants.paddingM),
+                    FormattedContentEditor(
+                      blocks: _noteBlocks,
+                      emptyLabel:
+                          'Add a note block to start writing what you learned.',
+                      onChanged: (blocks) {
+                        setState(() => _noteBlocks = blocks);
                       },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: subjectColor,
-                        foregroundColor: AppColors.textWhite,
-                      ),
-                      child: const Text('Save Notes'),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: AppConstants.paddingM),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _isSavingNotes ? null : _saveNotes,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: subjectColor,
+                          foregroundColor: AppColors.textWhite,
+                        ),
+                        child: _isSavingNotes
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Text('Save Notes'),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
+            ],
           ],
         ),
       ),
     );
+  }
+
+  IconData _materialIcon(String materialType) {
+    switch (materialType) {
+      case 'pdf':
+        return Icons.picture_as_pdf;
+      case 'doc':
+      case 'docx':
+        return Icons.description_outlined;
+      default:
+        return Icons.attach_file_outlined;
+    }
+  }
+
+  Color _materialColor(String materialType) {
+    switch (materialType) {
+      case 'pdf':
+        return AppColors.error;
+      case 'doc':
+      case 'docx':
+        return AppColors.info;
+      default:
+        return AppColors.studentPrimary;
+    }
   }
 
   Widget _buildVideoPlayer(String videoUrl, Color subjectColor) {

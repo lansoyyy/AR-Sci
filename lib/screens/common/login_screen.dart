@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../utils/colors.dart';
 import '../../utils/constants.dart';
+import '../../utils/password_policy.dart';
 import '../../routes/app_routes.dart';
 import '../../widgets/custom_button.dart';
 
@@ -436,11 +437,17 @@ class _LoginScreenState extends State<LoginScreen> {
                       if (value == null || value.isEmpty) {
                         return 'Please enter your password';
                       }
-                      if (value.length < 6) {
-                        return 'Password must be at least 6 characters';
-                      }
                       return null;
                     },
+                  ),
+
+                  const SizedBox(height: AppConstants.paddingS),
+                  Text(
+                    'For new or reset passwords: ${PasswordPolicy.helperText}',
+                    style: const TextStyle(
+                      fontSize: AppConstants.fontS,
+                      color: AppColors.textSecondary,
+                    ),
                   ),
 
                   const SizedBox(height: AppConstants.paddingM),

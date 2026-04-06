@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../utils/colors.dart';
 import '../../utils/constants.dart';
+import '../../utils/notification_service.dart';
 
 class AdminAnnouncementsScreen extends StatefulWidget {
   const AdminAnnouncementsScreen({super.key});
@@ -28,7 +29,7 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
   ];
 
   final List<Map<String, String>> _targets = [
-    {'id': 'all', 'name': 'All Users'},
+    {'id': 'all', 'name': 'All Active Users'},
     {'id': 'student', 'name': 'Students Only'},
     {'id': 'teacher', 'name': 'Teachers Only'},
     {'id': 'admin', 'name': 'Admins Only'},
@@ -48,7 +49,31 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
 
       final adminName = adminDoc.data()?['name'] as String? ?? 'Administrator';
 
-      // Create the announcement
+      Query<Map<String, dynamic>> usersQuery = FirebaseFirestore.instance
+          .collection('users')
+          .where('verified', isEqualTo: true);
+
+      if (_targetAudience != 'all') {
+        usersQuery = usersQuery.where('role', isEqualTo: _targetAudience);
+      }
+
+      final usersSnapshot = await usersQuery.get();
+      final targetUsers = usersSnapshot.docs.where((user) {
+        final data = user.data();
+        return data['deleted'] != true && data['deactivated'] != true;
+      }).toList();
+
+      if (targetUsers.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No active users match the selected audience.'),
+            backgroundColor: AppColors.warning,
+          ),
+        );
+        return;
+      }
+
       final announcementRef =
           await FirebaseFirestore.instance.collection('announcements').add({
         'title': _titleController.text.trim(),
@@ -59,48 +84,38 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
         'createdByName': adminName,
         'createdAt': FieldValue.serverTimestamp(),
         'isActive': true,
+        'createdByRole': 'admin',
+        'recipientCount': targetUsers.length,
       });
 
-      // Create notifications for target users in the global notifications collection
-      final batch = FirebaseFirestore.instance.batch();
-
-      Query<Map<String, dynamic>> usersQuery =
-          FirebaseFirestore.instance.collection('users');
-
-      if (_targetAudience != 'all') {
-        usersQuery = usersQuery.where('role', isEqualTo: _targetAudience);
+      final recipientsByRole = <String, List<String>>{};
+      for (final user in targetUsers) {
+        final userRole = (user.data()['role'] ?? 'student').toString();
+        recipientsByRole.putIfAbsent(userRole, () => <String>[]).add(user.id);
       }
 
-      final usersSnapshot = await usersQuery.get();
-
-      for (final user in usersSnapshot.docs) {
-        final userData = user.data();
-        final userRole = userData['role'] as String? ?? 'student';
-
-        final notificationRef =
-            FirebaseFirestore.instance.collection('notifications').doc();
-
-        batch.set(notificationRef, {
-          'userId': user.id,
-          'role': userRole,
-          'title': _titleController.text.trim(),
-          'message': _messageController.text.trim(),
-          'type': 'system',
-          'announcementId': announcementRef.id,
-          'priority': _selectedPriority,
-          'isRead': false,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
+      for (final entry in recipientsByRole.entries) {
+        await NotificationService.notifySystemAnnouncement(
+          userIds: entry.value,
+          role: entry.key,
+          title: _titleController.text.trim(),
+          message: _messageController.text.trim(),
+          metadata: {
+            'announcementId': announcementRef.id,
+            'createdBy': currentUser?.uid,
+            'createdByName': adminName,
+            'priority': _selectedPriority,
+            'targetAudience': _targetAudience,
+            'contentType': 'announcement',
+          },
+        );
       }
-
-      await batch.commit();
 
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content:
-              Text('Announcement sent to ${usersSnapshot.docs.length} users'),
+          content: Text('Announcement sent to ${targetUsers.length} users'),
           backgroundColor: AppColors.success,
         ),
       );
@@ -151,10 +166,21 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
     if (confirmed != true) return;
 
     try {
-      await FirebaseFirestore.instance
-          .collection('announcements')
-          .doc(id)
-          .delete();
+      final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+      final notifications = await FirebaseFirestore.instance
+          .collection('notifications')
+          .where('announcementId', isEqualTo: id)
+          .where('createdBy', isEqualTo: currentUserId)
+          .get();
+
+      final batch = FirebaseFirestore.instance.batch();
+      for (final notification in notifications.docs) {
+        batch.delete(notification.reference);
+      }
+      batch.delete(
+        FirebaseFirestore.instance.collection('announcements').doc(id),
+      );
+      await batch.commit();
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -385,7 +411,6 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
             final data = announcement.data();
             final priority = data['priority'] as String? ?? 'normal';
             final createdAt = data['createdAt'] as Timestamp?;
-            final isActive = data['isActive'] as bool? ?? true;
 
             return Card(
               margin: const EdgeInsets.only(bottom: AppConstants.paddingM),
@@ -417,6 +442,14 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
                         const SizedBox(width: 4),
                         Text(
                           data['targetAudience'] as String? ?? 'all',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        const SizedBox(width: 12),
+                        Icon(Icons.group_outlined,
+                            size: 14, color: AppColors.textSecondary),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${(data['recipientCount'] as num?)?.toInt() ?? 0}',
                           style: const TextStyle(fontSize: 12),
                         ),
                         const SizedBox(width: 12),

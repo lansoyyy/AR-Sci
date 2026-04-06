@@ -12,6 +12,7 @@ import '../screens/common/pending_verification_screen.dart';
 import '../screens/common/settings_screen.dart';
 import '../screens/common/help_screen.dart';
 import '../screens/student/student_dashboard.dart';
+import '../screens/student/student_bookmarks_screen.dart';
 import '../screens/student/lesson_detail_screen.dart';
 import '../screens/student/quiz_detail_screen.dart';
 import '../screens/student/ar_view_screen.dart';
@@ -28,7 +29,6 @@ import '../screens/admin/account_verification_screen.dart';
 import '../screens/admin/admin_analytics_screen.dart';
 import '../screens/admin/admin_reports_screen.dart';
 import '../screens/admin/admin_announcements_screen.dart';
-import '../screens/admin/subject_management_screen.dart';
 
 class AppRoutes {
   static const String splash = '/';
@@ -49,6 +49,7 @@ class AppRoutes {
   static const String lessonDetail = '/lesson-detail';
   static const String quizDetail = '/quiz-detail';
   static const String arView = '/ar-view';
+  static const String studentBookmarks = '/student-bookmarks';
 
   // Teacher Routes
   static const String teacherDashboard = '/teacher-dashboard';
@@ -66,7 +67,6 @@ class AppRoutes {
   static const String adminAnalytics = '/admin-analytics';
   static const String adminReports = '/admin-reports';
   static const String adminAnnouncements = '/admin-announcements';
-  static const String subjectManagement = '/subject-management';
 
   static Map<String, WidgetBuilder> getRoutes() {
     return {
@@ -131,13 +131,31 @@ class AppRoutes {
         );
 
       case adminCreateLesson:
+        final lessonArgs = settings.arguments as Map<String, dynamic>?;
         return MaterialPageRoute(
-          builder: (context) => const AdminCreateLessonScreen(),
+          builder: (context) => AdminCreateLessonScreen(
+            role: lessonArgs?['role'] as String? ?? 'admin',
+            lessonId: lessonArgs?['lessonId'] as String?,
+            initialData: lessonArgs?['lessonData'] is Map
+                ? Map<String, dynamic>.from(
+                    lessonArgs?['lessonData'] as Map,
+                  )
+                : null,
+          ),
         );
 
       case adminCreateQuiz:
+        final quizArgs = settings.arguments as Map<String, dynamic>?;
         return MaterialPageRoute(
-          builder: (context) => const AdminCreateQuizScreen(),
+          builder: (context) => AdminCreateQuizScreen(
+            role: quizArgs?['role'] as String? ?? 'admin',
+            quizId: quizArgs?['quizId'] as String?,
+            initialData: quizArgs?['quizData'] is Map
+                ? Map<String, dynamic>.from(
+                    quizArgs?['quizData'] as Map,
+                  )
+                : null,
+          ),
         );
 
       case adminAnalytics:
@@ -180,11 +198,6 @@ class AppRoutes {
           builder: (context) => const TeacherAnalyticsScreen(),
         );
 
-      case subjectManagement:
-        return MaterialPageRoute(
-          builder: (context) => const SubjectManagementScreen(),
-        );
-
       case lessonDetail:
         final args = settings.arguments;
         return MaterialPageRoute(
@@ -220,8 +233,14 @@ class AppRoutes {
             lessonId: args['id'] ?? args['lessonId'] ?? '',
             lessonTitle: args['title'] ?? args['lessonTitle'] ?? 'AR View',
             arItems: List<String>.from(args['arItems'] ?? []),
+            modelAssetPath: args['arModelUrl'] as String?,
             color: args['color'] as String?,
           ),
+        );
+
+      case studentBookmarks:
+        return MaterialPageRoute(
+          builder: (context) => const StudentBookmarksScreen(),
         );
 
       default:

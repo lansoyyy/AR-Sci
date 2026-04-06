@@ -1,8 +1,10 @@
-import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+
 import '../../utils/colors.dart';
 import '../../utils/constants.dart';
+import '../../utils/notification_service.dart';
 
 class TeacherAnnouncementsScreen extends StatefulWidget {
   const TeacherAnnouncementsScreen({super.key});
@@ -17,21 +19,120 @@ class _TeacherAnnouncementsScreenState
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _messageController = TextEditingController();
+
   bool _isSending = false;
+  bool _isLoadingProfile = true;
   String _selectedPriority = 'normal';
+  String _selectedTemplate = 'custom';
   String _targetAudience = 'students';
+  List<String> _teacherSections = <String>[];
+  List<String> _selectedSections = <String>[];
 
   final List<Map<String, String>> _priorities = [
-    {'id': 'low', 'name': 'Low', 'color': 'grey'},
-    {'id': 'normal', 'name': 'Normal', 'color': 'blue'},
-    {'id': 'high', 'name': 'High', 'color': 'orange'},
-    {'id': 'urgent', 'name': 'Urgent', 'color': 'red'},
+    {'id': 'low', 'name': 'Low'},
+    {'id': 'normal', 'name': 'Normal'},
+    {'id': 'high', 'name': 'High'},
+    {'id': 'urgent', 'name': 'Urgent'},
   ];
 
   final List<Map<String, String>> _targets = [
-    {'id': 'students', 'name': 'My Students'},
+    {'id': 'students', 'name': 'My Sections'},
+    {'id': 'specific_sections', 'name': 'Specific Sections'},
     {'id': 'all', 'name': 'All Students'},
   ];
+
+  final List<Map<String, String>> _templates = [
+    {
+      'id': 'custom',
+      'name': 'Custom Message',
+      'title': '',
+      'message': '',
+    },
+    {
+      'id': 'pending_quiz',
+      'name': 'Pending Quiz Reminder',
+      'title': 'Pending Quiz Reminder',
+      'message':
+          'Please complete your pending quiz as soon as possible and review the lesson materials before submitting.',
+    },
+    {
+      'id': 'lesson_reminder',
+      'name': 'Lesson Reminder',
+      'title': 'Lesson Reminder',
+      'message':
+          'A lesson is available for your section. Review the lesson content and save your notes before marking it complete.',
+    },
+    {
+      'id': 'score_follow_up',
+      'name': 'Score Follow-up',
+      'title': 'Quiz Scores Released',
+      'message':
+          'Your quiz scores have been posted. Review the results and check the feedback your teacher has made visible.',
+    },
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTeacherProfile();
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _messageController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadTeacherProfile() async {
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) {
+        if (!mounted) return;
+        setState(() => _isLoadingProfile = false);
+        return;
+      }
+
+      final teacherDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUser.uid)
+          .get();
+
+      final sections = (teacherDoc.data()?['sectionsHandled'] as List<dynamic>?)
+              ?.map((entry) => entry.toString().trim())
+              .where((entry) => entry.isNotEmpty)
+              .toSet()
+              .toList() ??
+          <String>[];
+
+      if (!mounted) return;
+      setState(() {
+        _teacherSections = sections;
+        _isLoadingProfile = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoadingProfile = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load teacher profile: $e')),
+      );
+    }
+  }
+
+  void _applyTemplate(String templateId) {
+    final template = _templates.firstWhere(
+      (item) => item['id'] == templateId,
+      orElse: () => _templates.first,
+    );
+
+    setState(() {
+      _selectedTemplate = templateId;
+      if (templateId != 'custom') {
+        _titleController.text = template['title'] ?? '';
+        _messageController.text = template['message'] ?? '';
+      }
+    });
+  }
 
   Future<void> _sendAnnouncement() async {
     if (!_formKey.currentState!.validate()) return;
@@ -47,69 +148,81 @@ class _TeacherAnnouncementsScreenState
 
       final teacherName = teacherDoc.data()?['name'] as String? ?? 'Teacher';
       final sections = (teacherDoc.data()?['sectionsHandled'] as List<dynamic>?)
-              ?.cast<String>() ??
-          [];
+              ?.map((entry) => entry.toString().trim())
+              .where((entry) => entry.isNotEmpty)
+              .toList() ??
+          <String>[];
+      final targetSections = _targetAudience == 'specific_sections'
+          ? _selectedSections
+          : _targetAudience == 'students'
+              ? sections
+              : <String>[];
 
-      // Create the announcement
       final announcementRef = await FirebaseFirestore.instance
           .collection('teacher_announcements')
           .add({
         'title': _titleController.text.trim(),
         'message': _messageController.text.trim(),
         'priority': _selectedPriority,
+        'templateId': _selectedTemplate,
         'targetAudience': _targetAudience,
         'teacherSections': sections,
+        'targetSections': targetSections,
         'createdBy': currentUser?.uid,
         'createdByName': teacherName,
         'createdAt': FieldValue.serverTimestamp(),
         'isActive': true,
       });
 
-      // Get target students
-      Query<Map<String, dynamic>> studentsQuery = FirebaseFirestore.instance
+      final studentsSnapshot = await FirebaseFirestore.instance
           .collection('users')
           .where('role', isEqualTo: 'student')
-          .where('verified', isEqualTo: true);
+          .where('verified', isEqualTo: true)
+          .get();
 
-      final studentsSnapshot = await studentsQuery.get();
+      final targetStudents = studentsSnapshot.docs.where((student) {
+        if (_targetAudience == 'all') {
+          return true;
+        }
 
-      // Filter by sections if needed
-      final targetStudents = studentsSnapshot.docs.where((s) {
-        if (_targetAudience == 'all') return true;
-        final grade = s.data()['gradeLevel'] as String?;
-        final section = s.data()['section'] as String?;
-        if (sections.isEmpty) return true;
-        return sections.contains(grade) || sections.contains(section);
+        final grade = (student.data()['gradeLevel'] ?? '').toString();
+        final section = (student.data()['section'] ?? '').toString();
+        if (targetSections.isEmpty) {
+          return true;
+        }
+
+        return targetSections.contains(grade) ||
+            targetSections.contains(section);
       }).toList();
 
-      // Create notifications in global collection
-      final batch = FirebaseFirestore.instance.batch();
-
-      for (final student in targetStudents) {
-        final studentData = student.data();
-        final studentRole = studentData['role'] as String? ?? 'student';
-
-        final notificationRef =
-            FirebaseFirestore.instance.collection('notifications').doc();
-
-        batch.set(notificationRef, {
-          'userId': student.id,
-          'role': studentRole,
-          'title': _titleController.text.trim(),
-          'message': _messageController.text.trim(),
-          'type': 'system',
-          'announcementId': announcementRef.id,
-          'priority': _selectedPriority,
-          'fromTeacher': teacherName,
-          'isRead': false,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
+      if (targetStudents.isEmpty) {
+        if (!mounted) return;
+        setState(() => _isSending = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No students match the selected target audience.'),
+            backgroundColor: AppColors.warning,
+          ),
+        );
+        return;
       }
 
-      await batch.commit();
+      await NotificationService.notifySystemAnnouncement(
+        userIds: targetStudents.map((student) => student.id).toList(),
+        role: 'student',
+        title: _titleController.text.trim(),
+        message: _messageController.text.trim(),
+        metadata: {
+          'announcementId': announcementRef.id,
+          'createdBy': currentUser?.uid,
+          'priority': _selectedPriority,
+          'fromTeacher': teacherName,
+          'targetSections': targetSections,
+          'contentType': 'announcement',
+        },
+      );
 
       if (!mounted) return;
-
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content:
@@ -122,7 +235,9 @@ class _TeacherAnnouncementsScreenState
       _messageController.clear();
       setState(() {
         _selectedPriority = 'normal';
+        _selectedTemplate = 'custom';
         _targetAudience = 'students';
+        _selectedSections = <String>[];
       });
     } catch (e) {
       if (!mounted) return;
@@ -133,7 +248,9 @@ class _TeacherAnnouncementsScreenState
         ),
       );
     } finally {
-      setState(() => _isSending = false);
+      if (mounted) {
+        setState(() => _isSending = false);
+      }
     }
   }
 
@@ -143,7 +260,8 @@ class _TeacherAnnouncementsScreenState
       builder: (context) => AlertDialog(
         title: const Text('Delete Announcement?'),
         content: const Text(
-            'This will remove the announcement and cannot be undone.'),
+          'This will remove the announcement and any linked notification entries.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -164,10 +282,20 @@ class _TeacherAnnouncementsScreenState
     if (confirmed != true) return;
 
     try {
-      await FirebaseFirestore.instance
+      final notifications = await FirebaseFirestore.instance
+          .collection('notifications')
+          .where('announcementId', isEqualTo: id)
+          .where('createdBy', isEqualTo: FirebaseAuth.instance.currentUser?.uid)
+          .get();
+
+      final batch = FirebaseFirestore.instance.batch();
+      for (final notification in notifications.docs) {
+        batch.delete(notification.reference);
+      }
+      batch.delete(FirebaseFirestore.instance
           .collection('teacher_announcements')
-          .doc(id)
-          .delete();
+          .doc(id));
+      await batch.commit();
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -214,27 +342,29 @@ class _TeacherAnnouncementsScreenState
         title: const Text('Send Announcements'),
         backgroundColor: AppColors.teacherPrimary,
       ),
-      body: DefaultTabController(
-        length: 2,
-        child: Column(
-          children: [
-            const TabBar(
-              tabs: [
-                Tab(icon: Icon(Icons.add_circle), text: 'New'),
-                Tab(icon: Icon(Icons.history), text: 'History'),
-              ],
-            ),
-            Expanded(
-              child: TabBarView(
+      body: _isLoadingProfile
+          ? const Center(child: CircularProgressIndicator())
+          : DefaultTabController(
+              length: 2,
+              child: Column(
                 children: [
-                  _buildNewAnnouncementTab(),
-                  _buildHistoryTab(),
+                  const TabBar(
+                    tabs: [
+                      Tab(icon: Icon(Icons.add_circle), text: 'New'),
+                      Tab(icon: Icon(Icons.history), text: 'History'),
+                    ],
+                  ),
+                  Expanded(
+                    child: TabBarView(
+                      children: [
+                        _buildNewAnnouncementTab(),
+                        _buildHistoryTab(),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -258,6 +388,24 @@ class _TeacherAnnouncementsScreenState
                         fontSize: AppConstants.fontL,
                         fontWeight: FontWeight.bold,
                       ),
+                    ),
+                    const SizedBox(height: AppConstants.paddingL),
+                    DropdownButtonFormField<String>(
+                      value: _selectedTemplate,
+                      decoration: const InputDecoration(
+                        labelText: 'Template',
+                        prefixIcon: Icon(Icons.auto_awesome_outlined),
+                      ),
+                      items: _templates.map((template) {
+                        return DropdownMenuItem<String>(
+                          value: template['id'],
+                          child: Text(template['name'] ?? 'Template'),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        if (value == null) return;
+                        _applyTemplate(value);
+                      },
                     ),
                     const SizedBox(height: AppConstants.paddingL),
                     TextFormField(
@@ -297,24 +445,25 @@ class _TeacherAnnouncementsScreenState
                         labelText: 'Priority',
                         prefixIcon: Icon(Icons.flag),
                       ),
-                      items: _priorities.map((p) {
-                        return DropdownMenuItem(
-                          value: p['id'],
+                      items: _priorities.map((priority) {
+                        return DropdownMenuItem<String>(
+                          value: priority['id'],
                           child: Row(
                             children: [
                               Icon(
-                                _getPriorityIcon(p['id']!),
-                                color: _getPriorityColor(p['id']!),
+                                _getPriorityIcon(priority['id']!),
+                                color: _getPriorityColor(priority['id']!),
                                 size: 20,
                               ),
                               const SizedBox(width: 8),
-                              Text(p['name']!),
+                              Text(priority['name']!),
                             ],
                           ),
                         );
                       }).toList(),
                       onChanged: (value) {
-                        setState(() => _selectedPriority = value!);
+                        if (value == null) return;
+                        setState(() => _selectedPriority = value);
                       },
                     ),
                     const SizedBox(height: AppConstants.paddingL),
@@ -324,16 +473,60 @@ class _TeacherAnnouncementsScreenState
                         labelText: 'Target Audience',
                         prefixIcon: Icon(Icons.people),
                       ),
-                      items: _targets.map((t) {
-                        return DropdownMenuItem(
-                          value: t['id'],
-                          child: Text(t['name']!),
+                      items: _targets.map((target) {
+                        return DropdownMenuItem<String>(
+                          value: target['id'],
+                          child: Text(target['name']!),
                         );
                       }).toList(),
                       onChanged: (value) {
-                        setState(() => _targetAudience = value!);
+                        if (value == null) return;
+                        setState(() => _targetAudience = value);
                       },
                     ),
+                    if (_targetAudience == 'specific_sections') ...[
+                      const SizedBox(height: AppConstants.paddingL),
+                      const Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Select Sections',
+                          style: TextStyle(
+                            fontSize: AppConstants.fontM,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: AppConstants.paddingS),
+                      Wrap(
+                        spacing: AppConstants.paddingS,
+                        runSpacing: AppConstants.paddingS,
+                        children: (_teacherSections.isEmpty
+                                ? AppConstants.studentSections
+                                : _teacherSections)
+                            .map((section) {
+                          final isSelected =
+                              _selectedSections.contains(section);
+                          return FilterChip(
+                            label: Text(section),
+                            selected: isSelected,
+                            onSelected: (selected) {
+                              setState(() {
+                                if (selected) {
+                                  if (!_selectedSections.contains(section)) {
+                                    _selectedSections.add(section);
+                                  }
+                                } else {
+                                  _selectedSections.remove(section);
+                                }
+                              });
+                            },
+                            selectedColor: AppColors.teacherPrimary
+                                .withValues(alpha: 0.18),
+                            checkmarkColor: AppColors.teacherPrimary,
+                          );
+                        }).toList(),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -401,6 +594,11 @@ class _TeacherAnnouncementsScreenState
             final data = announcement.data();
             final priority = data['priority'] as String? ?? 'normal';
             final createdAt = data['createdAt'] as Timestamp?;
+            final targetSections =
+                ((data['targetSections'] as List?) ?? const [])
+                    .map((entry) => entry.toString())
+                    .where((entry) => entry.trim().isNotEmpty)
+                    .toList();
 
             return Card(
               margin: const EdgeInsets.only(bottom: AppConstants.paddingM),
@@ -419,15 +617,47 @@ class _TeacherAnnouncementsScreenState
                 subtitle: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    const SizedBox(height: 4),
                     Text(
                       data['message'] as String? ?? '',
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 4),
+                    if (targetSections.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: AppConstants.paddingS,
+                        runSpacing: AppConstants.paddingS,
+                        children: targetSections
+                            .map(
+                              (section) => Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: AppConstants.paddingS,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.teacherPrimary
+                                      .withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(
+                                    AppConstants.radiusRound,
+                                  ),
+                                ),
+                                child: Text(
+                                  section,
+                                  style: const TextStyle(
+                                    fontSize: AppConstants.fontS,
+                                    color: AppColors.teacherPrimary,
+                                  ),
+                                ),
+                              ),
+                            )
+                            .toList(),
+                      ),
+                    ],
+                    const SizedBox(height: 6),
                     Row(
                       children: [
-                        Icon(Icons.people,
+                        const Icon(Icons.people,
                             size: 14, color: AppColors.textSecondary),
                         const SizedBox(width: 4),
                         Text(
@@ -435,7 +665,7 @@ class _TeacherAnnouncementsScreenState
                           style: const TextStyle(fontSize: 12),
                         ),
                         const SizedBox(width: 12),
-                        Icon(Icons.access_time,
+                        const Icon(Icons.access_time,
                             size: 14, color: AppColors.textSecondary),
                         const SizedBox(width: 4),
                         Text(
@@ -455,7 +685,7 @@ class _TeacherAnnouncementsScreenState
                     }
                   },
                   itemBuilder: (context) => [
-                    const PopupMenuItem(
+                    const PopupMenuItem<String>(
                       value: 'delete',
                       child: Row(
                         children: [

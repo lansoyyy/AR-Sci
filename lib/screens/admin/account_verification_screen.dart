@@ -29,6 +29,34 @@ class _AccountVerificationScreenState extends State<AccountVerificationScreen> {
         .where('verified', isEqualTo: false);
   }
 
+  bool _isPendingUser(Map<String, dynamic> data) {
+    return data['verified'] != true &&
+        data['rejected'] != true &&
+        data['deleted'] != true &&
+        data['deactivated'] != true;
+  }
+
+  List<QueryDocumentSnapshot<Map<String, dynamic>>> _applyRoleFilter(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+  ) {
+    if (_selectedRoleFilter == 'all') {
+      return docs;
+    }
+
+    return docs.where((doc) {
+      final role = (doc.data()['role'] as String?) ?? 'student';
+      return role == _selectedRoleFilter;
+    }).toList();
+  }
+
+  String _readCsvValue(List<dynamic> row, int index) {
+    if (index < 0 || row.length <= index) {
+      return '';
+    }
+
+    return (row[index] ?? '').toString().trim();
+  }
+
   Future<void> _approveUser({
     required String userId,
     required String name,
@@ -61,24 +89,63 @@ class _AccountVerificationScreenState extends State<AccountVerificationScreen> {
   }
 
   Future<void> _approveAllUsers() async {
+    final snapshot = await _baseQuery().get();
+    final pendingDocs = _applyRoleFilter(
+      snapshot.docs.where((doc) => _isPendingUser(doc.data())).toList(),
+    );
+
+    if (pendingDocs.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No pending accounts to approve')),
+      );
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Approve All Pending Accounts?'),
+        content: Text(
+          'Approve ${pendingDocs.length} ${_selectedRoleFilter == 'all' ? 'pending accounts' : '${_selectedRoleFilter}s'} now?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.success,
+              foregroundColor: AppColors.textWhite,
+            ),
+            child: const Text('Approve All'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
     setState(() => _isProcessing = true);
     try {
-      final snapshot = await _baseQuery().get();
       final adminUser = FirebaseAuth.instance.currentUser;
-
       final batch = FirebaseFirestore.instance.batch();
-      for (var doc in snapshot.docs) {
+      for (final doc in pendingDocs) {
         batch.update(doc.reference, {
           'verified': true,
           'verifiedAt': FieldValue.serverTimestamp(),
+          'rejected': false,
           if (adminUser != null) 'verifiedBy': adminUser.uid,
         });
       }
       await batch.commit();
 
-      // Notify all approved users
-      for (var doc in snapshot.docs) {
-        final name = doc.data()['name'] ?? 'Unknown';
+      for (final doc in pendingDocs) {
+        final name = (doc.data()['name'] ?? 'Unknown').toString();
         await NotificationService.notifyStudentApproved(
           studentId: doc.id,
           studentName: name,
@@ -88,7 +155,7 @@ class _AccountVerificationScreenState extends State<AccountVerificationScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Approved ${snapshot.docs.length} users successfully'),
+          content: Text('Approved ${pendingDocs.length} users successfully'),
           backgroundColor: AppColors.success,
         ),
       );
@@ -128,15 +195,21 @@ class _AccountVerificationScreenState extends State<AccountVerificationScreen> {
       await FirebaseFirestore.instance.collection('users').doc(userId).update({
         'verified': false,
         'rejected': true,
+        'accountStatus': 'rejected',
         'rejectedAt': FieldValue.serverTimestamp(),
         'rejectionReason': reason,
         if (adminUser != null) 'rejectedBy': adminUser.uid,
       });
 
+      await NotificationService.notifyStudentRejected(
+        studentId: userId,
+        reason: reason,
+      );
+
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Rejected $name. Account marked for deletion.'),
+          content: Text('Rejected $name. Account removed from approval queue.'),
           duration: const Duration(seconds: 3),
         ),
       );
@@ -163,7 +236,7 @@ class _AccountVerificationScreenState extends State<AccountVerificationScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'This will reject the account and permanently delete it. '
+              'This will reject the account and keep it out of the pending approval list. '
               'Please provide a reason for rejection.',
             ),
             const SizedBox(height: AppConstants.paddingM),
@@ -310,33 +383,12 @@ Bob Wilson,bob.wilson@email.com,student,Grade 8,Section B,,''',
       if (file.path == null) return;
 
       final input = File(file.path!).readAsStringSync();
-      final rows = const CsvToListConverter().convert(input);
+      final preview = await _prepareImportPreview(input);
 
-      if (rows.isEmpty) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('CSV file is empty')));
-        return;
-      }
+      if (!mounted) return;
 
-      // Parse header
-      final headers = rows[0].map((e) => e.toString().toLowerCase()).toList();
-      final nameIndex = headers.indexOf('name');
-      final emailIndex = headers.indexOf('email');
-      final roleIndex = headers.indexOf('role');
-      final gradeLevelIndex = headers.indexOf('gradelevel');
-      final sectionIndex = headers.indexOf('section');
-      final subjectsIndex = headers.indexOf('subjects');
-      final sectionsHandledIndex = headers.indexOf('sectionshandled');
-
-      if (nameIndex == -1 || emailIndex == -1 || roleIndex == -1) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('CSV must contain name, email, and role columns'),
-          ),
-        );
+      final confirmed = await _showImportPreviewDialog(preview);
+      if (confirmed != true || preview.importableCount == 0) {
         return;
       }
 
@@ -344,72 +396,30 @@ Bob Wilson,bob.wilson@email.com,student,Grade 8,Section B,,''',
 
       final adminUser = FirebaseAuth.instance.currentUser;
       final batch = FirebaseFirestore.instance.batch();
-      int successCount = 0;
-      List<String> errors = [];
+      for (final operation in preview.operations) {
+        final payload = <String, dynamic>{
+          ...operation.userData,
+          'importedAt': FieldValue.serverTimestamp(),
+          if (adminUser != null) 'importedBy': adminUser.uid,
+        };
 
-      for (int i = 1; i < rows.length; i++) {
-        try {
-          final row = rows[i];
-          if (row.length <= nameIndex) continue;
-
-          final name = row[nameIndex]?.toString().trim() ?? '';
-          final email = row[emailIndex]?.toString().trim() ?? '';
-          final role = row[roleIndex]?.toString().trim().toLowerCase() ?? '';
-
-          if (name.isEmpty || email.isEmpty || role.isEmpty) {
-            errors.add('Row $i: Missing required fields');
-            continue;
-          }
-
-          if (!['student', 'teacher', 'admin'].contains(role)) {
-            errors.add('Row $i: Invalid role "$role"');
-            continue;
-          }
-
-          final userData = <String, dynamic>{
-            'name': name,
-            'email': email,
-            'role': role,
-            'verified': false,
-            'createdAt': FieldValue.serverTimestamp(),
-            if (adminUser != null) 'importedBy': adminUser.uid,
-          };
-
-          // Add optional fields for students
-          if (role == 'student') {
-            if (gradeLevelIndex != -1 && row.length > gradeLevelIndex) {
-              userData['gradeLevel'] = row[gradeLevelIndex]?.toString().trim();
-            }
-            if (sectionIndex != -1 && row.length > sectionIndex) {
-              userData['section'] = row[sectionIndex]?.toString().trim();
-            }
-          }
-
-          // Add optional fields for teachers
-          if (role == 'teacher') {
-            if (subjectsIndex != -1 && row.length > subjectsIndex) {
-              final subjectsStr = row[subjectsIndex]?.toString().trim() ?? '';
-              if (subjectsStr.isNotEmpty) {
-                userData['subjects'] =
-                    subjectsStr.split('|').map((s) => s.trim()).toList();
-              }
-            }
-            if (sectionsHandledIndex != -1 &&
-                row.length > sectionsHandledIndex) {
-              final sectionsStr =
-                  row[sectionsHandledIndex]?.toString().trim() ?? '';
-              if (sectionsStr.isNotEmpty) {
-                userData['sectionsHandled'] =
-                    sectionsStr.split('|').map((s) => s.trim()).toList();
-              }
-            }
-          }
-
-          final docRef = FirebaseFirestore.instance.collection('users').doc();
-          batch.set(docRef, userData);
-          successCount++;
-        } catch (e) {
-          errors.add('Row $i: $e');
+        if (operation.createNew) {
+          batch.set(
+            FirebaseFirestore.instance.collection('users').doc(),
+            {
+              ...payload,
+              'createdAt': FieldValue.serverTimestamp(),
+            },
+          );
+        } else if (operation.reference != null) {
+          batch.set(
+            operation.reference!,
+            {
+              ...payload,
+              'updatedAt': FieldValue.serverTimestamp(),
+            },
+            SetOptions(merge: true),
+          );
         }
       }
 
@@ -417,22 +427,35 @@ Bob Wilson,bob.wilson@email.com,student,Grade 8,Section B,,''',
 
       if (!mounted) return;
 
-      String message = 'Successfully imported $successCount users';
-      if (errors.isNotEmpty) {
-        message += '. ${errors.length} errors occurred.';
+      final message = StringBuffer(
+        'Imported ${preview.importableCount} account${preview.importableCount == 1 ? '' : 's'}',
+      );
+      if (preview.alreadyApprovedUsers > 0) {
+        message.write(
+          '. ${preview.alreadyApprovedUsers} already approved',
+        );
+      }
+      if (preview.skippedUsers > 0) {
+        message.write('. ${preview.skippedUsers} skipped');
+      }
+      if (preview.errors.isNotEmpty) {
+        message.write('. ${preview.errors.length} invalid rows');
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(message),
-          backgroundColor:
-              errors.isEmpty ? AppColors.success : AppColors.warning,
-          duration: const Duration(seconds: 3),
-          action: errors.isNotEmpty
+          content: Text(message.toString()),
+          backgroundColor: preview.errors.isEmpty && preview.skippedUsers == 0
+              ? AppColors.success
+              : AppColors.warning,
+          duration: const Duration(seconds: 4),
+          action: preview.errors.isNotEmpty ||
+                  preview.alreadyApprovedUsers > 0 ||
+                  preview.skippedUsers > 0
               ? SnackBarAction(
-                  label: 'View Errors',
+                  label: 'View Report',
                   textColor: AppColors.textWhite,
-                  onPressed: () => _showImportErrors(errors),
+                  onPressed: () => _showImportReport(preview),
                 )
               : null,
         ),
@@ -452,23 +475,284 @@ Bob Wilson,bob.wilson@email.com,student,Grade 8,Section B,,''',
     }
   }
 
-  void _showImportErrors(List<String> errors) {
+  Future<_CsvImportPreview> _prepareImportPreview(String input) async {
+    final rows = const CsvToListConverter().convert(input);
+    if (rows.isEmpty) {
+      throw const FormatException('CSV file is empty');
+    }
+
+    final headers =
+        rows.first.map((entry) => entry.toString().toLowerCase()).toList();
+    final nameIndex = headers.indexOf('name');
+    final emailIndex = headers.indexOf('email');
+    final roleIndex = headers.indexOf('role');
+    final gradeLevelIndex = headers.indexOf('gradelevel');
+    final sectionIndex = headers.indexOf('section');
+    final subjectsIndex = headers.indexOf('subjects');
+    final sectionsHandledIndex = headers.indexOf('sectionshandled');
+
+    if (nameIndex == -1 || emailIndex == -1 || roleIndex == -1) {
+      throw const FormatException(
+        'CSV must contain name, email, and role columns',
+      );
+    }
+
+    final existingUsers =
+        await FirebaseFirestore.instance.collection('users').get();
+    final existingByEmail =
+        <String, QueryDocumentSnapshot<Map<String, dynamic>>>{};
+    for (final doc in existingUsers.docs) {
+      final email = (doc.data()['email'] ?? '').toString().trim().toLowerCase();
+      if (email.isNotEmpty) {
+        existingByEmail[email] = doc;
+      }
+    }
+
+    final adminUser = FirebaseAuth.instance.currentUser;
+    final operations = <_CsvImportOperation>[];
+    final errors = <String>[];
+    final seenEmails = <String>{};
+    var newUsers = 0;
+    var updatedPendingUsers = 0;
+    var alreadyApprovedUsers = 0;
+    var skippedUsers = 0;
+
+    for (int i = 1; i < rows.length; i++) {
+      final row = rows[i];
+      final rowNumber = i + 1;
+      final isBlankRow = row.every(
+        (cell) => cell == null || cell.toString().trim().isEmpty,
+      );
+      if (isBlankRow) {
+        continue;
+      }
+
+      final name = _readCsvValue(row, nameIndex);
+      final email = _readCsvValue(row, emailIndex).toLowerCase();
+      final role = _readCsvValue(row, roleIndex).toLowerCase();
+
+      if (name.isEmpty || email.isEmpty || role.isEmpty) {
+        errors.add('Row $rowNumber: Missing required fields');
+        continue;
+      }
+
+      if (!seenEmails.add(email)) {
+        errors.add('Row $rowNumber: Duplicate email "$email" in CSV');
+        continue;
+      }
+
+      if (!['student', 'teacher', 'admin'].contains(role)) {
+        errors.add('Row $rowNumber: Invalid role "$role"');
+        continue;
+      }
+
+      final userData = <String, dynamic>{
+        'name': name,
+        'email': email,
+        'role': role,
+        'verified': false,
+        'rejected': false,
+        'deleted': false,
+        'deactivated': false,
+        'accountStatus': 'pending',
+        if (adminUser != null) 'importedBy': adminUser.uid,
+      };
+
+      if (role == 'student') {
+        final gradeLevel = _readCsvValue(row, gradeLevelIndex);
+        final section = _readCsvValue(row, sectionIndex);
+        if (gradeLevel.isNotEmpty) {
+          userData['gradeLevel'] = gradeLevel;
+        }
+        if (section.isNotEmpty) {
+          userData['section'] = section;
+        }
+      }
+
+      if (role == 'teacher') {
+        final subjects = _readCsvValue(row, subjectsIndex)
+            .split('|')
+            .map((item) => item.trim())
+            .where((item) => item.isNotEmpty)
+            .toList();
+        final sectionsHandled = _readCsvValue(row, sectionsHandledIndex)
+            .split('|')
+            .map((item) => item.trim())
+            .where((item) => item.isNotEmpty)
+            .toList();
+        if (subjects.isNotEmpty) {
+          userData['subjects'] = subjects;
+        }
+        if (sectionsHandled.isNotEmpty) {
+          userData['sectionsHandled'] = sectionsHandled;
+        }
+      }
+
+      final existingDoc = existingByEmail[email];
+      if (existingDoc == null) {
+        operations.add(
+          _CsvImportOperation(
+            createNew: true,
+            rowNumber: rowNumber,
+            email: email,
+            userData: userData,
+          ),
+        );
+        newUsers++;
+        continue;
+      }
+
+      final existingData = existingDoc.data();
+      if (existingData['deleted'] == true ||
+          existingData['deactivated'] == true ||
+          existingData['rejected'] == true) {
+        skippedUsers++;
+        continue;
+      }
+
+      if (existingData['verified'] == true) {
+        alreadyApprovedUsers++;
+        continue;
+      }
+
+      operations.add(
+        _CsvImportOperation(
+          createNew: false,
+          rowNumber: rowNumber,
+          email: email,
+          userData: userData,
+          reference: existingDoc.reference,
+        ),
+      );
+      updatedPendingUsers++;
+    }
+
+    return _CsvImportPreview(
+      newUsers: newUsers,
+      updatedPendingUsers: updatedPendingUsers,
+      alreadyApprovedUsers: alreadyApprovedUsers,
+      skippedUsers: skippedUsers,
+      errors: errors,
+      operations: operations,
+    );
+  }
+
+  Future<bool?> _showImportPreviewDialog(_CsvImportPreview preview) {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Review CSV Import'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('New accounts: ${preview.newUsers}'),
+              const SizedBox(height: AppConstants.paddingS),
+              Text('Updated pending accounts: ${preview.updatedPendingUsers}'),
+              const SizedBox(height: AppConstants.paddingS),
+              Text('Already approved: ${preview.alreadyApprovedUsers}'),
+              const SizedBox(height: AppConstants.paddingS),
+              Text('Skipped existing accounts: ${preview.skippedUsers}'),
+              const SizedBox(height: AppConstants.paddingS),
+              Text('Invalid rows: ${preview.errors.length}'),
+              const SizedBox(height: AppConstants.paddingM),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(AppConstants.paddingM),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceLight,
+                  borderRadius: BorderRadius.circular(AppConstants.radiusM),
+                ),
+                child: Text(
+                  preview.importableCount == 0
+                      ? 'Nothing new can be imported from this CSV.'
+                      : '${preview.importableCount} account${preview.importableCount == 1 ? '' : 's'} will be imported when you continue.',
+                ),
+              ),
+              if (preview.errors.isNotEmpty) ...[
+                const SizedBox(height: AppConstants.paddingM),
+                const Text(
+                  'Issues Found',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: AppConstants.paddingS),
+                ...preview.errors.take(5).map(
+                      (error) => Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Text('• $error'),
+                      ),
+                    ),
+                if (preview.errors.length > 5)
+                  Text(
+                    '...and ${preview.errors.length - 5} more',
+                    style: const TextStyle(color: AppColors.textSecondary),
+                  ),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: preview.importableCount == 0
+                ? null
+                : () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.adminPrimary,
+              foregroundColor: AppColors.textWhite,
+            ),
+            child: const Text('Import Accounts'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showImportReport(_CsvImportPreview preview) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Import Errors'),
+        title: const Text('Import Report'),
         content: SizedBox(
           width: double.maxFinite,
-          height: 300,
-          child: ListView.builder(
-            itemCount: errors.length,
-            itemBuilder: (context, index) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Text(
-                '• ${errors[index]}',
-                style: const TextStyle(color: AppColors.error),
-              ),
-            ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('New accounts: ${preview.newUsers}'),
+              const SizedBox(height: AppConstants.paddingS),
+              Text('Updated pending accounts: ${preview.updatedPendingUsers}'),
+              const SizedBox(height: AppConstants.paddingS),
+              Text('Already approved: ${preview.alreadyApprovedUsers}'),
+              const SizedBox(height: AppConstants.paddingS),
+              Text('Skipped existing accounts: ${preview.skippedUsers}'),
+              if (preview.errors.isNotEmpty) ...[
+                const SizedBox(height: AppConstants.paddingM),
+                const Text(
+                  'Invalid Rows',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: AppConstants.paddingS),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 220),
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: preview.errors.length,
+                    itemBuilder: (context, index) => Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Text(
+                        '• ${preview.errors[index]}',
+                        style: const TextStyle(color: AppColors.error),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
         actions: [
@@ -516,19 +800,14 @@ Bob Wilson,bob.wilson@email.com,student,Grade 8,Section B,,''',
       }
       await batch.commit();
 
-      // Notify approved users
-      final usersSnapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .where(
-            FieldPath.documentId,
-            whereIn: _selectedUserIds.take(10).toList(),
-          )
-          .get();
-
-      for (final doc in usersSnapshot.docs) {
-        final name = doc.data()['name'] ?? 'Unknown';
+      for (final userId in _selectedUserIds) {
+        final doc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userId)
+            .get();
+        final name = (doc.data()?['name'] ?? 'Unknown').toString();
         await NotificationService.notifyStudentApproved(
-          studentId: doc.id,
+          studentId: userId,
           studentName: name,
         );
       }
@@ -638,7 +917,7 @@ Bob Wilson,bob.wilson@email.com,student,Grade 8,Section B,,''',
                           foregroundColor: AppColors.textWhite,
                         ),
                         icon: const Icon(Icons.check_circle, size: 18),
-                        label: const Text('Click Lang'),
+                        label: const Text('Approve All Pending'),
                       ),
                     ),
                   ],
@@ -708,20 +987,16 @@ Bob Wilson,bob.wilson@email.com,student,Grade 8,Section B,,''',
                 }
 
                 final allDocs = snapshot.data?.docs ?? [];
-                final docs = _selectedRoleFilter == 'all'
-                    ? allDocs
-                    : allDocs.where((doc) {
-                        final data = doc.data();
-                        final role = (data['role'] as String?) ?? 'student';
-                        return role == _selectedRoleFilter;
-                      }).toList();
+                final docs = _applyRoleFilter(
+                  allDocs.where((doc) => _isPendingUser(doc.data())).toList(),
+                );
 
                 if (docs.isEmpty) {
                   return const Center(
                     child: Padding(
                       padding: EdgeInsets.all(AppConstants.paddingL),
                       child: Text(
-                        'No pending accounts.',
+                        'No pending accounts for this filter.',
                         style: TextStyle(
                           fontSize: AppConstants.fontL,
                           color: AppColors.textSecondary,
@@ -955,4 +1230,40 @@ class _InfoPill extends StatelessWidget {
       ),
     );
   }
+}
+
+class _CsvImportOperation {
+  final bool createNew;
+  final int rowNumber;
+  final String email;
+  final Map<String, dynamic> userData;
+  final DocumentReference<Map<String, dynamic>>? reference;
+
+  const _CsvImportOperation({
+    required this.createNew,
+    required this.rowNumber,
+    required this.email,
+    required this.userData,
+    this.reference,
+  });
+}
+
+class _CsvImportPreview {
+  final int newUsers;
+  final int updatedPendingUsers;
+  final int alreadyApprovedUsers;
+  final int skippedUsers;
+  final List<String> errors;
+  final List<_CsvImportOperation> operations;
+
+  const _CsvImportPreview({
+    required this.newUsers,
+    required this.updatedPendingUsers,
+    required this.alreadyApprovedUsers,
+    required this.skippedUsers,
+    required this.errors,
+    required this.operations,
+  });
+
+  int get importableCount => newUsers + updatedPendingUsers;
 }

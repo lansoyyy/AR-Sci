@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../utils/colors.dart';
 import '../../utils/constants.dart';
+import '../../utils/password_policy.dart';
 import '../../widgets/custom_button.dart';
 
 class ChangePasswordScreen extends StatefulWidget {
@@ -211,11 +212,9 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                       ),
                     ),
                     validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please enter your new password';
-                      }
-                      if (value.length < 6) {
-                        return 'Password must be at least 6 characters';
+                      final validation = PasswordPolicy.validate(value);
+                      if (validation != null) {
+                        return validation;
                       }
                       if (value == _currentPasswordController.text) {
                         return 'New password must be different from current password';
@@ -292,7 +291,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                           ],
                         ),
                         const SizedBox(height: 8),
-                        const Text('• At least 6 characters long'),
+                        Text('• ${PasswordPolicy.helperText}'),
                         const Text('• Different from current password'),
                       ],
                     ),

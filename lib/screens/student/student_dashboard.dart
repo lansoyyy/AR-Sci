@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../routes/app_routes.dart';
 import '../../utils/colors.dart';
+import '../../utils/content_utils.dart';
 import '../../utils/constants.dart';
 import '../../widgets/stat_card.dart';
 import '../../widgets/lesson_card.dart';
@@ -152,49 +154,64 @@ DateTime _parseFirestoreDate(dynamic value) {
 }
 
 LessonModel _lessonModelFromMap(Map<String, dynamic> lesson) {
-  final createdAt = _parseFirestoreDate(lesson['createdAt']);
-  return LessonModel(
-    id: (lesson['id'] ?? '').toString(),
-    title: (lesson['title'] ?? '').toString(),
-    description: (lesson['description'] ?? '').toString(),
-    subject: (lesson['subject'] ?? '').toString(),
-    gradeLevel: (lesson['gradeLevel'] ?? lesson['grade'] ?? '').toString(),
-    content: (lesson['content'] ?? '').toString(),
-    imageUrls:
-        (lesson['imageUrls'] as List?)?.map((e) => e.toString()).toList() ??
-            const <String>[],
-    videoUrls:
-        (lesson['videoUrls'] as List?)?.map((e) => e.toString()).toList() ??
-            const <String>[],
-    teacherId:
+  return LessonModel.fromJson({
+    ...lesson,
+    'id': (lesson['id'] ?? '').toString(),
+    'teacherId':
         (lesson['teacherId'] ?? lesson['createdBy'] ?? 'admin').toString(),
-    createdAt: createdAt,
-    isPublished: lesson['isPublished'] == true,
-  );
+    'gradeLevel': (lesson['gradeLevel'] ?? lesson['grade'] ?? '').toString(),
+  });
 }
 
 QuizModel _quizModelFromMap(Map<String, dynamic> quiz) {
-  final createdAt = _parseFirestoreDate(quiz['createdAt']);
-  final rawQuestions = quiz['questions'] as List? ?? const [];
-  final questions = rawQuestions
-      .whereType<Map>()
-      .map((q) => QuizQuestion.fromJson(Map<String, dynamic>.from(q)))
-      .toList();
+  return QuizModel.fromJson({
+    ...quiz,
+    'id': (quiz['id'] ?? '').toString(),
+    'gradeLevel': (quiz['gradeLevel'] ?? quiz['grade'] ?? '').toString(),
+  });
+}
 
-  return QuizModel(
-    id: (quiz['id'] ?? '').toString(),
-    title: (quiz['title'] ?? '').toString(),
-    description: (quiz['description'] ?? '').toString(),
-    lessonId: (quiz['lessonId'] ?? '').toString(),
-    subject: (quiz['subject'] ?? '').toString(),
-    gradeLevel: (quiz['gradeLevel'] ?? quiz['grade'] ?? '').toString(),
-    questions: questions,
-    duration: quiz['duration'] is int
-        ? quiz['duration'] as int
-        : int.tryParse((quiz['duration'] ?? '').toString()) ?? 30,
-    createdAt: createdAt,
-    isPublished: quiz['isPublished'] == true,
-  );
+Map<String, dynamic> _mapFirestoreDoc(
+  QueryDocumentSnapshot<Map<String, dynamic>> doc,
+) {
+  return <String, dynamic>{
+    ...doc.data(),
+    'id': doc.data()['id'] ?? doc.id,
+  };
+}
+
+List<Map<String, dynamic>> _sortVisibleContent(
+    List<Map<String, dynamic>> items) {
+  items.sort((a, b) {
+    final aDate = parseFlexibleDate(a['availableFrom']) ??
+        _parseFirestoreDate(a['createdAt']);
+    final bDate = parseFlexibleDate(b['availableFrom']) ??
+        _parseFirestoreDate(b['createdAt']);
+    return bDate.compareTo(aDate);
+  });
+  return items;
+}
+
+List<Map<String, dynamic>> _visibleLessonsForStudent(
+  Iterable<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+  UserModel? student,
+) {
+  final items = docs
+      .map(_mapFirestoreDoc)
+      .where((lesson) => canStudentAccessContent(lesson, student))
+      .toList();
+  return _sortVisibleContent(items);
+}
+
+List<Map<String, dynamic>> _visibleQuizzesForStudent(
+  Iterable<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+  UserModel? student,
+) {
+  final items = docs
+      .map(_mapFirestoreDoc)
+      .where((quiz) => canStudentAccessContent(quiz, student))
+      .toList();
+  return _sortVisibleContent(items);
 }
 
 class _DashboardHome extends StatelessWidget {
@@ -221,6 +238,12 @@ class _DashboardHome extends StatelessWidget {
             onPressed: () {
               Navigator.pushNamed(context, '/notifications',
                   arguments: 'student');
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.bookmark_outline),
+            onPressed: () {
+              Navigator.pushNamed(context, AppRoutes.studentBookmarks);
             },
           ),
           IconButton(
@@ -279,23 +302,52 @@ class _DashboardHome extends StatelessWidget {
                             ),
                             const SizedBox(height: AppConstants.paddingS),
                             if (currentUser?.gradeLevel != null)
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: AppConstants.paddingM,
-                                  vertical: AppConstants.paddingS,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: AppColors.textWhite.withOpacity(0.2),
-                                  borderRadius: BorderRadius.circular(
-                                      AppConstants.radiusRound),
-                                ),
-                                child: Text(
-                                  currentUser!.gradeLevel!,
-                                  style: const TextStyle(
-                                    color: AppColors.textWhite,
-                                    fontWeight: FontWeight.w600,
+                              Wrap(
+                                spacing: AppConstants.paddingS,
+                                runSpacing: AppConstants.paddingS,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: AppConstants.paddingM,
+                                      vertical: AppConstants.paddingS,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color:
+                                          AppColors.textWhite.withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(
+                                          AppConstants.radiusRound),
+                                    ),
+                                    child: Text(
+                                      currentUser!.gradeLevel!,
+                                      style: const TextStyle(
+                                        color: AppColors.textWhite,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
                                   ),
-                                ),
+                                  if ((currentUser?.section ?? '')
+                                      .trim()
+                                      .isNotEmpty)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: AppConstants.paddingM,
+                                        vertical: AppConstants.paddingS,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.textWhite
+                                            .withOpacity(0.2),
+                                        borderRadius: BorderRadius.circular(
+                                            AppConstants.radiusRound),
+                                      ),
+                                      child: Text(
+                                        currentUser!.section!,
+                                        style: const TextStyle(
+                                          color: AppColors.textWhite,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                ],
                               ),
                           ],
                         ),
@@ -306,9 +358,9 @@ class _DashboardHome extends StatelessWidget {
                             .doc('current')
                             .snapshots(),
                         builder: (context, snapshot) {
-                          final year =
-                              snapshot.data?.data()?['academicYear'] as String? ??
-                                  '2025-2026';
+                          final year = snapshot.data?.data()?['academicYear']
+                                  as String? ??
+                              '2025-2026';
                           return Column(
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
@@ -349,7 +401,11 @@ class _DashboardHome extends StatelessWidget {
                     .where('isPublished', isEqualTo: true)
                     .snapshots(),
                 builder: (context, lessonsSnapshot) {
-                  final lessonsCount = lessonsSnapshot.data?.docs.length ?? 0;
+                  final lessonsCount = _visibleLessonsForStudent(
+                    lessonsSnapshot.data?.docs ??
+                        const <QueryDocumentSnapshot<Map<String, dynamic>>>[],
+                    currentUser,
+                  ).length;
 
                   return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                     stream: FirebaseFirestore.instance
@@ -357,8 +413,12 @@ class _DashboardHome extends StatelessWidget {
                         .where('isPublished', isEqualTo: true)
                         .snapshots(),
                     builder: (context, quizzesSnapshot) {
-                      final quizzesCount =
-                          quizzesSnapshot.data?.docs.length ?? 0;
+                      final quizzesCount = _visibleQuizzesForStudent(
+                        quizzesSnapshot.data?.docs ??
+                            const <QueryDocumentSnapshot<
+                                Map<String, dynamic>>>[],
+                        currentUser,
+                      ).length;
 
                       final resultsStream = studentId == null
                           ? const Stream<
@@ -468,26 +528,22 @@ class _DashboardHome extends StatelessWidget {
                           .limit(50)
                           .get();
 
-                      final filteredDocs = snapshot.docs.where((doc) {
-                        final data = doc.data();
-                        return data['gradeLevel'] == currentUser?.gradeLevel;
-                      }).toList();
+                      final visibleLessons = _visibleLessonsForStudent(
+                        snapshot.docs,
+                        currentUser,
+                      );
 
-                      if (filteredDocs.isEmpty) {
+                      if (visibleLessons.isEmpty) {
                         if (!context.mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                               content: Text(
-                                  'No lessons available for your grade level.')),
+                                  'No AR-ready lessons are available for you right now.')),
                         );
                         return;
                       }
 
-                      final firstDoc = filteredDocs.first;
-                      final firstLesson = <String, dynamic>{
-                        ...firstDoc.data(),
-                        'id': firstDoc.data()['id'] ?? firstDoc.id,
-                      };
+                      final firstLesson = visibleLessons.first;
 
                       if (!context.mounted) return;
                       Navigator.pushNamed(
@@ -589,13 +645,10 @@ class _DashboardHome extends StatelessWidget {
 
                 final allDocs = snapshot.data?.docs ??
                     <QueryDocumentSnapshot<Map<String, dynamic>>>[];
-                final firebaseLessons = allDocs
-                    .take(2)
-                    .map((d) => <String, dynamic>{
-                          ...d.data(),
-                          'id': d.data()['id'] ?? d.id,
-                        })
-                    .toList();
+                final firebaseLessons = _visibleLessonsForStudent(
+                  allDocs,
+                  currentUser,
+                ).take(2).toList();
 
                 if (firebaseLessons.isEmpty) {
                   return const Padding(
@@ -656,11 +709,6 @@ class _DashboardHome extends StatelessWidget {
               builder: (context, snapshot) {
                 final allDocs = snapshot.data?.docs ??
                     <QueryDocumentSnapshot<Map<String, dynamic>>>[];
-                final docs = allDocs
-                    .where((d) =>
-                        d.data()['gradeLevel'] == currentUser?.gradeLevel)
-                    .take(2)
-                    .toList();
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Padding(
                     padding: EdgeInsets.all(AppConstants.paddingM),
@@ -668,7 +716,11 @@ class _DashboardHome extends StatelessWidget {
                   );
                 }
 
-                if (docs.isEmpty) {
+                final items = _visibleQuizzesForStudent(allDocs, currentUser)
+                    .take(2)
+                    .toList();
+
+                if (items.isEmpty) {
                   return const Padding(
                     padding: EdgeInsets.all(AppConstants.paddingM),
                     child: Center(
@@ -679,13 +731,6 @@ class _DashboardHome extends StatelessWidget {
                     ),
                   );
                 }
-
-                final items = docs
-                    .map((d) => <String, dynamic>{
-                          ...d.data(),
-                          'id': d.data()['id'] ?? d.id,
-                        })
-                    .toList();
 
                 return Column(
                   children: items.map((quizMap) {
@@ -792,22 +837,26 @@ class _LessonsPageState extends State<_LessonsPage> {
                   .snapshots(),
               builder: (context, snapshot) {
                 final allDocs = snapshot.data?.docs ?? [];
-                final quarters = allDocs
-                    .map((d) => (d.data()['quarter'] ?? '').toString())
+                final visibleLessons = _visibleLessonsForStudent(
+                  allDocs,
+                  widget.currentUser,
+                );
+                final quarters = visibleLessons
+                    .map((lesson) => (lesson['quarter'] ?? '').toString())
                     .where((s) => s.isNotEmpty)
                     .toSet()
                     .toList()
                   ..sort();
-                final grades = allDocs
-                    .map((d) =>
-                        (d.data()['gradeLevel'] ?? d.data()['grade'] ?? '')
+                final grades = visibleLessons
+                    .map((lesson) =>
+                        (lesson['gradeLevel'] ?? lesson['grade'] ?? '')
                             .toString())
                     .where((s) => s.isNotEmpty)
                     .toSet()
                     .toList()
                   ..sort();
-                final subjects = allDocs
-                    .map((d) => (d.data()['subject'] ?? '').toString())
+                final subjects = visibleLessons
+                    .map((lesson) => (lesson['subject'] ?? '').toString())
                     .where((s) => s.isNotEmpty)
                     .toSet()
                     .toList()
@@ -864,14 +913,9 @@ class _LessonsPageState extends State<_LessonsPage> {
 
                 final allDocs = snapshot.data?.docs ??
                     <QueryDocumentSnapshot<Map<String, dynamic>>>[];
-                final firebaseLessons = allDocs
-                    .map((d) => <String, dynamic>{
-                          ...d.data(),
-                          'id': d.data()['id'] ?? d.id,
-                        })
-                    .toList();
-
-                final lessons = _applyFilter(firebaseLessons);
+                final lessons = _applyFilter(
+                  _visibleLessonsForStudent(allDocs, widget.currentUser),
+                );
 
                 if (lessons.isEmpty) {
                   return const Center(
@@ -982,16 +1026,19 @@ class _QuizzesPageBodyState extends State<_QuizzesPageBody> {
                   .snapshots(),
               builder: (context, snapshot) {
                 final allDocs = snapshot.data?.docs ?? [];
-                final grades = allDocs
-                    .map((d) =>
-                        (d.data()['gradeLevel'] ?? d.data()['grade'] ?? '')
-                            .toString())
+                final visibleQuizzes = _visibleQuizzesForStudent(
+                  allDocs,
+                  widget.currentUser,
+                );
+                final grades = visibleQuizzes
+                    .map((quiz) =>
+                        (quiz['gradeLevel'] ?? quiz['grade'] ?? '').toString())
                     .where((s) => s.isNotEmpty)
                     .toSet()
                     .toList()
                   ..sort();
-                final subjects = allDocs
-                    .map((d) => (d.data()['subject'] ?? '').toString())
+                final subjects = visibleQuizzes
+                    .map((quiz) => (quiz['subject'] ?? '').toString())
                     .where((s) => s.isNotEmpty)
                     .toSet()
                     .toList()
@@ -1041,14 +1088,9 @@ class _QuizzesPageBodyState extends State<_QuizzesPageBody> {
 
                 final allDocs = snapshot.data?.docs ??
                     <QueryDocumentSnapshot<Map<String, dynamic>>>[];
-                final quizzes = allDocs
-                    .map((d) => <String, dynamic>{
-                          ...d.data(),
-                          'id': d.data()['id'] ?? d.id,
-                        })
-                    .toList();
-
-                final filtered = _applyFilter(quizzes);
+                final filtered = _applyFilter(
+                  _visibleQuizzesForStudent(allDocs, widget.currentUser),
+                );
 
                 if (filtered.isEmpty) {
                   return const Center(

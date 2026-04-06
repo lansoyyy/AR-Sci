@@ -1,8 +1,10 @@
-import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+
 import '../../utils/colors.dart';
 import '../../utils/constants.dart';
+import '../../utils/notification_service.dart';
 
 class NotificationsScreen extends StatefulWidget {
   final String role;
@@ -14,7 +16,7 @@ class NotificationsScreen extends StatefulWidget {
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
-  List<NotificationItem> _notifications = [];
+  List<NotificationItem> _notifications = <NotificationItem>[];
   bool _isLoading = true;
 
   Color get _roleColor {
@@ -40,8 +42,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
+        if (!mounted) return;
         setState(() {
-          _notifications = [];
+          _notifications = <NotificationItem>[];
           _isLoading = false;
         });
         return;
@@ -52,33 +55,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           .where('userId', isEqualTo: user.uid)
           .get();
 
+      final notifications = snapshot.docs
+          .map((doc) => _mapNotification(doc))
+          .whereType<NotificationItem>()
+          .toList()
+        ..sort((a, b) => b.sortTime.compareTo(a.sortTime));
+
       if (!mounted) return;
-
-      final docs = snapshot.docs.toList();
-      docs.sort((a, b) {
-        final aTime = a.data()['createdAt'] as Timestamp?;
-        final bTime = b.data()['createdAt'] as Timestamp?;
-        if (aTime == null && bTime == null) return 0;
-        if (aTime == null) return 1;
-        if (bTime == null) return -1;
-        return bTime.compareTo(aTime);
-      });
-
-      final notifications = docs.take(50).map((doc) {
-        final data = doc.data();
-        return NotificationItem(
-          id: doc.id,
-          title: data['title']?.toString() ?? '',
-          message: data['message']?.toString() ?? '',
-          time: _formatTimestamp(data['createdAt']),
-          icon: _getIconForType(data['type']?.toString()),
-          color: _getColorForType(data['type']?.toString()),
-          isRead: data['isRead'] ?? false,
-        );
-      }).toList();
-
       setState(() {
-        _notifications = notifications;
+        _notifications = notifications.take(50).toList();
         _isLoading = false;
       });
     } catch (e) {
@@ -88,16 +73,89 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
+  NotificationItem? _mapNotification(
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
+    final data = doc.data();
+    final deliverAt = _parseDateTime(data['deliverAt']);
+    if (deliverAt != null && deliverAt.isAfter(DateTime.now())) {
+      return null;
+    }
+
+    final type = (data['type'] ?? '').toString();
+    final contentType = _resolveContentType(data);
+    final effectiveTime =
+        deliverAt ?? _parseDateTime(data['createdAt']) ?? DateTime.now();
+    final senderName = _resolveSenderName(data);
+    final priority = (data['priority'] ?? '').toString().trim().toLowerCase();
+
+    return NotificationItem(
+      id: doc.id,
+      title: data['title']?.toString() ?? '',
+      message: data['message']?.toString() ?? '',
+      time: _formatTimestamp(effectiveTime),
+      icon: _getIconForType(type, contentType),
+      color: _getColorForType(type, contentType),
+      isRead: data['isRead'] == true,
+      typeLabel: _getTypeLabel(type, contentType),
+      priorityLabel: priority.isEmpty || priority == 'normal'
+          ? null
+          : '${priority[0].toUpperCase()}${priority.substring(1)}',
+      senderName: senderName,
+      sortTime: effectiveTime,
+    );
+  }
+
+  DateTime? _parseDateTime(dynamic value) {
+    if (value is Timestamp) {
+      return value.toDate();
+    }
+    if (value is DateTime) {
+      return value;
+    }
+    if (value is String && value.trim().isNotEmpty) {
+      return DateTime.tryParse(value.trim());
+    }
+    return null;
+  }
+
+  String _resolveContentType(Map<String, dynamic> data) {
+    final metadata = data['metadata'];
+    if (data['contentType'] != null) {
+      return data['contentType'].toString().trim().toLowerCase();
+    }
+    if (metadata is Map && metadata['contentType'] != null) {
+      return metadata['contentType'].toString().trim().toLowerCase();
+    }
+    return (data['type'] ?? 'system').toString().trim().toLowerCase();
+  }
+
+  String? _resolveSenderName(Map<String, dynamic> data) {
+    final directSender =
+        (data['fromTeacher'] ?? data['createdByName'] ?? '').toString().trim();
+    if (directSender.isNotEmpty) {
+      return directSender;
+    }
+
+    final metadata = data['metadata'];
+    if (metadata is Map) {
+      final metadataSender = (metadata['fromTeacher'] ??
+              metadata['createdByName'] ??
+              metadata['studentName'] ??
+              '')
+          .toString()
+          .trim();
+      if (metadataSender.isNotEmpty) {
+        return metadataSender;
+      }
+    }
+    return null;
+  }
+
   Future<void> _markAsRead(String notificationId) async {
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
-
-      await FirebaseFirestore.instance
-          .collection('notifications')
-          .doc(notificationId)
-          .update({'isRead': true});
-
+      await NotificationService.markAsRead(notificationId);
+      if (!mounted) return;
       setState(() {
         final index = _notifications.indexWhere((n) => n.id == notificationId);
         if (index >= 0) {
@@ -114,24 +172,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
-      final unreadIds =
-          _notifications.where((n) => !n.isRead).map((n) => n.id).toList();
-      final batch = FirebaseFirestore.instance.batch();
-      for (var id in unreadIds) {
-        batch.update(
-          FirebaseFirestore.instance.collection('notifications').doc(id),
-          {'isRead': true},
-        );
-      }
-      await batch.commit();
-
-      setState(() {
-        for (var i = 0; i < _notifications.length; i++) {
-          _notifications[i] = _notifications[i].copyWith(isRead: true);
-        }
-      });
+      await NotificationService.markAllAsRead(user.uid);
 
       if (!mounted) return;
+      setState(() {
+        _notifications = _notifications
+            .map((notification) => notification.copyWith(isRead: true))
+            .toList();
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('All notifications marked as read')),
       );
@@ -166,17 +214,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
       if (confirmed != true) return;
 
-      final snapshot = await FirebaseFirestore.instance
-          .collection('notifications')
-          .where('userId', isEqualTo: user.uid)
-          .get();
-
-      for (var doc in snapshot.docs) {
-        await doc.reference.delete();
-      }
+      await NotificationService.clearAll(user.uid);
 
       if (!mounted) return;
-      setState(() => _notifications = []);
+      setState(() => _notifications = <NotificationItem>[]);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Notifications cleared')),
       );
@@ -185,18 +226,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
-  String _formatTimestamp(dynamic timestamp) {
-    if (timestamp == null) return 'Just now';
-
-    DateTime dateTime;
-    if (timestamp is Timestamp) {
-      dateTime = timestamp.toDate();
-    } else if (timestamp is DateTime) {
-      dateTime = timestamp;
-    } else {
-      return 'Just now';
-    }
-
+  String _formatTimestamp(DateTime dateTime) {
     final now = DateTime.now();
     final difference = now.difference(dateTime);
 
@@ -213,41 +243,87 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
-  IconData _getIconForType(String? type) {
-    switch (type?.toLowerCase()) {
+  IconData _getIconForType(String type, String contentType) {
+    switch (contentType) {
       case 'lesson':
         return Icons.book_outlined;
       case 'quiz':
-        return Icons.quiz_outlined;
-      case 'assignment':
-        return Icons.assignment_turned_in_outlined;
-      case 'grade':
-        return Icons.grade_outlined;
-      case 'system':
-        return Icons.system_update_outlined;
-      case 'ar':
-        return Icons.view_in_ar_outlined;
+        return type == 'grade'
+            ? Icons.fact_check_outlined
+            : Icons.quiz_outlined;
+      case 'announcement':
+        return Icons.campaign_outlined;
       default:
-        return Icons.notifications_outlined;
+        switch (type.toLowerCase()) {
+          case 'reminder':
+            return Icons.alarm_outlined;
+          case 'grade':
+            return Icons.grade_outlined;
+          case 'approval':
+            return Icons.verified_outlined;
+          case 'rejection':
+            return Icons.block_outlined;
+          case 'ar':
+            return Icons.view_in_ar_outlined;
+          case 'system':
+            return Icons.notifications_active_outlined;
+          default:
+            return Icons.notifications_outlined;
+        }
     }
   }
 
-  Color _getColorForType(String? type) {
-    switch (type?.toLowerCase()) {
+  Color _getColorForType(String type, String contentType) {
+    switch (contentType) {
       case 'lesson':
         return AppColors.studentPrimary;
       case 'quiz':
-        return AppColors.warning;
-      case 'assignment':
-        return AppColors.success;
-      case 'grade':
-        return AppColors.info;
-      case 'system':
+        return type == 'grade' ? AppColors.info : AppColors.warning;
+      case 'announcement':
         return AppColors.adminPrimary;
-      case 'ar':
-        return AppColors.studentPrimary;
       default:
-        return AppColors.textSecondary;
+        switch (type.toLowerCase()) {
+          case 'reminder':
+            return AppColors.warning;
+          case 'grade':
+            return AppColors.info;
+          case 'approval':
+            return AppColors.success;
+          case 'rejection':
+            return AppColors.error;
+          case 'ar':
+            return AppColors.studentPrimary;
+          case 'system':
+            return AppColors.adminPrimary;
+          default:
+            return AppColors.textSecondary;
+        }
+    }
+  }
+
+  String _getTypeLabel(String type, String contentType) {
+    switch (contentType) {
+      case 'lesson':
+        return type == 'reminder' ? 'Lesson Reminder' : 'Lesson';
+      case 'quiz':
+        return type == 'grade' ? 'Score Update' : 'Quiz';
+      case 'announcement':
+        return 'Announcement';
+      default:
+        switch (type.toLowerCase()) {
+          case 'approval':
+            return 'Approval';
+          case 'rejection':
+            return 'Rejection';
+          case 'reminder':
+            return 'Reminder';
+          case 'system':
+            return 'System';
+          case 'grade':
+            return 'Score Update';
+          default:
+            return 'Notification';
+        }
     }
   }
 
@@ -298,20 +374,24 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     ],
                   ),
                 )
-              : ListView.builder(
-                  padding: const EdgeInsets.all(AppConstants.paddingM),
-                  itemCount: _notifications.length,
-                  itemBuilder: (context, index) {
-                    final notification = _notifications[index];
-                    return _NotificationCard(
-                      notification: notification,
-                      onTap: () {
-                        if (!notification.isRead) {
-                          _markAsRead(notification.id);
-                        }
-                      },
-                    );
-                  },
+              : RefreshIndicator(
+                  color: _roleColor,
+                  onRefresh: _loadNotifications,
+                  child: ListView.builder(
+                    padding: const EdgeInsets.all(AppConstants.paddingM),
+                    itemCount: _notifications.length,
+                    itemBuilder: (context, index) {
+                      final notification = _notifications[index];
+                      return _NotificationCard(
+                        notification: notification,
+                        onTap: () {
+                          if (!notification.isRead) {
+                            _markAsRead(notification.id);
+                          }
+                        },
+                      );
+                    },
+                  ),
                 ),
     );
   }
@@ -325,6 +405,10 @@ class NotificationItem {
   final IconData icon;
   final Color color;
   final bool isRead;
+  final String typeLabel;
+  final String? priorityLabel;
+  final String? senderName;
+  final DateTime sortTime;
 
   NotificationItem({
     required this.id,
@@ -333,7 +417,11 @@ class NotificationItem {
     required this.time,
     required this.icon,
     required this.color,
-    this.isRead = false,
+    required this.isRead,
+    required this.typeLabel,
+    required this.sortTime,
+    this.priorityLabel,
+    this.senderName,
   });
 
   NotificationItem copyWith({
@@ -344,6 +432,10 @@ class NotificationItem {
     IconData? icon,
     Color? color,
     bool? isRead,
+    String? typeLabel,
+    String? priorityLabel,
+    String? senderName,
+    DateTime? sortTime,
   }) {
     return NotificationItem(
       id: id ?? this.id,
@@ -353,6 +445,10 @@ class NotificationItem {
       icon: icon ?? this.icon,
       color: color ?? this.color,
       isRead: isRead ?? this.isRead,
+      typeLabel: typeLabel ?? this.typeLabel,
+      priorityLabel: priorityLabel ?? this.priorityLabel,
+      senderName: senderName ?? this.senderName,
+      sortTime: sortTime ?? this.sortTime,
     );
   }
 }
@@ -385,12 +481,11 @@ class _NotificationCard extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Icon
               Container(
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: notification.color.withOpacity(0.1),
+                  color: notification.color.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(AppConstants.radiusM),
                 ),
                 child: Icon(
@@ -400,13 +495,12 @@ class _NotificationCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: AppConstants.paddingM),
-
-              // Content
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
                           child: Text(
@@ -424,10 +518,27 @@ class _NotificationCard extends StatelessWidget {
                           Container(
                             width: 8,
                             height: 8,
+                            margin: const EdgeInsets.only(top: 6),
                             decoration: const BoxDecoration(
                               color: AppColors.studentPrimary,
                               shape: BoxShape.circle,
                             ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: AppConstants.paddingS),
+                    Wrap(
+                      spacing: AppConstants.paddingS,
+                      runSpacing: AppConstants.paddingS,
+                      children: [
+                        _NotificationTag(
+                          label: notification.typeLabel,
+                          color: notification.color,
+                        ),
+                        if (notification.priorityLabel != null)
+                          _NotificationTag(
+                            label: notification.priorityLabel!,
+                            color: AppColors.warning,
                           ),
                       ],
                     ),
@@ -440,6 +551,17 @@ class _NotificationCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: AppConstants.paddingXS),
+                    if (notification.senderName != null) ...[
+                      Text(
+                        notification.senderName!,
+                        style: const TextStyle(
+                          fontSize: AppConstants.fontS,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: AppConstants.paddingXS),
+                    ],
                     Text(
                       notification.time,
                       style: const TextStyle(
@@ -452,6 +574,38 @@ class _NotificationCard extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NotificationTag extends StatelessWidget {
+  final String label;
+  final Color color;
+
+  const _NotificationTag({
+    required this.label,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppConstants.paddingS,
+        vertical: AppConstants.paddingXS,
+      ),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(AppConstants.radiusRound),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: AppConstants.fontXS,
+          fontWeight: FontWeight.w600,
+          color: color,
         ),
       ),
     );
