@@ -9,7 +9,7 @@ class AiAssessmentService {
   static const String _endpoint =
       'https://api.together.xyz/v1/chat/completions';
 
-  static const String _model = 'meta-llama/Llama-3.3-70B-Instruct-Turbo';
+  static const String _model = 'google/gemma-3n-E4B-it';
 
   // Rate limiting: maximum AI requests per user per day
   static const int _maxDailyRequests = 20;
@@ -45,7 +45,8 @@ class AiAssessmentService {
       final snapshot = await FirebaseFirestore.instance
           .collection('ai_usage_logs')
           .where('userId', isEqualTo: userId)
-          .where('timestamp', isGreaterThanOrEqualTo: startOfDay.toIso8601String())
+          .where('timestamp',
+              isGreaterThanOrEqualTo: startOfDay.toIso8601String())
           .where('timestamp', isLessThan: endOfDay.toIso8601String())
           .count()
           .get();
@@ -124,8 +125,8 @@ class AiAssessmentService {
     }
 
     final apiKey = const String.fromEnvironment(
-      'tgp_v1_onFMvvKE406HiInIX9ZxmQtZB-xk1uTumlxUHlFUxJc',
-      defaultValue: 'tgp_v1_onFMvvKE406HiInIX9ZxmQtZB-xk1uTumlxUHlFUxJc',
+      'tgp_v1_hzF47eE4FxOHINvx6gTCAhnIwoqFU3g9cGF30EILl5g',
+      defaultValue: 'tgp_v1_hzF47eE4FxOHINvx6gTCAhnIwoqFU3g9cGF30EILl5g',
     );
 
     if (apiKey.trim().isEmpty) {
