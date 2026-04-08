@@ -14,6 +14,50 @@ class AdminAnalyticsScreen extends StatefulWidget {
 
 class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
   String _selectedTimeRange = '7days';
+  final Map<String, String> _quizTitleCache = {};
+
+  Future<void> _fetchQuizTitlesBatch(List<String> quizIds) async {
+    final toFetch =
+        quizIds.where((id) => id.isNotEmpty && !_quizTitleCache.containsKey(id)).toList();
+    if (toFetch.isEmpty) return;
+    final chunks = <List<String>>[];
+    for (var i = 0; i < toFetch.length; i += 10) {
+      chunks.add(toFetch.sublist(
+          i, (i + 10) < toFetch.length ? (i + 10) : toFetch.length));
+    }
+    final newTitles = <String, String>{};
+    for (final chunk in chunks) {
+      // Try by document ID first
+      final snap = await FirebaseFirestore.instance
+          .collection('quizzes')
+          .where(FieldPath.documentId, whereIn: chunk)
+          .get();
+      for (final doc in snap.docs) {
+        final title = (doc.data()['title'] ?? '').toString();
+        newTitles[doc.id] = title;
+        final customId = (doc.data()['id'] ?? '').toString();
+        if (customId.isNotEmpty) newTitles[customId] = title;
+      }
+      // Also try by custom 'id' field for any still missing
+      final stillMissing =
+          chunk.where((id) => !newTitles.containsKey(id)).toList();
+      if (stillMissing.isNotEmpty) {
+        final snap2 = await FirebaseFirestore.instance
+            .collection('quizzes')
+            .where('id', whereIn: stillMissing)
+            .get();
+        for (final doc in snap2.docs) {
+          final title = (doc.data()['title'] ?? '').toString();
+          final cid = (doc.data()['id'] ?? doc.id).toString();
+          newTitles[cid] = title;
+          newTitles[doc.id] = title;
+        }
+      }
+    }
+    if (newTitles.isNotEmpty && mounted) {
+      setState(() => _quizTitleCache.addAll(newTitles));
+    }
+  }
 
   DateTime get _startDate {
     final now = DateTime.now();
@@ -276,15 +320,15 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                   ),
                 ),
                 const SizedBox(height: AppConstants.paddingM),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: AppConstants.paddingL,
+                  runSpacing: AppConstants.paddingS,
                   children: [
                     _buildLegend(
                         'Students', AppColors.studentPrimary, students),
-                    const SizedBox(width: AppConstants.paddingL),
                     _buildLegend(
                         'Teachers', AppColors.teacherPrimary, teachers),
-                    const SizedBox(width: AppConstants.paddingL),
                     _buildLegend('Admins', AppColors.adminPrimary, admins),
                   ],
                 ),
@@ -375,9 +419,11 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                           alignment: BarChartAlignment.spaceAround,
                           maxY: topLessons.isEmpty
                               ? 10
-                              : (lessonViews[topLessons.first['id']] ?? 0)
-                                      .toDouble() *
-                                  1.2,
+                              : ((lessonViews[topLessons.first['id']] ?? 0)
+                                          .toDouble() *
+                                      1.2)
+                                  .clamp(1.0, double.infinity),
+                          minY: 0,
                           barTouchData: BarTouchData(enabled: true),
                           titlesData: FlTitlesData(
                             show: true,
@@ -486,22 +532,46 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
           );
         }
 
+        // Fetch quiz titles for unknown entries asynchronously
+        final unknownIds = <String>{};
+        for (final r in results) {
+          final data = r.data();
+          final id = (data['quizId'] ?? '').toString();
+          if (id.isEmpty) continue;
+          final storedTitle = (data['quizTitle'] ?? '').toString().trim();
+          if (storedTitle.isEmpty && !_quizTitleCache.containsKey(id)) {
+            unknownIds.add(id);
+          }
+        }
+        if (unknownIds.isNotEmpty) {
+          _fetchQuizTitlesBatch(unknownIds.toList());
+        }
+
         // Calculate average scores by quiz
         final quizStats = <String, Map<String, dynamic>>{};
         for (final result in results) {
           final data = result.data();
-          final quizId = data['quizId'] as String? ?? 'unknown';
-          final quizTitle = data['quizTitle'] as String? ?? 'Unknown Quiz';
+          final quizId = (data['quizId'] ?? '').toString();
+          if (quizId.isEmpty) continue;
+          final storedTitle = (data['quizTitle'] ?? '').toString().trim();
+          final quizTitle = storedTitle.isNotEmpty
+              ? storedTitle
+              : (_quizTitleCache[quizId] ?? '');
           final score = (data['score'] as num?)?.toDouble() ?? 0;
-          final total = (data['totalQuestions'] as num?)?.toDouble() ?? 1;
+          final total = (data['totalPoints'] as num?)?.toDouble() ?? 0;
+          if (total <= 0) continue;
           final percentage = (score / total) * 100;
 
           if (!quizStats.containsKey(quizId)) {
             quizStats[quizId] = {
-              'title': quizTitle,
+              'title': quizTitle.isNotEmpty ? quizTitle : quizId,
               'scores': <double>[],
               'attempts': 0,
             };
+          } else if (quizTitle.isNotEmpty &&
+              quizStats[quizId]!['title'] == quizId) {
+            // Update title if we now have a real name
+            quizStats[quizId]!['title'] = quizTitle;
           }
           quizStats[quizId]!['scores'].add(percentage);
           quizStats[quizId]!['attempts'] =
@@ -557,6 +627,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                       borderData: FlBorderData(show: true),
                       minY: 0,
                       maxY: 100,
+                      clipData: FlClipData.all(),
                       lineBarsData: [
                         LineChartBarData(
                           spots: topQuizzes.asMap().entries.map((entry) {

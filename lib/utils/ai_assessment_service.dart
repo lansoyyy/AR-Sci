@@ -66,11 +66,13 @@ class AiAssessmentService {
     required String subject,
     required int questionCount,
     required bool success,
+    String quizTitle = '',
     String? errorMessage,
   }) async {
     try {
       await FirebaseFirestore.instance.collection('ai_usage_logs').add({
         'userId': userId,
+        'quizTitle': quizTitle,
         'lessonTitle': lessonTitle,
         'gradeLevel': gradeLevel,
         'subject': subject,
@@ -104,9 +106,14 @@ class AiAssessmentService {
     required String gradeLevel,
     required String subject,
     int questionCount = 10,
+    String quizTitle = '',
+    String? callerRole,
   }) async {
-    // Check authorization - only teachers and admins can use AI generation
-    final isAuthorized = await _isAuthorizedUser();
+    // Check authorization - use caller-provided role first (already verified at
+    // login), then fall back to Firestore lookup if role not supplied.
+    final bool isAuthorized = (callerRole == 'teacher' || callerRole == 'admin')
+        ? true
+        : await _isAuthorizedUser();
     if (!isAuthorized) {
       throw Exception(
           'Unauthorized: Only teachers and admins can generate AI questions.');
@@ -203,6 +210,7 @@ class AiAssessmentService {
       // Log successful usage
       await _logUsage(
         userId: user.uid,
+        quizTitle: quizTitle,
         lessonTitle: lessonTitle,
         gradeLevel: gradeLevel,
         subject: subject,
@@ -217,6 +225,7 @@ class AiAssessmentService {
       // Log failed usage
       await _logUsage(
         userId: user.uid,
+        quizTitle: quizTitle,
         lessonTitle: lessonTitle,
         gradeLevel: gradeLevel,
         subject: subject,

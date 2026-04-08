@@ -221,6 +221,16 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
         }
       }
 
+      // Record lesson view (creates doc if not exists, updates lastAccessed)
+      await FirebaseFirestore.instance
+          .collection('lesson_progress')
+          .doc('${user.uid}_$lessonId')
+          .set({
+        'userId': user.uid,
+        'lessonId': lessonId,
+        'lastAccessed': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
       // Load bookmark status
       final bookmarkDoc = await FirebaseFirestore.instance
           .collection('bookmarks')
@@ -390,6 +400,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
         'userId': user.uid,
         'lessonId': lessonId,
         'progress': progress,
+        'lastAccessed': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
         'completedAt': progress >= 1.0 ? FieldValue.serverTimestamp() : null,
       }, SetOptions(merge: true));

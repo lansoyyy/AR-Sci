@@ -82,6 +82,31 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
         if (_viewerRole == 'student') {
           final quizId = (_quiz['id'] ?? '').toString();
           if (quizId.isNotEmpty) {
+            // Check if student already submitted this quiz
+            final existingResult = await FirebaseFirestore.instance
+                .collection('quiz_results')
+                .where('studentId', isEqualTo: user.uid)
+                .where('quizId', isEqualTo: quizId)
+                .limit(1)
+                .get();
+
+            if (existingResult.docs.isNotEmpty) {
+              final resultData = existingResult.docs.first.data();
+              final prevScore =
+                  (resultData['score'] as num?)?.toInt() ?? 0;
+              final prevTotal =
+                  (resultData['totalPoints'] as num?)?.toInt() ?? 0;
+              final prevAnswers =
+                  resultData['answers'] is Map
+                      ? Map<String, dynamic>.from(
+                          resultData['answers'] as Map)
+                      : <String, dynamic>{};
+              _hasSubmitted = true;
+              _score = prevScore;
+              _totalPoints = prevTotal;
+              _userAnswers.addAll(prevAnswers);
+            }
+
             final bookmarkDoc = await FirebaseFirestore.instance
                 .collection('bookmarks')
                 .where('userId', isEqualTo: user.uid)
@@ -550,15 +575,42 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
                 style: TextStyle(color: AppColors.textSecondary),
               ),
             )
+          else if (_hasSubmitted)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(AppConstants.paddingM),
+              decoration: BoxDecoration(
+                color: AppColors.success.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(AppConstants.radiusM),
+                border:
+                    Border.all(color: AppColors.success.withOpacity(0.35)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.check_circle,
+                      color: AppColors.success, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'You have already completed this quiz.',
+                      style: TextStyle(color: AppColors.success),
+                    ),
+                  ),
+                ],
+              ),
+            )
           else
             const SizedBox.shrink(),
           const SizedBox(height: AppConstants.paddingXL),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: rawQuestions.isEmpty || _viewerRole != 'student'
-                  ? null
-                  : _startQuiz,
+              onPressed:
+                  rawQuestions.isEmpty ||
+                          _viewerRole != 'student' ||
+                          _hasSubmitted
+                      ? null
+                      : _startQuiz,
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.studentPrimary,
                 foregroundColor: AppColors.textWhite,
@@ -865,6 +917,29 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
       padding: const EdgeInsets.all(AppConstants.paddingL),
       child: Column(
         children: [
+          Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(bottom: AppConstants.paddingL),
+            padding: const EdgeInsets.all(AppConstants.paddingM),
+            decoration: BoxDecoration(
+              color: AppColors.info.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(AppConstants.radiusM),
+              border: Border.all(color: AppColors.info.withOpacity(0.3)),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.info_outline, color: AppColors.info, size: 18),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'You have already submitted this quiz. Only one attempt is allowed.',
+                    style: TextStyle(
+                        color: AppColors.info, fontSize: AppConstants.fontS),
+                  ),
+                ),
+              ],
+            ),
+          ),
           Container(
             width: 150,
             height: 150,

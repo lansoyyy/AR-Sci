@@ -1127,8 +1127,58 @@ class _QuizzesPageBodyState extends State<_QuizzesPageBody> {
   }
 }
 
-class _ProgressPage extends StatelessWidget {
+class _ProgressPage extends StatefulWidget {
   const _ProgressPage();
+
+  @override
+  State<_ProgressPage> createState() => _ProgressPageState();
+}
+
+class _ProgressPageState extends State<_ProgressPage> {
+  final Map<String, String> _quizTitleCache = {};
+
+  Future<void> _fetchMissingQuizTitles(List<String> quizIds) async {
+    final toFetch = quizIds
+        .toSet()
+        .where((id) => id.isNotEmpty && !_quizTitleCache.containsKey(id))
+        .toList();
+    if (toFetch.isEmpty) return;
+    final chunks = <List<String>>[];
+    for (var i = 0; i < toFetch.length; i += 10) {
+      chunks.add(toFetch.sublist(
+          i, (i + 10) < toFetch.length ? (i + 10) : toFetch.length));
+    }
+    final newTitles = <String, String>{};
+    for (final chunk in chunks) {
+      final snap = await FirebaseFirestore.instance
+          .collection('quizzes')
+          .where(FieldPath.documentId, whereIn: chunk)
+          .get();
+      for (final doc in snap.docs) {
+        final title = (doc.data()['title'] ?? '').toString();
+        newTitles[doc.id] = title;
+        final cid = (doc.data()['id'] ?? '').toString();
+        if (cid.isNotEmpty) newTitles[cid] = title;
+      }
+      final stillMissing =
+          chunk.where((id) => !newTitles.containsKey(id)).toList();
+      if (stillMissing.isNotEmpty) {
+        final snap2 = await FirebaseFirestore.instance
+            .collection('quizzes')
+            .where('id', whereIn: stillMissing)
+            .get();
+        for (final doc in snap2.docs) {
+          final title = (doc.data()['title'] ?? '').toString();
+          final cid = (doc.data()['id'] ?? doc.id).toString();
+          newTitles[cid] = title;
+          newTitles[doc.id] = title;
+        }
+      }
+    }
+    if (newTitles.isNotEmpty && mounted) {
+      setState(() => _quizTitleCache.addAll(newTitles));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1167,10 +1217,25 @@ class _ProgressPage extends StatelessWidget {
 
                 final docs = snapshot.data?.docs ?? [];
 
+                // Trigger fetch for quizIds with missing titles
+                final missingTitleIds = docs
+                    .where((d) =>
+                        (d.data()['quizTitle'] ?? '').toString().trim().isEmpty)
+                    .map((d) => (d.data()['quizId'] ?? '').toString())
+                    .where((id) => id.isNotEmpty)
+                    .toList();
+                if (missingTitleIds.isNotEmpty) {
+                  _fetchMissingQuizTitles(missingTitleIds);
+                }
+
                 final entries = docs.map((d) {
                   final data = d.data();
                   final quizId = (data['quizId'] ?? d.id).toString();
-                  final quizTitle = (data['quizTitle'] ?? '').toString();
+                  final storedTitle =
+                      (data['quizTitle'] ?? '').toString().trim();
+                  final quizTitle = storedTitle.isNotEmpty
+                      ? storedTitle
+                      : (_quizTitleCache[quizId] ?? '');
                   final score = (data['score'] as num?)?.toInt() ?? 0;
                   final totalPoints =
                       (data['totalPoints'] as num?)?.toInt() ?? 0;
@@ -1282,9 +1347,11 @@ class _ProgressPage extends StatelessWidget {
                         )
                       else
                         ...entries.take(10).map((e) {
-                          final title = (e['quizTitle'] as String).isEmpty
-                              ? (e['quizId'] as String)
-                              : (e['quizTitle'] as String);
+                          final storedTitle = (e['quizTitle'] as String).trim();
+                          final quizId = (e['quizId'] as String);
+                          final title = storedTitle.isNotEmpty
+                              ? storedTitle
+                              : (_quizTitleCache[quizId] ?? quizId);
                           return _ScoreCard(
                             title: title,
                             score: e['score'] as int,

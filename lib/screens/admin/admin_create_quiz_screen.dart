@@ -416,6 +416,8 @@ class _AdminCreateQuizScreenState extends State<AdminCreateQuizScreen> {
         gradeLevel: _selectedGradeLevel,
         subject: _selectedSubject,
         questionCount: 10,
+        quizTitle: _titleController.text.trim(),
+        callerRole: widget.role,
       );
 
       final normalized = _normalizeQuestions(generated);

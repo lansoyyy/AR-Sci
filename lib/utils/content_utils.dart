@@ -54,30 +54,40 @@ bool matchesStudentAssignment(
   Map<String, dynamic> content,
   UserModel? student,
 ) {
-  if (student == null) {
-    return false;
-  }
-
+  // If the quiz/lesson has no section or grade restrictions, it's accessible
   final assignedSections = stringListFromDynamic(content['assignedSections']);
   final assignedGradeLevels =
       stringListFromDynamic(content['assignedGradeLevels']);
   final legacyGradeLevel =
       (content['gradeLevel'] ?? content['grade'] ?? '').toString().trim();
 
+  // If no student profile yet (still loading), show unrestricted content only
+  if (student == null) {
+    final hasRestrictions = assignedSections.isNotEmpty ||
+        assignedGradeLevels.isNotEmpty ||
+        legacyGradeLevel.isNotEmpty;
+    return !hasRestrictions;
+  }
+
   final studentSection = student.section?.trim() ?? '';
   final studentGradeLevel = student.gradeLevel?.trim() ?? '';
 
+  // Only apply grade filter when the student has a known grade level
   if (assignedGradeLevels.isNotEmpty &&
+      studentGradeLevel.isNotEmpty &&
       !assignedGradeLevels.contains(studentGradeLevel)) {
     return false;
   }
 
+  // Only apply section filter when the student has a known section
   if (assignedSections.isNotEmpty &&
+      studentSection.isNotEmpty &&
       !assignedSections.contains(studentSection)) {
     return false;
   }
 
   if (assignedGradeLevels.isEmpty &&
+      studentGradeLevel.isNotEmpty &&
       legacyGradeLevel.isNotEmpty &&
       legacyGradeLevel != studentGradeLevel) {
     return false;

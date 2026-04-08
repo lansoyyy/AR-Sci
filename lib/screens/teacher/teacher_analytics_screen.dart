@@ -775,6 +775,7 @@ class _TeacherAnalyticsScreenState extends State<TeacherAnalyticsScreen>
                   borderData: FlBorderData(show: true),
                   minY: 0,
                   maxY: 100,
+                  clipData: FlClipData.all(),
                   lineBarsData: [
                     LineChartBarData(
                       spots: sorted.asMap().entries.map((e) {

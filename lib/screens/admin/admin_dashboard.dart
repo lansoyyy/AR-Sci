@@ -1936,7 +1936,7 @@ class _UserDistributionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final percentage = (count / total);
+    final percentage = total > 0 ? count / total : 0.0;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
