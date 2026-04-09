@@ -65,6 +65,9 @@ class _AdminCreateLessonScreenState extends State<AdminCreateLessonScreen> {
   String? _existingTeacherId;
   List<String> _existingVideoUrls = <String>[];
   List<String> _existingArItems = <String>[];
+  String? _existingArModelUrl;
+  final _arModelUrlController = TextEditingController();
+  final _newArItemController = TextEditingController();
 
   bool get _isEditMode {
     return (widget.lessonId ?? '').trim().isNotEmpty ||
@@ -157,6 +160,10 @@ class _AdminCreateLessonScreenState extends State<AdminCreateLessonScreen> {
         (lesson['teacherId'] ?? _existingCreatedBy ?? '').toString().trim();
     _existingVideoUrls = stringListFromDynamic(lesson['videoUrls']);
     _existingArItems = stringListFromDynamic(lesson['arItems']);
+    _existingArModelUrl = (lesson['arModelUrl'] ?? '').toString().trim().isEmpty
+        ? null
+        : (lesson['arModelUrl'] as String?);
+    _arModelUrlController.text = _existingArModelUrl ?? '';
   }
 
   Future<void> _saveLesson() async {
@@ -216,6 +223,9 @@ class _AdminCreateLessonScreenState extends State<AdminCreateLessonScreen> {
         'pdfUrl': materialType == 'pdf' ? materialUrl : null,
         'videoUrls': _existingVideoUrls,
         'arItems': _existingArItems,
+        'arModelUrl': _arModelUrlController.text.trim().isEmpty
+            ? null
+            : _arModelUrlController.text.trim(),
         'teacherId': _existingTeacherId?.isNotEmpty == true
             ? _existingTeacherId
             : currentUser.uid,
@@ -451,6 +461,8 @@ class _AdminCreateLessonScreenState extends State<AdminCreateLessonScreen> {
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
+    _arModelUrlController.dispose();
+    _newArItemController.dispose();
     super.dispose();
   }
 
@@ -766,6 +778,109 @@ class _AdminCreateLessonScreenState extends State<AdminCreateLessonScreen> {
                                       : 'Replace File',
                                 ),
                               ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: AppConstants.paddingL),
+                    // ── AR Content ──────────────────────────────────────────
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(AppConstants.paddingM),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'AR Content',
+                              style: TextStyle(
+                                fontSize: AppConstants.fontL,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: AppConstants.paddingS),
+                            const Text(
+                              'Add a 3D model URL and/or AR item labels to make this lesson AR-ready.',
+                              style: TextStyle(
+                                fontSize: AppConstants.fontS,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                            const SizedBox(height: AppConstants.paddingM),
+                            TextFormField(
+                              controller: _arModelUrlController,
+                              decoration: const InputDecoration(
+                                labelText: '3D Model URL (optional)',
+                                prefixIcon: Icon(Icons.view_in_ar_outlined),
+                                hintText: 'https://... or leave blank',
+                              ),
+                            ),
+                            const SizedBox(height: AppConstants.paddingM),
+                            const Text(
+                              'AR Item Labels',
+                              style: TextStyle(fontWeight: FontWeight.w500),
+                            ),
+                            const SizedBox(height: AppConstants.paddingS),
+                            if (_existingArItems.isNotEmpty)
+                              Wrap(
+                                spacing: AppConstants.paddingS,
+                                runSpacing: AppConstants.paddingS,
+                                children: _existingArItems
+                                    .asMap()
+                                    .entries
+                                    .map(
+                                      (entry) => Chip(
+                                        label: Text(entry.value),
+                                        onDeleted: () {
+                                          setState(() => _existingArItems
+                                              .removeAt(entry.key));
+                                        },
+                                      ),
+                                    )
+                                    .toList(),
+                              ),
+                            const SizedBox(height: AppConstants.paddingS),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: TextFormField(
+                                    controller: _newArItemController,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Add AR item label',
+                                      prefixIcon:
+                                          Icon(Icons.label_outline),
+                                    ),
+                                    onFieldSubmitted: (value) {
+                                      final trimmed = value.trim();
+                                      if (trimmed.isNotEmpty &&
+                                          !_existingArItems
+                                              .contains(trimmed)) {
+                                        setState(() {
+                                          _existingArItems.add(trimmed);
+                                          _newArItemController.clear();
+                                        });
+                                      }
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: AppConstants.paddingS),
+                                IconButton(
+                                  icon: const Icon(Icons.add_circle_outline),
+                                  tooltip: 'Add item',
+                                  color: _accentColor,
+                                  onPressed: () {
+                                    final trimmed =
+                                        _newArItemController.text.trim();
+                                    if (trimmed.isNotEmpty &&
+                                        !_existingArItems.contains(trimmed)) {
+                                      setState(() {
+                                        _existingArItems.add(trimmed);
+                                        _newArItemController.clear();
+                                      });
+                                    }
+                                  },
+                                ),
+                              ],
                             ),
                           ],
                         ),

@@ -22,10 +22,42 @@ class _TeacherAnalyticsScreenState extends State<TeacherAnalyticsScreen>
 
   List<Map<String, dynamic>> _myQuizzes = [];
   List<Map<String, dynamic>> _myLessons = [];
-  List<Map<String, dynamic>> _quizResults = [];
+  List<Map<String, dynamic>> _allQuizResults = [];
   List<Map<String, dynamic>> _lessonProgress = [];
 
   Map<String, Map<String, dynamic>> _quizById = {};
+
+  String _selectedTimeRange = '7days';
+
+  DateTime get _startDate {
+    final now = DateTime.now();
+    switch (_selectedTimeRange) {
+      case '7days':
+        return now.subtract(const Duration(days: 7));
+      case '30days':
+        return now.subtract(const Duration(days: 30));
+      case '90days':
+        return now.subtract(const Duration(days: 90));
+      default:
+        return DateTime(2020);
+    }
+  }
+
+  List<Map<String, dynamic>> get _quizResults {
+    final cutoff = _startDate;
+    if (_selectedTimeRange == 'all') return _allQuizResults;
+    return _allQuizResults.where((r) {
+      final completedAt = r['completedAt'];
+      DateTime? date;
+      if (completedAt is Timestamp) {
+        date = completedAt.toDate();
+      } else if (completedAt is String) {
+        date = DateTime.tryParse(completedAt);
+      }
+      if (date == null) return true;
+      return date.isAfter(cutoff);
+    }).toList();
+  }
 
   String? get _teacherId => FirebaseAuth.instance.currentUser?.uid;
 
@@ -93,12 +125,12 @@ class _TeacherAnalyticsScreenState extends State<TeacherAnalyticsScreen>
                 .get(),
           ),
         );
-        _quizResults = resultSnapshots
+        _allQuizResults = resultSnapshots
             .expand((s) => s.docs)
             .map((d) => <String, dynamic>{...d.data(), 'docId': d.id})
             .toList();
       } else {
-        _quizResults = [];
+        _allQuizResults = [];
       }
 
       final lessonIds = _myLessons.map((l) => l['id'].toString()).toSet();
@@ -295,6 +327,22 @@ class _TeacherAnalyticsScreenState extends State<TeacherAnalyticsScreen>
             icon: const Icon(Icons.refresh),
             onPressed: _loadData,
             tooltip: 'Refresh',
+          ),
+          PopupMenuButton<String>(
+            initialValue: _selectedTimeRange,
+            tooltip: 'Time range',
+            icon: const Icon(Icons.date_range_outlined),
+            onSelected: (value) =>
+                setState(() => _selectedTimeRange = value),
+            itemBuilder: (context) => const [
+              PopupMenuItem(
+                  value: '7days', child: Text('Last 7 Days')),
+              PopupMenuItem(
+                  value: '30days', child: Text('Last 30 Days')),
+              PopupMenuItem(
+                  value: '90days', child: Text('Last 90 Days')),
+              PopupMenuItem(value: 'all', child: Text('All Time')),
+            ],
           ),
         ],
         bottom: TabBar(

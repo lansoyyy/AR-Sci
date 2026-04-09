@@ -80,7 +80,8 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
         _viewerRole = (userDoc.data()?['role'] ?? '').toString();
 
         if (_viewerRole == 'student') {
-          final quizId = (_quiz['id'] ?? '').toString();
+          final quizId =
+              (_quiz['id'] ?? _quiz['quizId'] ?? '').toString().trim();
           if (quizId.isNotEmpty) {
             // Check if student already submitted this quiz
             final existingResult = await FirebaseFirestore.instance
@@ -253,8 +254,8 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
       }
 
       final result = QuizResult(
-        id: '${user.uid}_${_quiz['id']}_${DateTime.now().millisecondsSinceEpoch}',
-        quizId: _quiz['id']?.toString() ?? '',
+        id: '${user.uid}_${(_quiz['id'] ?? _quiz['quizId'] ?? '')}_${DateTime.now().millisecondsSinceEpoch}',
+        quizId: (_quiz['id'] ?? _quiz['quizId'] ?? '').toString(),
         studentId: user.uid,
         score: score,
         totalPoints: totalPoints,

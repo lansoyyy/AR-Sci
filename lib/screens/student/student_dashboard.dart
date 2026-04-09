@@ -1349,9 +1349,12 @@ class _ProgressPageState extends State<_ProgressPage> {
                         ...entries.take(10).map((e) {
                           final storedTitle = (e['quizTitle'] as String).trim();
                           final quizId = (e['quizId'] as String);
+                          final cached = (_quizTitleCache[quizId] ?? '').trim();
                           final title = storedTitle.isNotEmpty
                               ? storedTitle
-                              : (_quizTitleCache[quizId] ?? quizId);
+                              : cached.isNotEmpty
+                                  ? cached
+                                  : 'Quiz';
                           return _ScoreCard(
                             title: title,
                             score: e['score'] as int,

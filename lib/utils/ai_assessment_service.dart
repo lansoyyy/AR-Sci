@@ -111,9 +111,11 @@ class AiAssessmentService {
   }) async {
     // Check authorization - use caller-provided role first (already verified at
     // login), then fall back to Firestore lookup if role not supplied.
-    final bool isAuthorized = (callerRole == 'teacher' || callerRole == 'admin')
-        ? true
-        : await _isAuthorizedUser();
+    final normalizedRole = callerRole?.toLowerCase().trim();
+    final bool isAuthorized =
+        (normalizedRole == 'teacher' || normalizedRole == 'admin')
+            ? true
+            : await _isAuthorizedUser();
     if (!isAuthorized) {
       throw Exception(
           'Unauthorized: Only teachers and admins can generate AI questions.');

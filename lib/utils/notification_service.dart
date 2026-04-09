@@ -134,7 +134,7 @@ class NotificationService {
       return <String, dynamic>{
         'userId': student.id,
         'role': 'student',
-        'title': 'Pending Quiz',
+        'title': 'New Quiz: $quizTitle',
         'message': teacherName == null || teacherName.trim().isEmpty
             ? 'A new quiz "$quizTitle" is ready for you.'
             : '$teacherName published a quiz: "$quizTitle".',

@@ -155,10 +155,19 @@ class _DashboardHomeState extends State<_DashboardHome> {
       }
 
       if (!mounted) return;
+      final lesson = arReadyLessons.first;
       Navigator.pushNamed(
         context,
-        AppRoutes.lessonDetail,
-        arguments: arReadyLessons.first,
+        AppRoutes.arView,
+        arguments: <String, dynamic>{
+          'id': lesson['id'] ?? '',
+          'lessonId': lesson['id'] ?? '',
+          'title': lesson['title'] ?? 'AR View',
+          'lessonTitle': lesson['title'] ?? 'AR View',
+          'arItems': lesson['arItems'] ?? <String>[],
+          'arModelUrl': lesson['arModelUrl'],
+          'color': lesson['color'],
+        },
       );
     } catch (e) {
       if (!mounted) return;
@@ -576,7 +585,11 @@ class _DashboardHomeState extends State<_DashboardHome> {
               icon: Icons.quiz_outlined,
               iconColor: AppColors.warning,
               onTap: () {
-                Navigator.pushNamed(context, '/admin-create-quiz');
+                Navigator.pushNamed(
+                  context,
+                  '/admin-create-quiz',
+                  arguments: const <String, dynamic>{'role': 'admin'},
+                );
               },
             ),
 
