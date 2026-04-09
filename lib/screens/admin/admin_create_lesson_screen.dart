@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../models/formatted_content_block.dart';
+import '../../utils/admin_session.dart';
 import '../../utils/colors.dart';
 import '../../utils/constants.dart';
 import '../../utils/content_utils.dart';
@@ -173,8 +174,13 @@ class _AdminCreateLessonScreenState extends State<AdminCreateLessonScreen> {
 
     try {
       final currentUser = FirebaseAuth.instance.currentUser;
-      if (currentUser == null) {
-        throw Exception('You must be logged in to save learning materials.');
+      final actorId = await AdminSession.resolveActorId(role: widget.role);
+      if (actorId == null) {
+        throw Exception(
+          widget.role == 'admin'
+              ? 'Admin session is not available.'
+              : 'You must be logged in to save learning materials.',
+        );
       }
 
       final docRef = _isEditMode
@@ -185,12 +191,15 @@ class _AdminCreateLessonScreenState extends State<AdminCreateLessonScreen> {
           : FirebaseFirestore.instance.collection('lessons').doc();
       final lessonId = docRef.id;
 
-      final teacherDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUser.uid)
-          .get();
-      final teacherName =
-          (teacherDoc.data()?['name'] ?? 'Teacher').toString().trim();
+      var teacherName = await AdminSession.resolveActorName(role: widget.role);
+      if (currentUser != null) {
+        final teacherDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(currentUser.uid)
+            .get();
+        teacherName =
+            (teacherDoc.data()?['name'] ?? teacherName).toString().trim();
+      }
 
       final uploadedImageUrls = await _uploadImages(lessonId);
       final material = await _uploadMaterial(lessonId);
@@ -228,10 +237,10 @@ class _AdminCreateLessonScreenState extends State<AdminCreateLessonScreen> {
             : _arModelUrlController.text.trim(),
         'teacherId': _existingTeacherId?.isNotEmpty == true
             ? _existingTeacherId
-            : currentUser.uid,
+            : actorId,
         'createdBy': _existingCreatedBy?.isNotEmpty == true
             ? _existingCreatedBy
-            : currentUser.uid,
+            : actorId,
         'createdByName': teacherName,
         'isPublished': _isPublished,
         'assignedSections': _selectedAssignedSections,
@@ -314,8 +323,8 @@ class _AdminCreateLessonScreenState extends State<AdminCreateLessonScreen> {
 
   Future<String?> _pickInlineImageAndUpload() async {
     try {
-      final currentUser = FirebaseAuth.instance.currentUser;
-      if (currentUser == null) {
+      final actorId = await AdminSession.resolveActorId(role: widget.role);
+      if (actorId == null) {
         return null;
       }
 
@@ -332,7 +341,7 @@ class _AdminCreateLessonScreenState extends State<AdminCreateLessonScreen> {
       final extension = pickedFile.path.split('.').last.toLowerCase();
       final storageRef = FirebaseStorage.instance
           .ref()
-          .child('lesson_content_images/${currentUser.uid}')
+          .child('lesson_content_images/$actorId')
           .child('${DateTime.now().millisecondsSinceEpoch}.$extension');
 
       await storageRef.putFile(

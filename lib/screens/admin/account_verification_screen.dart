@@ -6,6 +6,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../utils/admin_session.dart';
 import '../../utils/colors.dart';
 import '../../utils/constants.dart';
 import '../../utils/notification_service.dart';
@@ -62,12 +63,12 @@ class _AccountVerificationScreenState extends State<AccountVerificationScreen> {
     required String name,
   }) async {
     try {
-      final adminUser = FirebaseAuth.instance.currentUser;
+      final adminUserId = await AdminSession.resolveActorId(role: 'admin');
 
       await FirebaseFirestore.instance.collection('users').doc(userId).update({
         'verified': true,
         'verifiedAt': FieldValue.serverTimestamp(),
-        if (adminUser != null) 'verifiedBy': adminUser.uid,
+        if (adminUserId != null) 'verifiedBy': adminUserId,
       });
 
       // Notify student of approval
@@ -132,14 +133,14 @@ class _AccountVerificationScreenState extends State<AccountVerificationScreen> {
 
     setState(() => _isProcessing = true);
     try {
-      final adminUser = FirebaseAuth.instance.currentUser;
+      final adminUserId = await AdminSession.resolveActorId(role: 'admin');
       final batch = FirebaseFirestore.instance.batch();
       for (final doc in pendingDocs) {
         batch.update(doc.reference, {
           'verified': true,
           'verifiedAt': FieldValue.serverTimestamp(),
           'rejected': false,
-          if (adminUser != null) 'verifiedBy': adminUser.uid,
+          if (adminUserId != null) 'verifiedBy': adminUserId,
         });
       }
       await batch.commit();
@@ -180,13 +181,13 @@ class _AccountVerificationScreenState extends State<AccountVerificationScreen> {
     required String reason,
   }) async {
     try {
-      final adminUser = FirebaseAuth.instance.currentUser;
+      final adminUserId = await AdminSession.resolveActorId(role: 'admin');
 
       // Create rejection audit log
       await FirebaseFirestore.instance.collection('rejection_logs').add({
         'userId': userId,
         'userName': name,
-        'rejectedBy': adminUser?.uid,
+        'rejectedBy': adminUserId,
         'rejectedAt': FieldValue.serverTimestamp(),
         'reason': reason,
       });
@@ -198,7 +199,7 @@ class _AccountVerificationScreenState extends State<AccountVerificationScreen> {
         'accountStatus': 'rejected',
         'rejectedAt': FieldValue.serverTimestamp(),
         'rejectionReason': reason,
-        if (adminUser != null) 'rejectedBy': adminUser.uid,
+        if (adminUserId != null) 'rejectedBy': adminUserId,
       });
 
       await NotificationService.notifyStudentRejected(

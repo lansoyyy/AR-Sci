@@ -5,6 +5,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import 'admin_session.dart';
+
 class AiAssessmentService {
   static const String _endpoint =
       'https://api.together.xyz/v1/chat/completions';
@@ -16,6 +18,10 @@ class AiAssessmentService {
 
   /// Check if user is authorized to use AI generation (teachers and admins only)
   static Future<bool> _isAuthorizedUser() async {
+    if (await AdminSession.isHardcodedAdminSignedIn()) {
+      return true;
+    }
+
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return false;
 
@@ -122,12 +128,14 @@ class AiAssessmentService {
     }
 
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
+    final userId = user?.uid ??
+        await AdminSession.resolveActorId(role: normalizedRole ?? callerRole);
+    if (userId == null) {
       throw Exception('User not authenticated.');
     }
 
     // Check rate limiting
-    final hasExceededLimit = await _hasExceededDailyLimit(user.uid);
+    final hasExceededLimit = await _hasExceededDailyLimit(userId);
     if (hasExceededLimit) {
       throw Exception(
           'Daily AI generation limit exceeded ($_maxDailyRequests requests per day). Please try again tomorrow.');
@@ -211,7 +219,7 @@ class AiAssessmentService {
 
       // Log successful usage
       await _logUsage(
-        userId: user.uid,
+        userId: userId,
         quizTitle: quizTitle,
         lessonTitle: lessonTitle,
         gradeLevel: gradeLevel,
@@ -226,7 +234,7 @@ class AiAssessmentService {
 
       // Log failed usage
       await _logUsage(
-        userId: user.uid,
+        userId: userId,
         quizTitle: quizTitle,
         lessonTitle: lessonTitle,
         gradeLevel: gradeLevel,

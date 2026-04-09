@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../utils/colors.dart';
+import '../../utils/admin_session.dart';
 import '../../utils/constants.dart';
 import '../../utils/password_policy.dart';
 import '../../utils/text_utils.dart';
@@ -820,7 +821,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     CustomButton(
                       text: 'Logout',
                       onPressed: () async {
-                        await FirebaseAuth.instance.signOut();
+                        if (widget.role == 'admin') {
+                          await AdminSession.signOutAdminSession();
+                        } else {
+                          await FirebaseAuth.instance.signOut();
+                        }
                         if (!mounted) return;
                         Navigator.pushNamedAndRemoveUntil(
                           context,

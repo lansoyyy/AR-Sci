@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../utils/admin_session.dart';
 import '../../utils/colors.dart';
 import '../../utils/constants.dart';
 
@@ -64,6 +65,11 @@ class _SplashScreenState extends State<SplashScreen>
     await Future.delayed(const Duration(seconds: 4));
 
     if (!mounted) return;
+
+    if (await AdminSession.isHardcodedAdminSignedIn()) {
+      Navigator.pushReplacementNamed(context, '/admin-dashboard');
+      return;
+    }
 
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) {

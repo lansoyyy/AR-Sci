@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../utils/admin_session.dart';
 import '../../utils/colors.dart';
 import '../../utils/constants.dart';
 import '../../utils/notification_service.dart';
@@ -42,12 +43,16 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
 
     try {
       final currentUser = FirebaseAuth.instance.currentUser;
-      final adminDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUser?.uid)
-          .get();
+      final actorId = await AdminSession.resolveActorId(role: 'admin');
+      var adminName = await AdminSession.resolveActorName(role: 'admin');
 
-      final adminName = adminDoc.data()?['name'] as String? ?? 'Administrator';
+      if (currentUser != null) {
+        final adminDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(currentUser.uid)
+            .get();
+        adminName = adminDoc.data()?['name'] as String? ?? adminName;
+      }
 
       Query<Map<String, dynamic>> usersQuery = FirebaseFirestore.instance
           .collection('users')
@@ -80,7 +85,7 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
         'message': _messageController.text.trim(),
         'priority': _selectedPriority,
         'targetAudience': _targetAudience,
-        'createdBy': currentUser?.uid,
+        'createdBy': actorId,
         'createdByName': adminName,
         'createdAt': FieldValue.serverTimestamp(),
         'isActive': true,
@@ -102,7 +107,7 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
           message: _messageController.text.trim(),
           metadata: {
             'announcementId': announcementRef.id,
-            'createdBy': currentUser?.uid,
+            'createdBy': actorId,
             'createdByName': adminName,
             'priority': _selectedPriority,
             'targetAudience': _targetAudience,
@@ -166,7 +171,7 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
     if (confirmed != true) return;
 
     try {
-      final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+      final currentUserId = await AdminSession.resolveActorId(role: 'admin');
       final notifications = await FirebaseFirestore.instance
           .collection('notifications')
           .where('announcementId', isEqualTo: id)

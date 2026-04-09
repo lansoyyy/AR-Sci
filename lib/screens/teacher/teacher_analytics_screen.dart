@@ -7,7 +7,16 @@ import '../../utils/colors.dart';
 import '../../utils/constants.dart';
 
 class TeacherAnalyticsScreen extends StatefulWidget {
-  const TeacherAnalyticsScreen({super.key});
+  final bool includeAllContent;
+  final String screenTitle;
+  final Color accentColor;
+
+  const TeacherAnalyticsScreen({
+    super.key,
+    this.includeAllContent = false,
+    this.screenTitle = 'My Analytics',
+    this.accentColor = AppColors.teacherPrimary,
+  });
 
   @override
   State<TeacherAnalyticsScreen> createState() => _TeacherAnalyticsScreenState();
@@ -61,6 +70,26 @@ class _TeacherAnalyticsScreenState extends State<TeacherAnalyticsScreen>
 
   String? get _teacherId => FirebaseAuth.instance.currentUser?.uid;
 
+  Color get _accentColor => widget.accentColor;
+
+  String get _lessonsCardTitle {
+    return widget.includeAllContent ? 'Lessons' : 'My Lessons';
+  }
+
+  String get _quizzesCardTitle {
+    return widget.includeAllContent ? 'Quizzes' : 'My Quizzes';
+  }
+
+  String get _averageCardTitle {
+    return widget.includeAllContent ? 'Overall Avg' : 'Class Avg';
+  }
+
+  String get _atRiskDescription {
+    return widget.includeAllContent
+        ? 'Students averaging below 60% across all quizzes.'
+        : 'Students averaging below 60% across your quizzes.';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -83,16 +112,19 @@ class _TeacherAnalyticsScreenState extends State<TeacherAnalyticsScreen>
 
     try {
       final teacherId = _teacherId;
-      if (teacherId == null) throw Exception('Not authenticated');
+      if (!widget.includeAllContent && teacherId == null) {
+        throw Exception('Not authenticated');
+      }
 
-      final quizSnap = await FirebaseFirestore.instance
-          .collection('quizzes')
-          .where('createdBy', isEqualTo: teacherId)
-          .get();
-      final lessonSnap = await FirebaseFirestore.instance
-          .collection('lessons')
-          .where('createdBy', isEqualTo: teacherId)
-          .get();
+      final quizQuery = FirebaseFirestore.instance.collection('quizzes');
+      final lessonQuery = FirebaseFirestore.instance.collection('lessons');
+
+      final quizSnap = await (widget.includeAllContent
+          ? quizQuery.get()
+          : quizQuery.where('createdBy', isEqualTo: teacherId).get());
+      final lessonSnap = await (widget.includeAllContent
+          ? lessonQuery.get()
+          : lessonQuery.where('createdBy', isEqualTo: teacherId).get());
       final progressSnap =
           await FirebaseFirestore.instance.collection('lesson_progress').get();
 
@@ -320,8 +352,8 @@ class _TeacherAnalyticsScreenState extends State<TeacherAnalyticsScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('My Analytics'),
-        backgroundColor: AppColors.teacherPrimary,
+        title: Text(widget.screenTitle),
+        backgroundColor: _accentColor,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -390,7 +422,7 @@ class _TeacherAnalyticsScreenState extends State<TeacherAnalyticsScreen>
             ElevatedButton(
               onPressed: _loadData,
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.teacherPrimary,
+                backgroundColor: _accentColor,
                 foregroundColor: AppColors.textWhite,
               ),
               child: const Text('Retry'),
@@ -412,7 +444,7 @@ class _TeacherAnalyticsScreenState extends State<TeacherAnalyticsScreen>
     final students = _uniqueStudents.length;
 
     return RefreshIndicator(
-      color: AppColors.teacherPrimary,
+      color: _accentColor,
       onRefresh: _loadData,
       child: ListView(
         padding: const EdgeInsets.all(AppConstants.paddingM),
@@ -421,16 +453,16 @@ class _TeacherAnalyticsScreenState extends State<TeacherAnalyticsScreen>
             children: [
               Expanded(
                 child: _AnalyticsCard(
-                  title: 'My Lessons',
+                  title: _lessonsCardTitle,
                   value: _myLessons.length.toString(),
                   icon: Icons.book_outlined,
-                  color: AppColors.teacherPrimary,
+                  color: _accentColor,
                 ),
               ),
               const SizedBox(width: AppConstants.paddingM),
               Expanded(
                 child: _AnalyticsCard(
-                  title: 'My Quizzes',
+                  title: _quizzesCardTitle,
                   value: _myQuizzes.length.toString(),
                   icon: Icons.quiz_outlined,
                   color: AppColors.warning,
@@ -452,7 +484,7 @@ class _TeacherAnalyticsScreenState extends State<TeacherAnalyticsScreen>
               const SizedBox(width: AppConstants.paddingM),
               Expanded(
                 child: _AnalyticsCard(
-                  title: 'Class Avg',
+                  title: _averageCardTitle,
                   value: '${overall.toStringAsFixed(1)}%',
                   icon: Icons.grade_outlined,
                   color: _scoreColor(overall),
@@ -826,12 +858,12 @@ class _TeacherAnalyticsScreenState extends State<TeacherAnalyticsScreen>
                         return FlSpot(e.key.toDouble(), e.value.value);
                       }).toList(),
                       isCurved: true,
-                      color: AppColors.teacherPrimary,
+                      color: _accentColor,
                       barWidth: 3,
                       dotData: const FlDotData(show: true),
                       belowBarData: BarAreaData(
                         show: true,
-                        color: AppColors.teacherPrimary.withValues(alpha: 0.15),
+                        color: _accentColor.withValues(alpha: 0.15),
                       ),
                     ),
                   ],
@@ -1357,7 +1389,7 @@ class _TeacherAnalyticsScreenState extends State<TeacherAnalyticsScreen>
                 title: 'Total Views',
                 value: _lessonProgress.length.toString(),
                 icon: Icons.visibility_outlined,
-                color: AppColors.teacherPrimary,
+                color: _accentColor,
               ),
             ),
             const SizedBox(width: AppConstants.paddingM),
@@ -1386,8 +1418,8 @@ class _TeacherAnalyticsScreenState extends State<TeacherAnalyticsScreen>
         const SizedBox(height: AppConstants.paddingXL),
         const _SectionHeader('At-Risk Students'),
         const SizedBox(height: AppConstants.paddingS),
-        const Text(
-          'Students averaging below 60% across your quizzes.',
+        Text(
+          _atRiskDescription,
           style: TextStyle(
             color: AppColors.textSecondary,
             fontSize: AppConstants.fontS,
@@ -1489,7 +1521,7 @@ class _TeacherAnalyticsScreenState extends State<TeacherAnalyticsScreen>
                   barRods: [
                     BarChartRodData(
                       toY: entry.value.value.toDouble(),
-                      color: AppColors.teacherPrimary,
+                      color: _accentColor,
                       width: 22,
                       borderRadius:
                           const BorderRadius.vertical(top: Radius.circular(4)),

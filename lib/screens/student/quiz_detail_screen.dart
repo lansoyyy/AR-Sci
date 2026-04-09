@@ -83,27 +83,7 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
           final quizId =
               (_quiz['id'] ?? _quiz['quizId'] ?? '').toString().trim();
           if (quizId.isNotEmpty) {
-            // Check if student already submitted this quiz
-            final existingResult = await FirebaseFirestore.instance
-                .collection('quiz_results')
-                .where('studentId', isEqualTo: user.uid)
-                .where('quizId', isEqualTo: quizId)
-                .limit(1)
-                .get();
-
-            if (existingResult.docs.isNotEmpty) {
-              final resultData = existingResult.docs.first.data();
-              final prevScore = (resultData['score'] as num?)?.toInt() ?? 0;
-              final prevTotal =
-                  (resultData['totalPoints'] as num?)?.toInt() ?? 0;
-              final prevAnswers = resultData['answers'] is Map
-                  ? Map<String, dynamic>.from(resultData['answers'] as Map)
-                  : <String, dynamic>{};
-              _hasSubmitted = true;
-              _score = prevScore;
-              _totalPoints = prevTotal;
-              _userAnswers.addAll(prevAnswers);
-            }
+            await _loadExistingSubmission(userId: user.uid, quizId: quizId);
 
             final bookmarkDoc = await FirebaseFirestore.instance
                 .collection('bookmarks')
@@ -123,6 +103,57 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  Future<void> _loadExistingSubmission({
+    required String userId,
+    required String quizId,
+  }) async {
+    final deterministicDocId = '${userId}_$quizId';
+    final deterministicDoc = await FirebaseFirestore.instance
+        .collection('quiz_results')
+        .doc(deterministicDocId)
+        .get();
+
+    if (deterministicDoc.exists) {
+      _applyPreviousSubmission(
+        docId: deterministicDoc.id,
+        data: deterministicDoc.data() ?? <String, dynamic>{},
+      );
+      return;
+    }
+
+    final existingResult = await FirebaseFirestore.instance
+        .collection('quiz_results')
+        .where('studentId', isEqualTo: userId)
+        .where('quizId', isEqualTo: quizId)
+        .limit(1)
+        .get();
+
+    if (existingResult.docs.isEmpty) {
+      return;
+    }
+
+    final previousDoc = existingResult.docs.first;
+    _applyPreviousSubmission(docId: previousDoc.id, data: previousDoc.data());
+  }
+
+  void _applyPreviousSubmission({
+    required String docId,
+    required Map<String, dynamic> data,
+  }) {
+    final prevScore = (data['score'] as num?)?.toInt() ?? 0;
+    final prevTotal = (data['totalPoints'] as num?)?.toInt() ?? 0;
+    final prevAnswers = data['answers'] is Map
+        ? Map<String, dynamic>.from(data['answers'] as Map)
+        : <String, dynamic>{};
+
+    _hasSubmitted = true;
+    _score = prevScore;
+    _totalPoints = prevTotal;
+    _userAnswers
+      ..clear()
+      ..addAll(prevAnswers);
   }
 
   void _startQuiz() {
@@ -229,6 +260,23 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
         return;
       }
 
+      final quizId = (_quiz['id'] ?? _quiz['quizId'] ?? '').toString().trim();
+      if (quizId.isEmpty) {
+        throw Exception('Quiz ID is missing.');
+      }
+
+      await _loadExistingSubmission(userId: user.uid, quizId: quizId);
+      if (_hasSubmitted) {
+        if (!mounted) return;
+        setState(() => _isSubmitting = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('You have already submitted this quiz.'),
+          ),
+        );
+        return;
+      }
+
       final rawQuestions = _quiz['questions'] as List? ?? [];
       int score = 0;
       int totalPoints = 0;
@@ -251,8 +299,8 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
       }
 
       final result = QuizResult(
-        id: '${user.uid}_${(_quiz['id'] ?? _quiz['quizId'] ?? '')}_${DateTime.now().millisecondsSinceEpoch}',
-        quizId: (_quiz['id'] ?? _quiz['quizId'] ?? '').toString(),
+        id: '${user.uid}_$quizId',
+        quizId: quizId,
         studentId: user.uid,
         score: score,
         totalPoints: totalPoints,
@@ -266,13 +314,19 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
             _remainingTime,
       );
 
-      await FirebaseFirestore.instance
-          .collection('quiz_results')
-          .doc(result.id)
-          .set({
-        ...result.toJson(),
-        'quizTitle': _quiz['title'] ?? '',
-        'completedAt': FieldValue.serverTimestamp(), // Use server timestamp
+      final resultDoc =
+          FirebaseFirestore.instance.collection('quiz_results').doc(result.id);
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        final snapshot = await transaction.get(resultDoc);
+        if (snapshot.exists) {
+          throw Exception('You have already submitted this quiz.');
+        }
+
+        transaction.set(resultDoc, {
+          ...result.toJson(),
+          'quizTitle': _quiz['title'] ?? '',
+          'completedAt': FieldValue.serverTimestamp(),
+        });
       });
 
       final teacherId = (_quiz['createdBy'] ?? '').toString();

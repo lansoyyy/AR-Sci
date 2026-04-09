@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../utils/admin_session.dart';
 import '../../utils/colors.dart';
 import '../../utils/constants.dart';
 import '../../utils/ai_assessment_service.dart';
@@ -470,8 +471,13 @@ class _AdminCreateQuizScreenState extends State<AdminCreateQuizScreen> {
 
     try {
       final currentUser = FirebaseAuth.instance.currentUser;
-      if (currentUser == null) {
-        throw Exception('You must be logged in to save quizzes.');
+      final actorId = await AdminSession.resolveActorId(role: widget.role);
+      if (actorId == null) {
+        throw Exception(
+          widget.role == 'admin'
+              ? 'Admin session is not available.'
+              : 'You must be logged in to save quizzes.',
+        );
       }
 
       final duration = int.tryParse(_durationController.text.trim()) ?? 30;
@@ -484,12 +490,15 @@ class _AdminCreateQuizScreenState extends State<AdminCreateQuizScreen> {
           : FirebaseFirestore.instance.collection('quizzes').doc();
       final quizId = docRef.id;
 
-      final teacherDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUser.uid)
-          .get();
-      final teacherName =
-          (teacherDoc.data()?['name'] ?? 'Teacher').toString().trim();
+      var teacherName = await AdminSession.resolveActorName(role: widget.role);
+      if (currentUser != null) {
+        final teacherDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(currentUser.uid)
+            .get();
+        teacherName =
+            (teacherDoc.data()?['name'] ?? teacherName).toString().trim();
+      }
 
       final payload = <String, dynamic>{
         'id': quizId,
@@ -507,8 +516,8 @@ class _AdminCreateQuizScreenState extends State<AdminCreateQuizScreen> {
         'showIncorrectAnswersAfterSubmission':
             _showIncorrectAnswersAfterSubmission,
         'updatedAt': FieldValue.serverTimestamp(),
-        'createdBy':
-            (widget.initialData?['createdBy'] ?? currentUser.uid).toString(),
+        'createdBy': (widget.initialData?['createdBy'] ?? actorId).toString(),
+        'createdByName': teacherName,
         // Assignment and Scheduling
         'assignedSections': _selectedAssignedSections,
         'availableFrom': _availableFrom?.toIso8601String(),

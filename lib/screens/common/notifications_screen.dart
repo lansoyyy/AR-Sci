@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../utils/admin_session.dart';
 import '../../utils/colors.dart';
 import '../../utils/constants.dart';
 import '../../utils/notification_service.dart';
@@ -40,8 +40,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   Future<void> _loadNotifications() async {
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
+      final actorId = await AdminSession.resolveActorId(role: widget.role);
+      if (actorId == null) {
         if (!mounted) return;
         setState(() {
           _notifications = <NotificationItem>[];
@@ -52,7 +52,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
       final snapshot = await FirebaseFirestore.instance
           .collection('notifications')
-          .where('userId', isEqualTo: user.uid)
+          .where('userId', isEqualTo: actorId)
           .get();
 
       final notifications = snapshot.docs
@@ -169,10 +169,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   Future<void> _markAllAsRead() async {
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
+      final actorId = await AdminSession.resolveActorId(role: widget.role);
+      if (actorId == null) return;
 
-      await NotificationService.markAllAsRead(user.uid);
+      await NotificationService.markAllAsRead(actorId);
 
       if (!mounted) return;
       setState(() {
@@ -190,8 +190,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   Future<void> _clearNotifications() async {
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
+      final actorId = await AdminSession.resolveActorId(role: widget.role);
+      if (actorId == null) return;
 
       final confirmed = await showDialog<bool>(
         context: context,
@@ -214,7 +214,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
       if (confirmed != true) return;
 
-      await NotificationService.clearAll(user.uid);
+      await NotificationService.clearAll(actorId);
 
       if (!mounted) return;
       setState(() => _notifications = <NotificationItem>[]);

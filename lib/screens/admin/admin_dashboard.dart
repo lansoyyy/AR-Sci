@@ -3,7 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../common/settings_screen.dart';
+import '../../utils/admin_session.dart';
 import '../../utils/colors.dart';
+import '../../utils/content_utils.dart';
 import '../../utils/constants.dart';
 import '../../routes/app_routes.dart';
 import '../../widgets/stat_card.dart';
@@ -120,12 +122,7 @@ class _DashboardHome extends StatefulWidget {
 
 class _DashboardHomeState extends State<_DashboardHome> {
   bool _isLessonArReady(Map<String, dynamic> lesson) {
-    final arItems = (lesson['arItems'] as List<dynamic>? ?? <dynamic>[])
-        .map((item) => item.toString().trim())
-        .where((item) => item.isNotEmpty)
-        .toList();
-    final modelUrl = (lesson['arModelUrl'] ?? '').toString().trim();
-    return arItems.isNotEmpty || modelUrl.isNotEmpty;
+    return hasArContent(lesson);
   }
 
   Future<void> _openAdminArExperience() async {
@@ -146,10 +143,16 @@ class _DashboardHomeState extends State<_DashboardHome> {
 
       if (arReadyLessons.isEmpty) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No AR-ready lessons are available right now.'),
-          ),
+        Navigator.pushNamed(
+          context,
+          AppRoutes.arView,
+          arguments: const <String, dynamic>{
+            'id': '',
+            'lessonId': '',
+            'title': 'AR Science Lab',
+            'lessonTitle': 'AR Science Lab',
+            'arItems': <String>[],
+          },
         );
         return;
       }
@@ -229,7 +232,7 @@ class _DashboardHomeState extends State<_DashboardHome> {
                 ),
               );
               if (confirmed == true) {
-                await FirebaseAuth.instance.signOut();
+                await AdminSession.signOutAdminSession();
                 if (!mounted) return;
                 Navigator.pushNamedAndRemoveUntil(
                   context,
@@ -714,7 +717,7 @@ class _UserManagementState extends State<_UserManagement> {
     if (confirmed != true) return;
 
     try {
-      final currentUser = FirebaseAuth.instance.currentUser;
+      final actorId = await AdminSession.resolveActorId(role: 'admin');
       final userName = userData['name'] as String? ?? '';
       final userRole = userData['role'] as String? ?? '';
 
@@ -723,7 +726,7 @@ class _UserManagementState extends State<_UserManagement> {
         'userName': userName,
         'userEmail': email,
         'userRole': userRole,
-        'deletedBy': currentUser?.uid,
+        'deletedBy': actorId,
         'deletedAt': FieldValue.serverTimestamp(),
         'deletedByRole': 'admin',
         'action': 'deactivated',
@@ -734,9 +737,9 @@ class _UserManagementState extends State<_UserManagement> {
         'deactivated': true,
         'accountStatus': 'deactivated',
         'deletedAt': FieldValue.serverTimestamp(),
-        'deletedBy': currentUser?.uid,
+        'deletedBy': actorId,
         'deactivatedAt': FieldValue.serverTimestamp(),
-        'deactivatedBy': currentUser?.uid,
+        'deactivatedBy': actorId,
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
@@ -791,13 +794,13 @@ class _UserManagementState extends State<_UserManagement> {
     if (confirmed != true) return;
 
     try {
-      final currentUser = FirebaseAuth.instance.currentUser;
+      final actorId = await AdminSession.resolveActorId(role: 'admin');
       await FirebaseFirestore.instance.collection('users').doc(userId).update({
         'deleted': false,
         'deactivated': false,
         'accountStatus': 'active',
         'restoredAt': FieldValue.serverTimestamp(),
-        'restoredBy': currentUser?.uid,
+        'restoredBy': actorId,
         'updatedAt': FieldValue.serverTimestamp(),
         'deletedAt': FieldValue.delete(),
         'deletedBy': FieldValue.delete(),

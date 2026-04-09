@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../utils/admin_session.dart';
 import '../../utils/colors.dart';
 import '../../utils/constants.dart';
 import '../../utils/password_policy.dart';
@@ -202,6 +203,10 @@ class _LoginScreenState extends State<LoginScreen> {
           email == 'admin@lcct.edu.ph' &&
           password == 'Admin1234!') {
         // Simulate admin login without Firebase Auth
+        if (FirebaseAuth.instance.currentUser != null) {
+          await FirebaseAuth.instance.signOut();
+        }
+        await AdminSession.signInHardcodedAdmin();
         if (!mounted) return;
         setState(() => _isLoading = false);
         // Clear failed attempts on successful login
@@ -211,6 +216,8 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       try {
+        await AdminSession.clearHardcodedAdminSession();
+
         // Firebase Auth for all roles (students, teachers, and admins)
         final credential =
             await FirebaseAuth.instance.signInWithEmailAndPassword(

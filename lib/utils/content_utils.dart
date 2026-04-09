@@ -29,6 +29,24 @@ List<String> stringListFromDynamic(dynamic value) {
   return const <String>[];
 }
 
+String normalizeContentKey(String value) {
+  return value.trim().toLowerCase();
+}
+
+bool _containsNormalizedValue(
+  Iterable<String> values,
+  String candidate,
+) {
+  final normalizedCandidate = normalizeContentKey(candidate);
+  if (normalizedCandidate.isEmpty) {
+    return false;
+  }
+
+  return values.any(
+    (value) => normalizeContentKey(value) == normalizedCandidate,
+  );
+}
+
 bool isPublishedNow(Map<String, dynamic> content, {DateTime? now}) {
   if (content['isPublished'] != true) {
     return false;
@@ -75,21 +93,22 @@ bool matchesStudentAssignment(
   // Only apply grade filter when the student has a known grade level
   if (assignedGradeLevels.isNotEmpty &&
       studentGradeLevel.isNotEmpty &&
-      !assignedGradeLevels.contains(studentGradeLevel)) {
+      !_containsNormalizedValue(assignedGradeLevels, studentGradeLevel)) {
     return false;
   }
 
   // Only apply section filter when the student has a known section
   if (assignedSections.isNotEmpty &&
       studentSection.isNotEmpty &&
-      !assignedSections.contains(studentSection)) {
+      !_containsNormalizedValue(assignedSections, studentSection)) {
     return false;
   }
 
   if (assignedGradeLevels.isEmpty &&
       studentGradeLevel.isNotEmpty &&
       legacyGradeLevel.isNotEmpty &&
-      legacyGradeLevel != studentGradeLevel) {
+      normalizeContentKey(legacyGradeLevel) !=
+          normalizeContentKey(studentGradeLevel)) {
     return false;
   }
 
@@ -123,6 +142,12 @@ bool hasLessonLearningContent(Map<String, dynamic> lesson) {
       arItems.isNotEmpty ||
       materialUrl.isNotEmpty ||
       arModelUrl.isNotEmpty;
+}
+
+bool hasArContent(Map<String, dynamic> lesson) {
+  final arItems = stringListFromDynamic(lesson['arItems']);
+  final arModelUrl = (lesson['arModelUrl'] ?? '').toString().trim();
+  return arItems.isNotEmpty || arModelUrl.isNotEmpty;
 }
 
 String effectiveMaterialUrl(Map<String, dynamic> lesson) {

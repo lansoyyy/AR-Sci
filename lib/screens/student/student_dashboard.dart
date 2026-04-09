@@ -531,7 +531,7 @@ class _DashboardHome extends StatelessWidget {
                       final visibleLessons = _visibleLessonsForStudent(
                         snapshot.docs,
                         currentUser,
-                      );
+                      ).where(hasArContent).toList();
 
                       if (visibleLessons.isEmpty) {
                         if (!context.mounted) return;
