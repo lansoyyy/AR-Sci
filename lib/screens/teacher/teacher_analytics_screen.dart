@@ -332,15 +332,11 @@ class _TeacherAnalyticsScreenState extends State<TeacherAnalyticsScreen>
             initialValue: _selectedTimeRange,
             tooltip: 'Time range',
             icon: const Icon(Icons.date_range_outlined),
-            onSelected: (value) =>
-                setState(() => _selectedTimeRange = value),
+            onSelected: (value) => setState(() => _selectedTimeRange = value),
             itemBuilder: (context) => const [
-              PopupMenuItem(
-                  value: '7days', child: Text('Last 7 Days')),
-              PopupMenuItem(
-                  value: '30days', child: Text('Last 30 Days')),
-              PopupMenuItem(
-                  value: '90days', child: Text('Last 90 Days')),
+              PopupMenuItem(value: '7days', child: Text('Last 7 Days')),
+              PopupMenuItem(value: '30days', child: Text('Last 30 Days')),
+              PopupMenuItem(value: '90days', child: Text('Last 90 Days')),
               PopupMenuItem(value: 'all', child: Text('All Time')),
             ],
           ),

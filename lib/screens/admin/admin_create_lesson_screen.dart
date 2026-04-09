@@ -847,14 +847,12 @@ class _AdminCreateLessonScreenState extends State<AdminCreateLessonScreen> {
                                     controller: _newArItemController,
                                     decoration: const InputDecoration(
                                       labelText: 'Add AR item label',
-                                      prefixIcon:
-                                          Icon(Icons.label_outline),
+                                      prefixIcon: Icon(Icons.label_outline),
                                     ),
                                     onFieldSubmitted: (value) {
                                       final trimmed = value.trim();
                                       if (trimmed.isNotEmpty &&
-                                          !_existingArItems
-                                              .contains(trimmed)) {
+                                          !_existingArItems.contains(trimmed)) {
                                         setState(() {
                                           _existingArItems.add(trimmed);
                                           _newArItemController.clear();

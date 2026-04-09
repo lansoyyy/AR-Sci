@@ -93,15 +93,12 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
 
             if (existingResult.docs.isNotEmpty) {
               final resultData = existingResult.docs.first.data();
-              final prevScore =
-                  (resultData['score'] as num?)?.toInt() ?? 0;
+              final prevScore = (resultData['score'] as num?)?.toInt() ?? 0;
               final prevTotal =
                   (resultData['totalPoints'] as num?)?.toInt() ?? 0;
-              final prevAnswers =
-                  resultData['answers'] is Map
-                      ? Map<String, dynamic>.from(
-                          resultData['answers'] as Map)
-                      : <String, dynamic>{};
+              final prevAnswers = resultData['answers'] is Map
+                  ? Map<String, dynamic>.from(resultData['answers'] as Map)
+                  : <String, dynamic>{};
               _hasSubmitted = true;
               _score = prevScore;
               _totalPoints = prevTotal;
@@ -583,13 +580,11 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
               decoration: BoxDecoration(
                 color: AppColors.success.withOpacity(0.08),
                 borderRadius: BorderRadius.circular(AppConstants.radiusM),
-                border:
-                    Border.all(color: AppColors.success.withOpacity(0.35)),
+                border: Border.all(color: AppColors.success.withOpacity(0.35)),
               ),
               child: const Row(
                 children: [
-                  Icon(Icons.check_circle,
-                      color: AppColors.success, size: 20),
+                  Icon(Icons.check_circle, color: AppColors.success, size: 20),
                   SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -606,12 +601,11 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed:
-                  rawQuestions.isEmpty ||
-                          _viewerRole != 'student' ||
-                          _hasSubmitted
-                      ? null
-                      : _startQuiz,
+              onPressed: rawQuestions.isEmpty ||
+                      _viewerRole != 'student' ||
+                      _hasSubmitted
+                  ? null
+                  : _startQuiz,
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.studentPrimary,
                 foregroundColor: AppColors.textWhite,
