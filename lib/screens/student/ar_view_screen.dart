@@ -573,6 +573,14 @@ class _ARViewScreenState extends State<ARViewScreen> {
     return value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), ' ').trim();
   }
 
+  bool _isGenericArTitle(String value) {
+    return const <String>{
+      'ar view',
+      'ar science lab',
+      'science lab',
+    }.contains(value);
+  }
+
   Set<String> _candidateFilters() {
     final filters = widget.arItems
         .map(_normalize)
@@ -580,7 +588,7 @@ class _ARViewScreenState extends State<ARViewScreen> {
         .toSet();
 
     final normalizedTitle = _normalize(widget.lessonTitle);
-    if (normalizedTitle.isNotEmpty && normalizedTitle != 'ar view') {
+    if (normalizedTitle.isNotEmpty && !_isGenericArTitle(normalizedTitle)) {
       filters.add(normalizedTitle);
       filters.addAll(
         normalizedTitle.split(' ').where((token) => token.trim().length >= 4),
