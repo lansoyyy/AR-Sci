@@ -536,10 +536,16 @@ class _DashboardHome extends StatelessWidget {
 
                       if (visibleLessons.isEmpty) {
                         if (!context.mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                              content: Text(
-                                  'No AR-ready lessons are available for you right now.')),
+                        Navigator.pushNamed(
+                          context,
+                          AppRoutes.arView,
+                          arguments: const <String, dynamic>{
+                            'id': '',
+                            'lessonId': '',
+                            'title': 'AR Science Lab',
+                            'lessonTitle': 'AR Science Lab',
+                            'arItems': <String>[],
+                          },
                         );
                         return;
                       }
@@ -549,7 +555,7 @@ class _DashboardHome extends StatelessWidget {
                       if (!context.mounted) return;
                       Navigator.pushNamed(
                         context,
-                        '/ar-view',
+                        AppRoutes.arView,
                         arguments: firstLesson,
                       );
                     } catch (e) {
