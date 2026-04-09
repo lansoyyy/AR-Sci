@@ -30,7 +30,7 @@ List<String> stringListFromDynamic(dynamic value) {
 }
 
 String normalizeContentKey(String value) {
-  return value.trim().toLowerCase();
+  return value.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '');
 }
 
 bool _containsNormalizedValue(
@@ -47,15 +47,59 @@ bool _containsNormalizedValue(
   );
 }
 
+bool _hasExplicitTimeComponent(DateTime value) {
+  return value.hour != 0 ||
+      value.minute != 0 ||
+      value.second != 0 ||
+      value.millisecond != 0 ||
+      value.microsecond != 0;
+}
+
+DateTime startOfDay(DateTime value) {
+  return DateTime(value.year, value.month, value.day);
+}
+
+DateTime endOfDay(DateTime value) {
+  return DateTime(value.year, value.month, value.day, 23, 59, 59, 999, 999);
+}
+
+DateTime normalizeAvailableFromDate(DateTime value) {
+  if (_hasExplicitTimeComponent(value)) {
+    return value;
+  }
+  return startOfDay(value);
+}
+
+DateTime normalizeAvailableToDate(DateTime value) {
+  if (_hasExplicitTimeComponent(value)) {
+    return value;
+  }
+  return endOfDay(value);
+}
+
+bool isTruthyFlag(dynamic value) {
+  if (value is bool) {
+    return value;
+  }
+
+  final normalized = value?.toString().trim().toLowerCase() ?? '';
+  return normalized == 'true' || normalized == '1' || normalized == 'yes';
+}
+
 bool isPublishedNow(Map<String, dynamic> content, {DateTime? now}) {
-  if (content['isPublished'] != true) {
+  if (!isTruthyFlag(content['isPublished'])) {
     return false;
   }
 
   final currentTime = now ?? DateTime.now();
-  final availableFrom = parseFlexibleDate(content['availableFrom']) ??
+  final availableFromRaw = parseFlexibleDate(content['availableFrom']) ??
       parseFlexibleDate(content['scheduledDate']);
-  final availableTo = parseFlexibleDate(content['availableTo']);
+  final availableToRaw = parseFlexibleDate(content['availableTo']);
+  final availableFrom = availableFromRaw == null
+      ? null
+      : normalizeAvailableFromDate(availableFromRaw);
+  final availableTo =
+      availableToRaw == null ? null : normalizeAvailableToDate(availableToRaw);
 
   if (availableFrom != null && currentTime.isBefore(availableFrom)) {
     return false;

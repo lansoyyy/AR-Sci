@@ -180,6 +180,14 @@ Map<String, dynamic> _mapFirestoreDoc(
   };
 }
 
+Stream<QuerySnapshot<Map<String, dynamic>>> _studentLessonsStream() {
+  return FirebaseFirestore.instance.collection('lessons').snapshots();
+}
+
+Stream<QuerySnapshot<Map<String, dynamic>>> _studentQuizzesStream() {
+  return FirebaseFirestore.instance.collection('quizzes').snapshots();
+}
+
 List<Map<String, dynamic>> _sortVisibleContent(
     List<Map<String, dynamic>> items) {
   items.sort((a, b) {
@@ -396,10 +404,7 @@ class _DashboardHome extends StatelessWidget {
               padding:
                   const EdgeInsets.symmetric(horizontal: AppConstants.paddingM),
               child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                stream: FirebaseFirestore.instance
-                    .collection('lessons')
-                    .where('isPublished', isEqualTo: true)
-                    .snapshots(),
+                stream: _studentLessonsStream(),
                 builder: (context, lessonsSnapshot) {
                   final lessonsCount = _visibleLessonsForStudent(
                     lessonsSnapshot.data?.docs ??
@@ -408,10 +413,7 @@ class _DashboardHome extends StatelessWidget {
                   ).length;
 
                   return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                    stream: FirebaseFirestore.instance
-                        .collection('quizzes')
-                        .where('isPublished', isEqualTo: true)
-                        .snapshots(),
+                    stream: _studentQuizzesStream(),
                     builder: (context, quizzesSnapshot) {
                       final quizzesCount = _visibleQuizzesForStudent(
                         quizzesSnapshot.data?.docs ??
@@ -524,7 +526,6 @@ class _DashboardHome extends StatelessWidget {
                     try {
                       final snapshot = await FirebaseFirestore.instance
                           .collection('lessons')
-                          .where('isPublished', isEqualTo: true)
                           .limit(50)
                           .get();
 
@@ -631,10 +632,7 @@ class _DashboardHome extends StatelessWidget {
 
             // Show lessons from constants
             StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: FirebaseFirestore.instance
-                  .collection('lessons')
-                  .where('isPublished', isEqualTo: true)
-                  .snapshots(),
+              stream: _studentLessonsStream(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Padding(
@@ -702,10 +700,7 @@ class _DashboardHome extends StatelessWidget {
 
             // Show quiz for first lesson
             StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: FirebaseFirestore.instance
-                  .collection('quizzes')
-                  .where('isPublished', isEqualTo: true)
-                  .snapshots(),
+              stream: _studentQuizzesStream(),
               builder: (context, snapshot) {
                 final allDocs = snapshot.data?.docs ??
                     <QueryDocumentSnapshot<Map<String, dynamic>>>[];
@@ -831,10 +826,7 @@ class _LessonsPageState extends State<_LessonsPage> {
           Container(
             padding: const EdgeInsets.all(AppConstants.paddingM),
             child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: FirebaseFirestore.instance
-                  .collection('lessons')
-                  .where('isPublished', isEqualTo: true)
-                  .snapshots(),
+              stream: _studentLessonsStream(),
               builder: (context, snapshot) {
                 final allDocs = snapshot.data?.docs ?? [];
                 final visibleLessons = _visibleLessonsForStudent(
@@ -892,10 +884,7 @@ class _LessonsPageState extends State<_LessonsPage> {
           // Lessons List
           Expanded(
             child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: FirebaseFirestore.instance
-                  .collection('lessons')
-                  .where('isPublished', isEqualTo: true)
-                  .snapshots(),
+              stream: _studentLessonsStream(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
@@ -1020,10 +1009,7 @@ class _QuizzesPageBodyState extends State<_QuizzesPageBody> {
           Container(
             padding: const EdgeInsets.all(AppConstants.paddingM),
             child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: FirebaseFirestore.instance
-                  .collection('quizzes')
-                  .where('isPublished', isEqualTo: true)
-                  .snapshots(),
+              stream: _studentQuizzesStream(),
               builder: (context, snapshot) {
                 final allDocs = snapshot.data?.docs ?? [];
                 final visibleQuizzes = _visibleQuizzesForStudent(
@@ -1067,10 +1053,7 @@ class _QuizzesPageBodyState extends State<_QuizzesPageBody> {
           ),
           Expanded(
             child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: FirebaseFirestore.instance
-                  .collection('quizzes')
-                  .where('isPublished', isEqualTo: true)
-                  .snapshots(),
+              stream: _studentQuizzesStream(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());

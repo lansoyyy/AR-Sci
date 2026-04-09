@@ -122,7 +122,7 @@ class _AdminCreateQuizScreenState extends State<AdminCreateQuizScreen> {
     _selectedGradeLevel =
         (quiz['gradeLevel'] ?? quiz['grade'] ?? _selectedGradeLevel).toString();
     _selectedLessonId = (quiz['lessonId'] ?? '').toString();
-    _isPublished = quiz['isPublished'] == true;
+    _isPublished = isTruthyFlag(quiz['isPublished']);
     _wasPublished = _isPublished;
     _selectedAssignedSections
       ..clear()
@@ -520,8 +520,12 @@ class _AdminCreateQuizScreenState extends State<AdminCreateQuizScreen> {
         'createdByName': teacherName,
         // Assignment and Scheduling
         'assignedSections': _selectedAssignedSections,
-        'availableFrom': _availableFrom?.toIso8601String(),
-        'availableTo': _availableTo?.toIso8601String(),
+        'availableFrom': _availableFrom == null
+            ? null
+            : normalizeAvailableFromDate(_availableFrom!).toIso8601String(),
+        'availableTo': _availableTo == null
+            ? null
+            : normalizeAvailableToDate(_availableTo!).toIso8601String(),
       };
 
       if (!_isEditMode) {
@@ -829,7 +833,10 @@ class _AdminCreateQuizScreenState extends State<AdminCreateQuizScreen> {
                                   lastDate: DateTime(2100),
                                 );
                                 if (picked != null) {
-                                  setState(() => _availableFrom = picked);
+                                  setState(
+                                    () => _availableFrom =
+                                        normalizeAvailableFromDate(picked),
+                                  );
                                 }
                               },
                               child: InputDecorator(
@@ -855,7 +862,10 @@ class _AdminCreateQuizScreenState extends State<AdminCreateQuizScreen> {
                                   lastDate: DateTime(2100),
                                 );
                                 if (picked != null) {
-                                  setState(() => _availableTo = picked);
+                                  setState(
+                                    () => _availableTo =
+                                        normalizeAvailableToDate(picked),
+                                  );
                                 }
                               },
                               child: InputDecorator(

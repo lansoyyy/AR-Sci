@@ -134,7 +134,7 @@ class _AdminCreateLessonScreenState extends State<AdminCreateLessonScreen> {
         (lesson['gradeLevel'] ?? lesson['grade'] ?? _selectedGradeLevel)
             .toString();
     _selectedQuarter = (lesson['quarter'] ?? _selectedQuarter).toString();
-    _isPublished = lesson['isPublished'] == true;
+    _isPublished = isTruthyFlag(lesson['isPublished']);
     _wasPublished = _isPublished;
     _selectedAssignedSections =
         stringListFromDynamic(lesson['assignedSections']);
@@ -244,8 +244,12 @@ class _AdminCreateLessonScreenState extends State<AdminCreateLessonScreen> {
         'createdByName': teacherName,
         'isPublished': _isPublished,
         'assignedSections': _selectedAssignedSections,
-        'availableFrom': _availableFrom?.toIso8601String(),
-        'availableTo': _availableTo?.toIso8601String(),
+        'availableFrom': _availableFrom == null
+            ? null
+            : normalizeAvailableFromDate(_availableFrom!).toIso8601String(),
+        'availableTo': _availableTo == null
+            ? null
+            : normalizeAvailableToDate(_availableTo!).toIso8601String(),
         'updatedAt': FieldValue.serverTimestamp(),
       };
 
@@ -959,7 +963,10 @@ class _AdminCreateLessonScreenState extends State<AdminCreateLessonScreen> {
                                   lastDate: DateTime(2100),
                                 );
                                 if (picked != null) {
-                                  setState(() => _availableFrom = picked);
+                                  setState(
+                                    () => _availableFrom =
+                                        normalizeAvailableFromDate(picked),
+                                  );
                                 }
                               },
                             ),
@@ -977,7 +984,10 @@ class _AdminCreateLessonScreenState extends State<AdminCreateLessonScreen> {
                                   lastDate: DateTime(2100),
                                 );
                                 if (picked != null) {
-                                  setState(() => _availableTo = picked);
+                                  setState(
+                                    () => _availableTo =
+                                        normalizeAvailableToDate(picked),
+                                  );
                                 }
                               },
                             ),
